@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/Teocci/Devs/python/py-wb-cli -maxdepth 2 -type f \\\\\\(-name pyproject.toml -o -name requirements.txt -o -name setup.py -o -name setup.cfg -o -name Makefile -o -name justfile -o -name .env.example -o -name *.env \\\\\\))",
+      "Bash(find d:TeocciDevspythonpy-wb-cli -type f \\\\\\(-name *.py -o -name *.json -o -name *.yaml -o -name *.yml \\\\\\) ! -path */.venv/* ! -path */.idea/*)",
+      "Bash(grep -E \"\\\\.\\(toml|txt|cfg\\)$|Makefile|justfile|README\")",
+      "Read(//d/Teocci/Devs/python//**)",
+      "Bash(source .venv/Scripts/activate)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"from wb.core.constants import ExitCode; print\\(''constants OK:'', list\\(ExitCode\\)\\)\")",
+      "Bash(python -c \"from wb.core.exceptions import WbCliError, ApiError; print\\(''exceptions OK''\\)\")",
+      "Bash(python -c \"from wb.domain.enums import CampaignStatus; print\\(''enums OK:'', list\\(CampaignStatus\\)\\)\")",
+      "Bash(python -c \"from wb.domain.models import Campaign, SearchCluster; print\\(''models OK''\\)\")",
+      "Bash(python -c \"from wb.core.config import Settings; s = Settings\\(\\); print\\(''config OK:'', s.active_profile, s.config_dir\\)\")",
+      "Bash(python -c \"from wb.core.output import OutputRenderer; from wb.domain.enums import OutputFormat, VerbosityLevel; r = OutputRenderer\\(OutputFormat.JSON, VerbosityLevel.NORMAL\\); print\\(''output OK''\\)\")",
+      "Bash(python -c \"from wb.client.http import WbHttpClient; print\\(''http OK''\\)\")",
+      "Bash(python -c \"from wb.storage.audit import AuditLogger; print\\(''audit OK''\\)\")",
+      "Bash(python -m wb version)",
+      "Bash(python -m wb --help)",
+      "Bash(python -m wb auth --help)",
+      "Bash(python -m pytest tests/unit/ -v --tb=short)",
+      "Bash(python -m pytest tests/unit/test_campaign_service.py tests/unit/test_budget_service.py tests/unit/test_stats_service.py tests/unit/test_cluster_service.py tests/unit/test_bid_service.py -v)",
+      "Bash(python -m pytest tests/unit/test_cli_campaign.py tests/unit/test_cli_bid.py tests/unit/test_cli_budget.py tests/unit/test_cli_stats.py tests/unit/test_cli_cluster.py -v)",
+      "Bash(pytest tests/unit/ -v)",
+      "Bash(VENV=\".venv/Scripts\")",
+      "Bash($VENV/python -m pytest tests/unit/test_promotion_client_write.py tests/unit/test_service_write.py tests/unit/test_cli_write.py -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -q)"
+    ]
+  }
+}
