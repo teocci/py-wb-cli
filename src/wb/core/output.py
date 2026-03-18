@@ -98,6 +98,11 @@ class OutputRenderer:
         self.output_format = output_format
         self.verbosity = verbosity
 
+    @property
+    def is_json(self) -> bool:
+        """True when JSON output format is active."""
+        return self.output_format == OutputFormat.JSON
+
     def display(
             self,
             data: Any,

@@ -7,9 +7,11 @@ from wb.client.http import WbHttpClient
 from wb.client.promotion import PromotionClient
 from wb.core.config import Settings
 from wb.core.constants import PROMOTION_BASE_URL
+from wb.storage.audit import AuditLogger
 
 __all__ = [
     'create_promotion_client',
+    'create_audit_logger',
     'create_campaign_service',
     'create_budget_service',
     'create_stats_service',
@@ -32,6 +34,20 @@ def _get_promotion_token(profile_name: str | None = None) -> str:
     store = ProfileStore(settings.config_dir)
     profile = store.get_profile(profile_name)
     return profile.get_token('promotion')
+
+
+def create_audit_logger(profile_name: str | None = None) -> AuditLogger:
+    """Create an AuditLogger using the current profile's config directory.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured AuditLogger instance.
+    """
+    settings = Settings()
+    settings.ensure_config_dir()
+    return AuditLogger(settings.config_dir)
 
 
 def create_promotion_client(

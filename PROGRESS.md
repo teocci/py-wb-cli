@@ -6,8 +6,9 @@
 |---------|-------|------|-------------|
 | 0.1.0 | Phase 0 | 2026-03-18 | Foundation - CLI scaffold, config, auth, HTTP client, audit |
 | 0.2.0 | Phase 1 | 2026-03-18 | Read-only visibility - campaigns, budgets, bids, stats, clusters |
+| 0.3.0 | Phase 2 | 2026-03-18 | Core write controls - lifecycle, items, bids, budget, placements |
 
-## Current Version: 0.2.0
+## Current Version: 0.3.0
 
 ## Phase Status
 
@@ -15,7 +16,7 @@
 |-------|------|--------|---------|
 | 0 | Foundation | COMPLETED | 0.1.0 |
 | 1 | Read-only operational visibility | COMPLETED | 0.2.0 |
-| 2 | Core write controls | PENDING | - |
+| 2 | Core write controls | COMPLETED | 0.3.0 |
 | 3 | Search-cluster control | PENDING | - |
 | 4 | Analytics bridge | PENDING | - |
 | 5 | Optimization workflows | PENDING | - |
@@ -116,18 +117,76 @@ src/wb/
 
 ---
 
-## Phase 2 - Core Write Controls (PENDING)
+## Phase 2 - Core Write Controls (v0.3.0) - COMPLETED
+
+### What was built
+
+- **WbHttpClient.delete()**: HTTP DELETE method added to base HTTP client
+- **New endpoint constants**: 9 write-path constants (start, pause, stop, rename, create, items, placements, budget deposit, bid set)
+- **New domain models**: `MutationResult` (dry-run aware result), `CampaignCreate` (campaign params + `to_api()`), `BidMutation` (CPM bid + `to_api()`), `PlacementConfig` (search/catalog flags + `to_api()`)
+- **PromotionClient write methods**: `start_campaign`, `pause_campaign`, `stop_campaign`, `rename_campaign`, `delete_campaign`, `create_campaign`, `add_items`, `remove_items`, `set_placements`, `deposit_budget`, `set_item_bid`
+- **CampaignService write methods**: `create_campaign`, `start_campaign`, `pause_campaign`, `stop_campaign`, `rename_campaign`, `delete_campaign`, `add_items`, `remove_items`, `set_placements` — all with `dry_run` support
+- **BudgetService.topup()**: Deposits funds, validates positive amount, dry-run support
+- **BidService write methods**: `set_item_bid`, `set_item_bids` — validates CPM > 0, dry-run support
+- **Factory**: `create_audit_logger()` helper added
+- **CLI commands** (all with `--dry-run` and `--yes`, audit logging on execute):
+  - `wb campaign create --name --daily-budget --nms [--type] [--subject]`
+  - `wb campaign start <id>`
+  - `wb campaign pause <id>`
+  - `wb campaign stop <id>`
+  - `wb campaign rename <id> --name`
+  - `wb campaign delete <id>`
+  - `wb campaign add-items <id> --nms`
+  - `wb campaign remove-items <id> --nms`
+  - `wb campaign set-placements <id> [--search/--no-search] [--catalog/--no-catalog]`
+  - `wb bid set-item --campaign --nm --cpm [--subject]`
+  - `wb bid set-items --campaign --file bids.json`
+  - `wb budget topup --campaign --sum`
+- **OutputRenderer.is_json** property added (used to auto-skip confirmation prompts in JSON mode)
+
+### File structure additions
+
+```
+src/wb/
+  cli/
+    campaign.py      # +9 write commands, _confirm_or_abort, _log_mutation helpers
+    bid.py           # +set-item, set-items commands
+    budget.py        # +topup command
+  client/
+    http.py          # +delete() method
+    promotion.py     # +11 write methods
+  core/
+    constants.py     # +9 write endpoint constants
+    output.py        # +is_json property on OutputRenderer
+  domain/
+    models.py        # +MutationResult, CampaignCreate, BidMutation, PlacementConfig
+  services/
+    _factory.py      # +create_audit_logger()
+    campaigns.py     # +9 write methods
+    budgets.py       # +topup()
+    bids.py          # +set_item_bid(), set_item_bids()
+tests/unit/
+  test_promotion_client_write.py  # 14 tests
+  test_service_write.py           # 37 tests
+  test_cli_write.py               # 26 tests
+```
+
+### Test results
+
+- **326 tests passed** (0 failures)
+- 77 new tests covering: PromotionClient write methods, service write methods, domain models, CLI write commands, dry-run paths, validation errors
+
+---
+
+## Phase 3 - Search-cluster Control (PENDING)
 
 ### Planned scope
 
-- Campaign create/start/pause/stop/rename/delete
-- Item bid changes
-- Placement changes
-- Add/remove items from campaigns
-- Budget top-up
-- Dry-run support for all mutations
+- Cluster bid mutations (set-bids, delete-bids)
+- Minus phrase workflows (list, set, clear)
+- Planning diffs for cluster changes
 
-### Expected version: 0.3.0
+### Expected version: 0.4.0
 
 ---
 

@@ -27,6 +27,15 @@ __all__ = [
     'EP_CLUSTER_ACTIVE',
     'EP_CLUSTER_ALL',
     'EP_CLUSTER_STATS',
+    'EP_CAMPAIGN_START',
+    'EP_CAMPAIGN_PAUSE',
+    'EP_CAMPAIGN_STOP',
+    'EP_CAMPAIGN_RENAME',
+    'EP_CAMPAIGN_CREATE',
+    'EP_CAMPAIGN_ITEMS',
+    'EP_CAMPAIGN_PLACEMENTS',
+    'EP_BUDGET_DEPOSIT',
+    'EP_BID_SET',
 ]
 
 from enum import IntEnum
@@ -76,7 +85,7 @@ class ExitCode(IntEnum):
 # ── Token categories ──────────────────────────────────────────────────
 TOKEN_CATEGORIES: list[str] = ['promotion', 'analytics']
 
-# ── Promotion API endpoint paths ─────────────────────────────────────
+# ── Promotion API endpoint paths (read) ──────────────────────────────
 EP_CAMPAIGN_LIST = '/adv/v1/promotion/adverts'
 EP_CAMPAIGN_FULLSTATS = '/adv/v2/fullstats'
 EP_ELIGIBLE_SUBJECTS = '/adv/v1/promotion/subjects'
@@ -87,3 +96,14 @@ EP_CAMPAIGN_BUDGET = '/adv/v1/budget'
 EP_CLUSTER_ACTIVE = '/adv/v1/auto/active-words'
 EP_CLUSTER_ALL = '/adv/v1/auto/words'
 EP_CLUSTER_STATS = '/adv/v2/auto/stat-words'
+
+# ── Promotion API endpoint paths (write) ─────────────────────────────
+EP_CAMPAIGN_START = '/adv/v0/start'
+EP_CAMPAIGN_PAUSE = '/adv/v0/pause'
+EP_CAMPAIGN_STOP = '/adv/v0/stop'
+EP_CAMPAIGN_RENAME = '/adv/v1/rename'
+EP_CAMPAIGN_CREATE = '/adv/v1/promotion/adverts'
+EP_CAMPAIGN_ITEMS = '/adv/v1/promotion/nms'
+EP_CAMPAIGN_PLACEMENTS = '/adv/v1/auto/update-params'
+EP_BUDGET_DEPOSIT = '/adv/v1/budget/deposit'
+EP_BID_SET = '/adv/v1/cpm'

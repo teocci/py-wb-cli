@@ -1,4 +1,4 @@
-"""Typed client for WB Promotion API read operations."""
+"""Typed client for WB Promotion API operations."""
 
 from __future__ import annotations
 
@@ -7,9 +7,18 @@ from typing import Any
 from wb.client.http import WbHttpClient
 from wb.core.constants import (
     EP_ACCOUNT_BALANCE,
+    EP_BID_SET,
+    EP_BUDGET_DEPOSIT,
     EP_CAMPAIGN_BUDGET,
+    EP_CAMPAIGN_CREATE,
     EP_CAMPAIGN_FULLSTATS,
+    EP_CAMPAIGN_ITEMS,
     EP_CAMPAIGN_LIST,
+    EP_CAMPAIGN_PAUSE,
+    EP_CAMPAIGN_PLACEMENTS,
+    EP_CAMPAIGN_RENAME,
+    EP_CAMPAIGN_START,
+    EP_CAMPAIGN_STOP,
     EP_CLUSTER_ACTIVE,
     EP_CLUSTER_ALL,
     EP_CLUSTER_STATS,
@@ -19,6 +28,9 @@ from wb.core.constants import (
 )
 
 __all__ = ['PromotionClient']
+
+# Deposit type 1 = add funds to campaign budget
+_DEPOSIT_TYPE_ADD = 1
 
 
 class PromotionClient:
@@ -194,3 +206,120 @@ class PromotionClient:
             EP_CLUSTER_STATS, params={'id': campaign_id}
         )
         return result if isinstance(result, dict) else {}
+
+    # ── Write operations ──────────────────────────────────────────────
+
+    def start_campaign(self, campaign_id: int) -> None:
+        """Start a campaign.
+
+        Args:
+            campaign_id: Target campaign identifier.
+        """
+        self._http.get(EP_CAMPAIGN_START, params={'id': campaign_id})
+
+    def pause_campaign(self, campaign_id: int) -> None:
+        """Pause a running campaign.
+
+        Args:
+            campaign_id: Target campaign identifier.
+        """
+        self._http.get(EP_CAMPAIGN_PAUSE, params={'id': campaign_id})
+
+    def stop_campaign(self, campaign_id: int) -> None:
+        """Stop a campaign (archive it).
+
+        Args:
+            campaign_id: Target campaign identifier.
+        """
+        self._http.get(EP_CAMPAIGN_STOP, params={'id': campaign_id})
+
+    def rename_campaign(self, campaign_id: int, name: str) -> None:
+        """Rename a campaign.
+
+        Args:
+            campaign_id: Target campaign identifier.
+            name: New campaign name.
+        """
+        self._http.post(
+            EP_CAMPAIGN_RENAME,
+            json_body={'advertId': campaign_id, 'name': name},
+        )
+
+    def delete_campaign(self, campaign_id: int) -> None:
+        """Delete a campaign.
+
+        Args:
+            campaign_id: Target campaign identifier.
+        """
+        self._http.delete(
+            EP_CAMPAIGN_LIST, params={'ids': [campaign_id]}
+        )
+
+    def create_campaign(self, payload: dict) -> dict:
+        """Create a new campaign.
+
+        Args:
+            payload: Campaign creation parameters dict.
+
+        Returns:
+            New campaign data dict from the API.
+        """
+        result = self._http.post(EP_CAMPAIGN_CREATE, json_body=payload)
+        return result if isinstance(result, dict) else {}
+
+    def add_items(self, campaign_id: int, nm_ids: list[int]) -> None:
+        """Add product items to a campaign.
+
+        Args:
+            campaign_id: Target campaign identifier.
+            nm_ids: List of product nomenclature IDs to add.
+        """
+        self._http.post(
+            EP_CAMPAIGN_ITEMS,
+            json_body={'advertId': campaign_id, 'nms': nm_ids},
+        )
+
+    def remove_items(self, campaign_id: int, nm_ids: list[int]) -> None:
+        """Remove product items from a campaign.
+
+        Args:
+            campaign_id: Target campaign identifier.
+            nm_ids: List of product nomenclature IDs to remove.
+        """
+        self._http.delete(
+            EP_CAMPAIGN_ITEMS,
+            json_body={'advertId': campaign_id, 'nms': nm_ids},
+        )
+
+    def set_placements(self, campaign_id: int, payload: dict) -> None:
+        """Update placement configuration for a campaign.
+
+        Args:
+            campaign_id: Target campaign identifier.
+            payload: Placement params payload (from PlacementConfig.to_api).
+        """
+        self._http.post(EP_CAMPAIGN_PLACEMENTS, json_body=payload)
+
+    def deposit_budget(self, campaign_id: int, amount: int) -> None:
+        """Deposit funds into a campaign budget.
+
+        Args:
+            campaign_id: Target campaign identifier.
+            amount: Amount to deposit in kopecks.
+        """
+        self._http.post(
+            EP_BUDGET_DEPOSIT,
+            json_body={
+                'sum': amount,
+                'advertId': campaign_id,
+                'type': _DEPOSIT_TYPE_ADD,
+            },
+        )
+
+    def set_item_bid(self, payload: dict) -> None:
+        """Set a CPM bid for a campaign item.
+
+        Args:
+            payload: Bid payload dict (from BidMutation.to_api).
+        """
+        self._http.post(EP_BID_SET, json_body=payload)

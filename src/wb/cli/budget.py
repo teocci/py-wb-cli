@@ -72,3 +72,39 @@ def budget_get(
         ['Balance', str(budget.balance)],
     ]
     renderer.display(data, headers=headers, title=f'Budget — Campaign {campaign_id}')
+
+
+@budget_app.command('topup')
+def budget_topup(
+        ctx: typer.Context,
+        campaign_id: int = typer.Option(..., '--campaign', '-c', help='Campaign ID'),
+        amount: int = typer.Option(..., '--sum', '-s', help='Amount to deposit in kopecks'),
+        dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
+        yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
+) -> None:
+    """Deposit funds into a campaign budget."""
+    from wb.services._factory import create_audit_logger, create_budget_service
+
+    renderer = _get_renderer(ctx)
+    action = f'deposit {amount} kopecks to campaign {campaign_id}'
+
+    if not (yes or dry_run or renderer.is_json):
+        confirmed = typer.confirm(f'About to: {action}. Proceed?', default=False)
+        if not confirmed:
+            raise typer.Abort()
+
+    svc = create_budget_service(_get_profile(ctx))
+    result = svc.topup(campaign_id, amount, dry_run=dry_run)
+
+    if not dry_run:
+        audit = create_audit_logger(_get_profile(ctx))
+        audit.log(
+            profile=_get_profile(ctx) or 'default',
+            command='budget topup',
+            target_id=result.target_id,
+            payload={'action': result.action},
+            result=result.message,
+        )
+
+    prefix = '[DRY-RUN] ' if result.dry_run else ''
+    renderer.success(f'{prefix}{result.message}')

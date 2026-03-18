@@ -10,6 +10,9 @@ from wb.domain.enums import (
     PaymentType,
 )
 
+# CPM campaign type code for auto campaigns in the WB API
+_AUTO_CAMPAIGN_TYPE_CODE = 8
+
 __all__ = [
     'Campaign',
     'ProductCard',
@@ -23,6 +26,10 @@ __all__ = [
     'OptimizationDecision',
     'AccountBalance',
     'RecommendedBid',
+    'MutationResult',
+    'CampaignCreate',
+    'BidMutation',
+    'PlacementConfig',
 ]
 
 
@@ -340,6 +347,120 @@ class AccountBalance:
             net=data.get('net', 0),
             bonus=data.get('bonus', 0),
         )
+
+
+@dataclass(slots=True)
+class MutationResult:
+    """Result of a mutating API operation.
+
+    Attributes:
+        success: Whether the mutation succeeded (or would succeed).
+        action: Human-readable description of the action performed.
+        target_id: ID of the affected object.
+        dry_run: True when the mutation was simulated only.
+        message: Additional detail or confirmation message.
+    """
+
+    success: bool
+    action: str
+    target_id: str
+    dry_run: bool = False
+    message: str = ''
+
+
+@dataclass(slots=True)
+class CampaignCreate:
+    """Parameters for creating a new campaign.
+
+    Attributes:
+        name: Campaign display name.
+        campaign_type: Type of campaign to create.
+        daily_budget: Daily budget limit in kopecks.
+        nm_ids: Product nomenclature IDs to include.
+        subject_id: Subject category ID (optional).
+    """
+
+    name: str
+    campaign_type: CampaignType
+    daily_budget: int
+    nm_ids: list[int] = field(default_factory=list)
+    subject_id: int | None = None
+
+    def to_api(self) -> dict:
+        """Serialize to WB API create-campaign payload."""
+        payload: dict = {
+            'type': self.campaign_type.value,
+            'name': self.name,
+            'dailyBudget': self.daily_budget,
+        }
+        if self.nm_ids:
+            payload['nms'] = self.nm_ids
+        if self.subject_id is not None:
+            payload['subjectId'] = self.subject_id
+        return payload
+
+
+@dataclass(slots=True)
+class BidMutation:
+    """A single CPM bid change for an item in a campaign.
+
+    Attributes:
+        nm_id: Product nomenclature ID.
+        cpm: New CPM bid value in kopecks.
+        subject_id: Subject category scope (0 = all subjects).
+    """
+
+    nm_id: int
+    cpm: int
+    subject_id: int = 0
+
+    def to_api(self, campaign_id: int) -> dict:
+        """Serialize to WB API set-bid payload.
+
+        Args:
+            campaign_id: Campaign this bid belongs to.
+        """
+        return {
+            'advertId': campaign_id,
+            'type': _AUTO_CAMPAIGN_TYPE_CODE,
+            'cpm': self.cpm,
+            'param': self.subject_id,
+        }
+
+
+@dataclass(slots=True)
+class PlacementConfig:
+    """Placement configuration for a campaign.
+
+    Attributes:
+        search_enabled: Whether search placement is active.
+        catalog_enabled: Whether catalog placement is active.
+        booster_enabled: Whether booster placement is active.
+    """
+
+    search_enabled: bool = True
+    catalog_enabled: bool = True
+    booster_enabled: bool = False
+
+    def to_api(self, campaign_id: int) -> dict:
+        """Serialize to WB API update-params payload.
+
+        Args:
+            campaign_id: Campaign to apply placements to.
+        """
+        return {
+            'advertId': campaign_id,
+            'params': [
+                {
+                    'active': self.search_enabled,
+                    'place': 1,
+                },
+                {
+                    'active': self.catalog_enabled,
+                    'place': 2,
+                },
+            ],
+        }
 
 
 @dataclass(slots=True)
