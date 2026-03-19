@@ -131,17 +131,37 @@ def auth_status(
 
     json_output = ctx.obj.get('json_output', False) if ctx.obj else False
 
+    has_portal = profile.has_portal_session()
+
     if json_output:
         import json
-        typer.echo(json.dumps({
+        data = {
             'profile': profile.name,
             'categories': list(profile.tokens.keys()),
+            'portal_session': has_portal,
             'last_used': profile.last_used,
-        }, indent=2))
+        }
+        if has_portal:
+            ps = profile.get_portal_session()
+            if not ps:
+                typer.secho('Error: Portal session data is missing or corrupted.', fg=typer.colors.RED, err=True)
+                raise typer.Exit(code=5)
+            
+            data['portal_user_id'] = ps.get('user_id')
+            data['portal_exp'] = ps.get('exp')
+        typer.echo(json.dumps(data, indent=2))
         return
 
     typer.echo(f'Active profile: {profile.name}')
     typer.echo(f'Token categories: {", ".join(profile.tokens.keys()) or "none"}')
+    typer.echo(f'Portal session: {"yes" if has_portal else "no"}')
+    if has_portal:
+        ps = profile.get_portal_session()
+        if not ps:
+            typer.secho('Error: Portal session data is missing or corrupted.', fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=5)
+        
+        typer.echo(f'Portal user ID: {ps.get("user_id", "unknown")}')
     typer.echo(f'Last used: {profile.last_used or "never"}')
 
 
@@ -168,3 +188,102 @@ def auth_ping(
     except WbCliError as exc:
         typer.secho(f'Connection failed: {exc}', fg=typer.colors.RED, err=True)
         raise typer.Exit(code=3) from exc
+
+
+@auth_app.command('login-portal')
+def auth_login_portal(
+        profile: str = typer.Option('default', '--profile', '-p', help='Profile name'),
+        authorizev3: str = typer.Option(
+            ..., '--authorizev3', '-a',
+            help='authorizev3 header value from browser DevTools',
+            prompt=True,
+            hide_input=True,
+        ),
+        cookie: str = typer.Option(
+            ..., '--cookie', '-c',
+            help='Browser cookie string (required for portal auth)',
+            prompt=True,
+            hide_input=True,
+        ),
+        skip_auth: bool = typer.Option(
+            False, '--skip-auth',
+            help='Store credentials without authenticating',
+        ),
+) -> None:
+    """Authenticate with the WB seller portal using browser credentials.
+
+    Both authorizev3 and cookie are required. Copy them from browser DevTools.
+    """
+    from wb.client.portal import PortalClient
+
+    store = _get_profile_store()
+
+    try:
+        client = PortalClient(authorizev3=authorizev3, cookie=cookie)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Abort() from exc
+
+    if skip_auth:
+        store.save_portal_session(
+            profile_name=profile,
+            authorizev3=authorizev3,
+            cookie=cookie,
+        )
+        store.set_active(profile)
+        typer.secho(
+            f'Portal session saved to profile {profile!r} (not validated).',
+            fg=typer.colors.YELLOW,
+        )
+        return
+
+    typer.echo('Authenticating with seller portal...')
+    try:
+        session = client.authenticate()
+    except WbCliError as exc:
+        typer.secho(f'Portal auth failed: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Abort() from exc
+
+    store.save_portal_session(
+        profile_name=profile,
+        authorizev3=authorizev3,
+        cookie=cookie,
+        session_token=session.token,
+        user_id=str(session.user_id),
+        exp=str(session.exp),
+    )
+    store.set_active(profile)
+
+    from datetime import datetime, timezone
+    exp_dt = datetime.fromtimestamp(session.exp, tz=timezone.utc)
+    typer.secho('Portal authentication successful.', fg=typer.colors.GREEN)
+    typer.echo(f'  User ID: {session.user_id}')
+    typer.echo(f'  Expires: {exp_dt.isoformat()}')
+    typer.echo(f'  Profile: {profile!r}')
+
+
+@auth_app.command('generate-token')
+def auth_generate_token(
+        profile: str | None = typer.Option(
+            None, '--profile', '-p', help='Profile to use',
+        ),
+) -> None:
+    """Generate a render token using stored portal session credentials."""
+    try:
+        from wb.services._factory import create_portal_client
+        client = create_portal_client(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=7) from exc
+
+    typer.echo('Generating token via portal...')
+    try:
+        token = client.generate_token()
+    except WbCliError as exc:
+        typer.secho(f'Token generation failed: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=6) from exc
+
+    masked = f'{token[:8]}...{token[-4:]}' if len(token) > 12 else '***'
+    typer.secho('Token generated successfully.', fg=typer.colors.GREEN)
+    typer.echo(f'  Token: {masked}')
+    typer.echo(f'  Length: {len(token)} chars')

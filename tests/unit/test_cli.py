@@ -33,6 +33,8 @@ class TestCLIApp:
         assert 'use' in result.output
         assert 'status' in result.output
         assert 'ping' in result.output
+        assert 'login-portal' in result.output
+        assert 'generate-token' in result.output
 
     def test_global_options_exist(self):
         """Test global options are present in help."""

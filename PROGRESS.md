@@ -7,8 +7,9 @@
 | 0.1.0 | Phase 0 | 2026-03-18 | Foundation - CLI scaffold, config, auth, HTTP client, audit |
 | 0.2.0 | Phase 1 | 2026-03-18 | Read-only visibility - campaigns, budgets, bids, stats, clusters |
 | 0.3.0 | Phase 2 | 2026-03-18 | Core write controls - lifecycle, items, bids, budget, placements |
+| 0.3.1 | Auth | 2026-03-19 | Dual auth - portal session support, env var fallback, /ping fix |
 
-## Current Version: 0.3.0
+## Current Version: 0.3.1
 
 ## Phase Status
 
@@ -178,15 +179,58 @@ tests/unit/
 
 ---
 
-## Phase 3 - Search-cluster Control (PENDING)
+## Auth Enhancement (v0.3.1) - COMPLETED
 
-### Planned scope
+### What was built
 
-- Cluster bid mutations (set-bids, delete-bids)
-- Minus phrase workflows (list, set, clear)
-- Planning diffs for cluster changes
+- **Portal constants**: Seller portal base URLs, auth headers (`authorizev3`, `wb-seller-lk`), JRPC endpoint paths
+- **Env var support**: `WB_API_TOKEN`, `WB_USER_ID`, `WB_TOKEN_EXPIRATION` via `.env` / environment
+- **Portal session storage**: `portal_session` field on Profile dataclass with `get/set/has_portal_session()` methods, backward-compatible serialization
+- **Token validation fix**: Changed ping path from `/adv/v1/promotion/count` to official `/ping` endpoint
+- **Portal HTTP client** (`client/portal.py`): `PortalClient` with two-step JRPC auth chain — `authenticate()` → `generate_token()`
+- **Unified auth priority chain**: CLI flags > env vars > .env > profiles.json — applies to both API tokens and portal credentials
+- **Factory updates**: `create_portal_client()` and `_get_promotion_token()` both follow the unified priority chain
+- **CLI commands**:
+  - `wb auth login-portal --authorizev3 <key> [--cookie <str>]` — authenticate with seller portal
+  - `wb auth generate-token` — generate API token via portal JRPC
+  - `wb auth status` — now shows portal session info
 
-### Expected version: 0.4.0
+### File structure additions
+
+```
+src/wb/
+  client/
+    portal.py          # PortalClient, PortalSession (JSON-RPC)
+  core/
+    constants.py       # +portal URLs, headers, endpoints, PING_PATH
+    config.py          # +api_token, user_id, token_expiration, authorizev3, portal_cookie env vars
+  auth/
+    profiles.py        # +portal_session field and methods
+    token_validation.py # Fixed ping path to /ping
+  services/
+    _factory.py        # +create_portal_client(), env var fallback
+  cli/
+    auth.py            # +login-portal, generate-token commands
+tests/unit/
+  test_portal_client.py  # 19 tests
+  test_profiles.py       # +10 tests (portal_session)
+```
+
+### Portal auth discovery (2026-03-19)
+
+Testing revealed that **cookie + authorizev3** is the real auth pair for all portal endpoints. The `wb-seller-lk` session token is NOT required. PortalClient was simplified to remove session token management.
+
+Added:
+- `wb portal products` command — lists product cards from seller portal (tableListv6)
+- `PortalProductCard` domain model with `from_portal()` factory
+- `list_products()` method on PortalClient
+- Cookie made required (was optional) — both cookie + authorizev3 needed
+- `wb_portal_authentication_notes.md` — detailed auth combo test results
+
+### Test results
+
+- **355 tests passed** (0 failures, 1 pre-existing env-dependent skip)
+- Portal client tests cover: auth, generate_token, list_products, cookie validation, JRPC counter
 
 ---
 

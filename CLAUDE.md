@@ -38,6 +38,7 @@ python -m wb auth --help
 | 0.1.0 | Phase 0 - Foundation |
 | 0.2.0 | Phase 1 - Read-only visibility |
 | 0.3.0 | Phase 2 - Core write controls |
+| 0.3.1 | Auth - Dual auth (portal session + env var fallback) |
 | 0.4.0 | Phase 3 - Search-cluster control |
 | 0.5.0 | Phase 4 - Analytics bridge |
 | 0.6.0 | Phase 5 - Optimization workflows |
@@ -50,7 +51,7 @@ src/wb/
   core/         # constants, exceptions, config, output
   domain/       # enums, models (pure data, no I/O)
   auth/         # profiles, token validation
-  client/       # HTTP clients (promotion, analytics)
+  client/       # HTTP clients (promotion, analytics, portal)
   services/     # business logic / use-cases
   storage/      # audit log, local cache
 tests/
@@ -81,6 +82,38 @@ tests/
 | 5 | rate-limited |
 | 6 | WB API error |
 | 7 | config/profile error |
+
+## Authentication
+
+### Credential Resolution Priority
+
+All credentials follow the same chain (highest to lowest):
+
+```
+CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
+```
+
+### Auth Methods
+
+1. **API Key** — raw JWT in `Authorization` header (no Bearer). Created via seller portal UI.
+   - `wb auth login --token <JWT> --category promotion`
+2. **Portal Session** — `cookie + authorizev3` headers together (both required) to seller portal.
+   - `wb auth login-portal --authorizev3 <key> --cookie <str>`
+   - `wb auth generate-token` — generate tokens via portal JRPC
+   - `wb portal products` — list product cards from portal
+   - Auth: cookie + authorizev3 (wb-seller-lk session token is NOT needed)
+
+### Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `WB_API_TOKEN` | API token (fallback for profile token) |
+| `WB_AUTHORIZEV3` | Portal authorizev3 key (fallback for portal session) |
+| `WB_PORTAL_COOKIE` | Portal browser cookie (fallback for portal session) |
+| `WB_USER_ID` | Seller user ID |
+| `WB_TOKEN_EXPIRATION` | Token expiration timestamp |
+
+Full design: `wb_cli_authorization_plan.md`
 
 ## Key Design Decisions
 

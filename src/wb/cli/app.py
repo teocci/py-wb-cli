@@ -13,6 +13,7 @@ from wb.cli.bid import bid_app
 from wb.cli.budget import budget_app
 from wb.cli.campaign import campaign_app
 from wb.cli.cluster import cluster_app
+from wb.cli.portal import portal_app
 from wb.cli.stats import stats_app
 from wb.core.exceptions import WbCliError
 
@@ -29,6 +30,7 @@ app.add_typer(bid_app, name='bid', help='Bid management')
 app.add_typer(budget_app, name='budget', help='Budget and balance')
 app.add_typer(stats_app, name='stats', help='Campaign and cluster statistics')
 app.add_typer(cluster_app, name='cluster', help='Search cluster management')
+app.add_typer(portal_app, name='portal', help='Seller portal operations')
 
 
 def _configure_logging(verbose: bool = False) -> None:

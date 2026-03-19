@@ -7,6 +7,9 @@ token categories used throughout the application.
 __all__ = [
     'PROMOTION_BASE_URL',
     'ANALYTICS_BASE_URL',
+    'COMMON_API_BASE_URL',
+    'SELLER_PORTAL_BASE_URL',
+    'SELLER_CONTENT_BASE_URL',
     'DEFAULT_PROFILE_NAME',
     'CONFIG_DIR_NAME',
     'AUDIT_LOG_FILE',
@@ -17,6 +20,9 @@ __all__ = [
     'DEFAULT_BATCH_SIZE',
     'ExitCode',
     'TOKEN_CATEGORIES',
+    'PING_PATH',
+    'PORTAL_AUTH_HEADER',
+    'PORTAL_SESSION_HEADER',
     'EP_CAMPAIGN_LIST',
     'EP_CAMPAIGN_FULLSTATS',
     'EP_ELIGIBLE_SUBJECTS',
@@ -36,6 +42,9 @@ __all__ = [
     'EP_CAMPAIGN_PLACEMENTS',
     'EP_BUDGET_DEPOSIT',
     'EP_BID_SET',
+    'EP_PORTAL_AUTH_TOKEN',
+    'EP_PORTAL_TOKENS_JRPC',
+    'EP_PORTAL_TABLE_LIST',
 ]
 
 from enum import IntEnum
@@ -43,6 +52,11 @@ from enum import IntEnum
 # ── API base URLs ──────────────────────────────────────────────────────
 PROMOTION_BASE_URL = 'https://advert-api.wildberries.ru'
 ANALYTICS_BASE_URL = 'https://seller-analytics-api.wildberries.ru'
+COMMON_API_BASE_URL = 'https://common-api.wildberries.ru'
+
+# ── Seller portal base URLs ──────────────────────────────────────────
+SELLER_PORTAL_BASE_URL = 'https://seller.wildberries.ru'
+SELLER_CONTENT_BASE_URL = 'https://seller-content.wildberries.ru'
 
 # ── Configuration defaults ─────────────────────────────────────────────
 DEFAULT_PROFILE_NAME = 'default'
@@ -85,6 +99,13 @@ class ExitCode(IntEnum):
 # ── Token categories ──────────────────────────────────────────────────
 TOKEN_CATEGORIES: list[str] = ['promotion', 'analytics']
 
+# ── Connection check ─────────────────────────────────────────────────
+PING_PATH = '/ping'
+
+# ── Seller portal auth headers ───────────────────────────────────────
+PORTAL_AUTH_HEADER = 'authorizev3'
+PORTAL_SESSION_HEADER = 'wb-seller-lk'
+
 # ── Promotion API endpoint paths (read) ──────────────────────────────
 EP_CAMPAIGN_LIST = '/adv/v1/promotion/adverts'
 EP_CAMPAIGN_FULLSTATS = '/adv/v2/fullstats'
@@ -107,3 +128,8 @@ EP_CAMPAIGN_ITEMS = '/adv/v1/promotion/nms'
 EP_CAMPAIGN_PLACEMENTS = '/adv/v1/auto/update-params'
 EP_BUDGET_DEPOSIT = '/adv/v1/budget/deposit'
 EP_BID_SET = '/adv/v1/cpm'
+
+# ── Seller portal endpoint paths ─────────────────────────────────────
+EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'
+EP_PORTAL_TOKENS_JRPC = '/ns/suppliers-auth-tokens/suppliers-portal-core/api/v1/tokensjrpc'
+EP_PORTAL_TABLE_LIST = '/ns/viewer/content-card/viewer/tableListv6'

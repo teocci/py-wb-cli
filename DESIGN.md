@@ -46,6 +46,10 @@ CLI Layer (Typer)
 ```bash
 # Auth
 wb auth login / logout / list / use / status / ping
+wb auth login-portal / generate-token
+
+# Portal
+wb portal products
 
 # Campaigns
 wb campaign list / get / create / rename / delete
@@ -127,6 +131,41 @@ Performance problems happen at any of these three levels, so the CLI and optimiz
 ### Analytics (Phase 4, separate token)
 - `POST /api/v1/paid_acceptance` — search queries per item
 - Sales funnel and CSV report endpoints
+
+### Seller Portal (JSON-RPC, session auth)
+- `POST seller.wildberries.ru/ns/suppliers-auth/suppliers-portal-core/auth/token` — portal session auth
+- `POST seller-content.wildberries.ru/ns/suppliers-auth-tokens/suppliers-portal-core/api/v1/tokensjrpc` — token generation
+
+### Connection Check
+- `GET <domain>/ping` — per-category connection check (e.g., `advert-api.wildberries.ru/ping`)
+
+---
+
+## Authentication
+
+### Credential Resolution Priority
+
+All credentials follow the same chain (highest to lowest):
+```
+CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
+```
+
+### Auth Methods
+
+1. **API Key** (official) — JWT token in `Authorization` header (no Bearer prefix). Created via seller portal UI. 180-day validity.
+2. **Portal Session** (reverse-engineered) — `cookie + authorizev3` headers together (both required). Enables portal-only data access (product cards, token generation).
+
+See `wb_portal_authentication_notes.md` for detailed test results on which header combinations work.
+
+### Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `WB_API_TOKEN` | API token (fallback for profile token) |
+| `WB_AUTHORIZEV3` | Portal authorizev3 key |
+| `WB_PORTAL_COOKIE` | Portal browser cookie |
+| `WB_USER_ID` | Seller user ID |
+| `WB_TOKEN_EXPIRATION` | Token expiration timestamp |
 
 ---
 

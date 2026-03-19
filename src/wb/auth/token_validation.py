@@ -6,13 +6,13 @@ import logging
 
 import httpx
 
-from wb.core.constants import PROMOTION_BASE_URL
+from wb.core.constants import PING_PATH, PROMOTION_BASE_URL
 from wb.core.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
-# A lightweight endpoint to test if the promotion token works
-_PING_PATH = '/adv/v1/promotion/count'
+# Official connection check endpoint per WB API docs
+_PING_PATH = PING_PATH
 
 
 def validate_promotion_token(token: str, timeout: float = 10.0) -> bool:

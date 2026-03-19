@@ -34,6 +34,9 @@ class Settings(BaseSettings):
         retry_base_delay: Base delay in seconds for exponential backoff.
         output_format: Default output rendering format.
         verbosity: Default verbosity level.
+        api_token: WB API token from environment (fallback when no profile token).
+        user_id: WB user ID from environment.
+        token_expiration: WB token expiration timestamp from environment.
     """
 
     model_config = SettingsConfigDict(
@@ -52,6 +55,15 @@ class Settings(BaseSettings):
     retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY
     output_format: OutputFormat = OutputFormat.TABLE
     verbosity: VerbosityLevel = VerbosityLevel.NORMAL
+
+    # ── Auth env var fallbacks ────────────────────────────────────────
+    api_token: str | None = None
+    user_id: int | None = None
+    token_expiration: int | None = None
+
+    # ── Portal session env var fallbacks ──────────────────────────────
+    authorizev3: str | None = None
+    portal_cookie: str | None = None
 
     # ── Singleton ──────────────────────────────────────────────────────
     _instance: ClassVar['Settings | None'] = None

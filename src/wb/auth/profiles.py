@@ -31,6 +31,7 @@ class Profile:
 
     name: str
     tokens: dict[str, str] = field(default_factory=dict)
+    portal_session: dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_used: str | None = None
 
@@ -63,18 +64,58 @@ class Profile:
             )
         self.tokens[category] = token
 
+    def has_portal_session(self) -> bool:
+        """Check if profile has portal session credentials."""
+        return 'authorizev3' in self.portal_session and bool(self.portal_session['authorizev3'])
+
+    def get_portal_session(self) -> dict[str, str] | None:
+        """Get portal session data, or None if not configured."""
+        if not self.has_portal_session():
+            return None
+        return dict(self.portal_session)
+
+    def set_portal_session(
+            self,
+            authorizev3: str,
+            cookie: str | None = None,
+            session_token: str | None = None,
+            user_id: str | None = None,
+            exp: str | None = None,
+    ) -> None:
+        """Store portal session credentials.
+
+        Args:
+            authorizev3: The authorizev3 header value.
+            cookie: Browser cookie string.
+            session_token: Session JWT from portal auth endpoint.
+            user_id: Seller user ID from portal auth response.
+            exp: Token expiration timestamp from portal auth response.
+        """
+        self.portal_session = {'authorizev3': authorizev3}
+        if cookie:
+            self.portal_session['cookie'] = cookie
+        if session_token:
+            self.portal_session['session_token'] = session_token
+        if user_id:
+            self.portal_session['user_id'] = user_id
+        if exp:
+            self.portal_session['exp'] = exp
+
     def touch(self) -> None:
         """Update last_used timestamp."""
         self.last_used = datetime.now(timezone.utc).isoformat()
 
     def to_dict(self) -> dict:
         """Serialize to dict for JSON storage."""
-        return {
+        data = {
             'name': self.name,
             'tokens': self.tokens,
             'created_at': self.created_at,
             'last_used': self.last_used,
         }
+        if self.portal_session:
+            data['portal_session'] = self.portal_session
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> Profile:
@@ -82,6 +123,7 @@ class Profile:
         return cls(
             name=data['name'],
             tokens=data.get('tokens', {}),
+            portal_session=data.get('portal_session', {}),
             created_at=data.get('created_at', datetime.now(timezone.utc).isoformat()),
             last_used=data.get('last_used'),
         )
@@ -178,6 +220,28 @@ class ProfileStore:
             self.create_profile(profile_name)
         profile = self._profiles[profile_name]
         profile.set_token(category, token)
+        self._save()
+
+    def save_portal_session(
+            self,
+            profile_name: str,
+            authorizev3: str,
+            cookie: str | None = None,
+            session_token: str | None = None,
+            user_id: str | None = None,
+            exp: str | None = None,
+    ) -> None:
+        """Save portal session credentials to a profile, creating it if needed."""
+        if profile_name not in self._profiles:
+            self.create_profile(profile_name)
+        profile = self._profiles[profile_name]
+        profile.set_portal_session(
+            authorizev3=authorizev3,
+            cookie=cookie,
+            session_token=session_token,
+            user_id=user_id,
+            exp=exp,
+        )
         self._save()
 
     def delete_profile(self, name: str) -> None:

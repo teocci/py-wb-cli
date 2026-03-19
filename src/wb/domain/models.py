@@ -493,3 +493,66 @@ class RecommendedBid:
             recommended=data.get('cpm', 0),
             minimum=data.get('minCpm', 0),
         )
+
+
+@dataclass(slots=True)
+class PortalProductCard:
+    """Product card data from the seller portal tableListv6 endpoint.
+
+    Attributes:
+        nm_id: WB article number (nmID).
+        imt_id: Internal model type ID.
+        vendor_code: Seller's vendor/article code.
+        title: Product title.
+        brand: Brand name.
+        subject: Product category/subject.
+        stocks: Total stock quantity.
+        price: Current price in RUB.
+        feedback_rating: Average feedback rating.
+        feedback_count: Number of feedback reviews.
+        card_rating: Card quality rating (0-10).
+        tags: List of tag dicts with id, name, color.
+        updated_at: Last update timestamp (ISO string).
+    """
+
+    nm_id: int
+    imt_id: int
+    vendor_code: str
+    title: str
+    brand: str
+    subject: str
+    stocks: int
+    price: int
+    feedback_rating: float
+    feedback_count: int
+    card_rating: float
+    tags: list[dict[str, str]]
+    updated_at: str
+
+    @classmethod
+    def from_portal(cls, data: dict) -> PortalProductCard:
+        """Create from a raw portal tableListv6 card dict.
+
+        Args:
+            data: Raw card dict from the portal response.
+        """
+        sizes = data.get('sizes', [])
+        price = sizes[0].get('currentPrice', 0) if sizes else 0
+        feedbacks = data.get('feedbacks', {})
+        rating_data = data.get('meta', {}).get('ratingData', {})
+
+        return cls(
+            nm_id=data.get('nmID', 0),
+            imt_id=data.get('imtID', 0),
+            vendor_code=data.get('vendorCode', ''),
+            title=data.get('title', ''),
+            brand=data.get('brand', ''),
+            subject=data.get('subject', ''),
+            stocks=data.get('stocks', 0),
+            price=price,
+            feedback_rating=feedbacks.get('rating', 0.0),
+            feedback_count=feedbacks.get('count', 0),
+            card_rating=rating_data.get('rating', 0.0),
+            tags=data.get('tags', []),
+            updated_at=data.get('updateAt', ''),
+        )

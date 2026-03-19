@@ -81,6 +81,62 @@ class TestProfile:
         with pytest.raises(ValidationError, match='Unknown token category'):
             profile.set_token('nonexistent', 'val')
 
+    # ── portal_session ─────────────────────────────────────────────────
+
+    def test_create_defaults_empty_portal_session(self):
+        """Profile created with only a name gets empty portal_session."""
+        profile = Profile(name='bare2')
+        assert profile.portal_session == {}
+
+    def test_has_portal_session_false_when_empty(self):
+        """has_portal_session returns False when no session stored."""
+        profile = Profile(name='p')
+        assert profile.has_portal_session() is False
+
+    def test_has_portal_session_true_when_set(self):
+        """has_portal_session returns True after set_portal_session."""
+        profile = Profile(name='p')
+        profile.set_portal_session(authorizev3='key-123')
+        assert profile.has_portal_session() is True
+
+    def test_get_portal_session_none_when_empty(self):
+        """get_portal_session returns None when no session stored."""
+        profile = Profile(name='p')
+        assert profile.get_portal_session() is None
+
+    def test_get_portal_session_returns_copy(self):
+        """get_portal_session returns a copy, not the original dict."""
+        profile = Profile(name='p')
+        profile.set_portal_session(authorizev3='key')
+        session = profile.get_portal_session()
+        session['injected'] = 'bad'
+        assert 'injected' not in profile.portal_session
+
+    def test_set_portal_session_stores_all_fields(self):
+        """set_portal_session stores all provided fields."""
+        profile = Profile(name='p')
+        profile.set_portal_session(
+            authorizev3='auth-key',
+            cookie='session=abc',
+            session_token='jwt-token',
+            user_id='12345',
+            exp='1773884106',
+        )
+        session = profile.get_portal_session()
+        assert session['authorizev3'] == 'auth-key'
+        assert session['cookie'] == 'session=abc'
+        assert session['session_token'] == 'jwt-token'
+        assert session['user_id'] == '12345'
+        assert session['exp'] == '1773884106'
+
+    def test_set_portal_session_omits_none_fields(self):
+        """set_portal_session does not store None-valued optional fields."""
+        profile = Profile(name='p')
+        profile.set_portal_session(authorizev3='key')
+        session = profile.get_portal_session()
+        assert 'cookie' not in session
+        assert 'session_token' not in session
+
     # ── to_dict / from_dict roundtrip ─────────────────────────────────
 
     def test_roundtrip_to_dict_from_dict(self):
@@ -98,6 +154,24 @@ class TestProfile:
         assert rebuilt.created_at == original.created_at
         assert rebuilt.last_used == original.last_used
 
+    def test_roundtrip_with_portal_session(self):
+        """Profile with portal_session survives to_dict -> from_dict."""
+        original = Profile(name='portal-rt')
+        original.set_portal_session(
+            authorizev3='key',
+            session_token='jwt',
+            user_id='123',
+        )
+        rebuilt = Profile.from_dict(original.to_dict())
+        assert rebuilt.portal_session == original.portal_session
+        assert rebuilt.has_portal_session() is True
+
+    def test_to_dict_omits_empty_portal_session(self):
+        """to_dict does not include portal_session when empty."""
+        profile = Profile(name='no-portal')
+        data = profile.to_dict()
+        assert 'portal_session' not in data
+
     def test_from_dict_missing_optional_fields(self):
         """from_dict fills defaults for optional keys."""
         data = {'name': 'minimal'}
@@ -105,6 +179,7 @@ class TestProfile:
 
         assert profile.name == 'minimal'
         assert profile.tokens == {}
+        assert profile.portal_session == {}
         assert profile.last_used is None
 
     # ── touch ─────────────────────────────────────────────────────────
@@ -253,6 +328,47 @@ class TestProfileStore:
 
         with pytest.raises(ConfigError, match='Corrupted profiles file'):
             ProfileStore(tmp_path)
+
+    def test_save_portal_session_stores_session(self, tmp_path):
+        """save_portal_session writes portal session into a profile."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('portal-test')
+        store.save_portal_session(
+            profile_name='portal-test',
+            authorizev3='key-abc',
+            session_token='jwt-xyz',
+            user_id='999',
+        )
+        profile = store.get_profile('portal-test')
+        assert profile.has_portal_session() is True
+        session = profile.get_portal_session()
+        assert session['authorizev3'] == 'key-abc'
+        assert session['session_token'] == 'jwt-xyz'
+
+    def test_save_portal_session_creates_profile_if_needed(self, tmp_path):
+        """save_portal_session auto-creates a profile when it does not exist."""
+        store = ProfileStore(tmp_path)
+        store.save_portal_session(
+            profile_name='auto-portal',
+            authorizev3='key',
+        )
+        profile = store.get_profile('auto-portal')
+        assert profile.has_portal_session() is True
+
+    def test_portal_session_persists_across_instances(self, tmp_path):
+        """Portal session survives construction of a new ProfileStore."""
+        store1 = ProfileStore(tmp_path)
+        store1.create_profile('persist-portal')
+        store1.save_portal_session(
+            profile_name='persist-portal',
+            authorizev3='my-key',
+            session_token='my-jwt',
+        )
+
+        store2 = ProfileStore(tmp_path)
+        profile = store2.get_profile('persist-portal')
+        assert profile.has_portal_session() is True
+        assert profile.get_portal_session()['authorizev3'] == 'my-key'
 
     def test_config_dir_created_on_save(self, tmp_path):
         """ProfileStore creates intermediate directories when saving."""

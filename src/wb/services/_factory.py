@@ -11,6 +11,7 @@ from wb.storage.audit import AuditLogger
 
 __all__ = [
     'create_promotion_client',
+    'create_portal_client',
     'create_audit_logger',
     'create_campaign_service',
     'create_budget_service',
@@ -20,20 +21,90 @@ __all__ = [
 ]
 
 
-def _get_promotion_token(profile_name: str | None = None) -> str:
-    """Retrieve the promotion token for the given or active profile.
+def _get_promotion_token(
+        profile_name: str | None = None,
+        cli_token: str | None = None,
+) -> str:
+    """Retrieve the promotion token using the unified priority chain.
+
+    Priority: CLI flag > WB_API_TOKEN env var/.env > profiles.json
 
     Args:
         profile_name: Profile name, or None for active profile.
+        cli_token: Token passed via CLI flag (highest priority).
 
     Returns:
         Promotion API token string.
     """
+    if cli_token:
+        return cli_token
     settings = Settings()
+    if settings.api_token:
+        return settings.api_token
     settings.ensure_config_dir()
     store = ProfileStore(settings.config_dir)
     profile = store.get_profile(profile_name)
     return profile.get_token('promotion')
+
+
+def create_portal_client(
+        profile_name: str | None = None,
+        cli_authorizev3: str | None = None,
+        cli_cookie: str | None = None,
+):
+    """Create a PortalClient using the unified priority chain.
+
+    Priority: CLI flags > WB_AUTHORIZEV3/WB_PORTAL_COOKIE env vars/.env > profiles.json
+
+    Both authorizev3 and cookie are required for portal auth.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+        cli_authorizev3: authorizev3 value from CLI flag (highest priority).
+        cli_cookie: Cookie from CLI flag (highest priority).
+
+    Returns:
+        Configured PortalClient instance.
+
+    Raises:
+        ConfigError: If no portal credentials found at any level.
+        ValidationError: If cookie is missing (required for portal auth).
+    """
+    from wb.client.portal import PortalClient
+    from wb.core.exceptions import ConfigError
+
+    # Priority 1: CLI flags
+    if cli_authorizev3 and cli_cookie:
+        return PortalClient(authorizev3=cli_authorizev3, cookie=cli_cookie)
+
+    # Priority 2: Env vars / .env (handled by pydantic-settings)
+    settings = Settings()
+    if settings.authorizev3 and settings.portal_cookie:
+        return PortalClient(
+            authorizev3=settings.authorizev3,
+            cookie=settings.portal_cookie,
+        )
+
+    # Priority 3: profiles.json
+    settings.ensure_config_dir()
+    store = ProfileStore(settings.config_dir)
+    profile = store.get_profile(profile_name)
+    session = profile.get_portal_session()
+    if not session:
+        raise ConfigError(
+            'No portal credentials found. Set WB_AUTHORIZEV3 + WB_PORTAL_COOKIE '
+            'env vars, add them to .env, or run `wb auth login-portal`.'
+        )
+    cookie = session.get('cookie')
+    if not cookie:
+        raise ConfigError(
+            'Portal cookie is missing from profile. Both authorizev3 and cookie '
+            'are required. Re-run `wb auth login-portal` with --cookie.'
+        )
+    return PortalClient(
+        authorizev3=session['authorizev3'],
+        cookie=cookie,
+    )
 
 
 def create_audit_logger(profile_name: str | None = None) -> AuditLogger:
