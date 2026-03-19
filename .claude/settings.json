@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python -m wb portal products --limit 3)",
+      "Bash(.venv/Scripts/python -m wb --json portal products --limit 2)",
+      "Bash(.venv/Scripts/python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\([{''''nmID'''':c[''''nm_id''''],''''title'''':c[''''title''''][:40],''''stocks'''':c[''''stocks''''],''''price'''':c[''''price''''],''''rating'''':c[''''feedback_rating'''']} for c in d], indent=2, ensure_ascii=False\\)\\)\")"
+    ]
+  }
+}

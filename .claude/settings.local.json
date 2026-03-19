@@ -25,7 +25,13 @@
       "Bash(VENV=\".venv/Scripts\")",
       "Bash($VENV/python -m pytest tests/unit/test_promotion_client_write.py tests/unit/test_service_write.py tests/unit/test_cli_write.py -v)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/ -v)",
-      "Bash(.venv/Scripts/python -m pytest tests/unit/ -q)"
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -q)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "WebFetch(domain:dev.wildberries.ru)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=short)",
+      "Bash(.venv/Scripts/python -m wb auth --help)",
+      "Bash(.venv/Scripts/python -c \":*)"
     ]
   }
 }
