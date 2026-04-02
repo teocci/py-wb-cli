@@ -34,141 +34,142 @@ def _cluster_rows(clusters):
     """Build table rows from cluster list."""
     return [
         [
-            str(c.cluster_id),
-            c.cluster_name,
-            str(c.count),
+            c.norm_query,
             'Yes' if c.is_active else 'No',
             str(c.bid),
-            str(c.recommended_bid),
+            str(c.nm_id),
         ]
         for c in clusters
     ]
 
 
-_CLUSTER_HEADERS = ['ID', 'Name', 'Count', 'Active', 'Bid', 'Recommended']
+_CLUSTER_HEADERS = ['Norm Query', 'Active', 'Bid', 'NM ID']
+
+_NM_OPT = typer.Option(..., '--nm', '-n', help='Product NM ID (WB article)')
+_CAMPAIGN_OPT = typer.Option(..., '--campaign', '-c', help='Campaign ID')
 
 
 @cluster_app.command('list')
 def cluster_list(
         ctx: typer.Context,
-        campaign_id: int = typer.Option(
-            ..., '--campaign', '-c', help='Campaign ID',
-        ),
+        campaign_id: int = _CAMPAIGN_OPT,
+        nm_id: int = _NM_OPT,
 ) -> None:
-    """List all search clusters for a campaign."""
+    """List all search clusters for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
     renderer = _get_renderer(ctx)
     svc = create_cluster_service(_get_profile(ctx))
-    clusters = svc.list_clusters(campaign_id)
+    clusters = svc.list_clusters(campaign_id, nm_id)
 
     if not clusters:
         renderer.success('No clusters found.')
         return
 
     data = [asdict(c) for c in clusters]
-    rows = _cluster_rows(clusters)
     renderer.display(data, headers=_CLUSTER_HEADERS, title='Search Clusters')
 
 
 @cluster_app.command('active')
 def cluster_active(
         ctx: typer.Context,
-        campaign_id: int = typer.Option(
-            ..., '--campaign', '-c', help='Campaign ID',
-        ),
+        campaign_id: int = _CAMPAIGN_OPT,
+        nm_id: int = _NM_OPT,
 ) -> None:
-    """List active search clusters for a campaign."""
+    """List active search clusters for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
     renderer = _get_renderer(ctx)
     svc = create_cluster_service(_get_profile(ctx))
-    clusters = svc.get_active_clusters(campaign_id)
+    clusters = svc.get_active_clusters(campaign_id, nm_id)
 
     if not clusters:
         renderer.success('No active clusters found.')
         return
 
     data = [asdict(c) for c in clusters]
-    rows = _cluster_rows(clusters)
     renderer.display(data, headers=_CLUSTER_HEADERS, title='Active Clusters')
 
 
 @cluster_app.command('inactive')
 def cluster_inactive(
         ctx: typer.Context,
-        campaign_id: int = typer.Option(
-            ..., '--campaign', '-c', help='Campaign ID',
-        ),
+        campaign_id: int = _CAMPAIGN_OPT,
+        nm_id: int = _NM_OPT,
 ) -> None:
-    """List inactive search clusters for a campaign."""
+    """List inactive search clusters for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
     renderer = _get_renderer(ctx)
     svc = create_cluster_service(_get_profile(ctx))
-    clusters = svc.get_inactive_clusters(campaign_id)
+    clusters = svc.get_inactive_clusters(campaign_id, nm_id)
 
     if not clusters:
         renderer.success('No inactive clusters found.')
         return
 
     data = [asdict(c) for c in clusters]
-    rows = _cluster_rows(clusters)
     renderer.display(data, headers=_CLUSTER_HEADERS, title='Inactive Clusters')
 
 
 @cluster_app.command('bids')
 def cluster_bids(
         ctx: typer.Context,
-        campaign_id: int = typer.Option(
-            ..., '--campaign', '-c', help='Campaign ID',
-        ),
+        campaign_id: int = _CAMPAIGN_OPT,
+        nm_id: int = _NM_OPT,
 ) -> None:
-    """List clusters with bids set for a campaign."""
+    """List clusters with bids set for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
     renderer = _get_renderer(ctx)
     svc = create_cluster_service(_get_profile(ctx))
-    clusters = svc.get_cluster_bids(campaign_id)
+    clusters = svc.get_cluster_bids(campaign_id, nm_id)
 
     if not clusters:
         renderer.success('No cluster bids found.')
         return
 
     data = [asdict(c) for c in clusters]
-    rows = _cluster_rows(clusters)
     renderer.display(data, headers=_CLUSTER_HEADERS, title='Cluster Bids')
 
 
 @cluster_app.command('stats')
 def cluster_stats(
         ctx: typer.Context,
-        campaign_id: int = typer.Option(
-            ..., '--campaign', '-c', help='Campaign ID',
+        campaign_id: int = _CAMPAIGN_OPT,
+        nm_id: int = _NM_OPT,
+        date_from: str = typer.Option(
+            ..., '--from', help='Start date (YYYY-MM-DD)',
+        ),
+        date_to: str = typer.Option(
+            ..., '--to', help='End date (YYYY-MM-DD)',
         ),
 ) -> None:
-    """Show statistics for search clusters in a campaign."""
-    from wb.services._factory import create_stats_service
+    """Show statistics for search clusters in a campaign/product."""
+    from wb.services._factory import create_cluster_service
 
     renderer = _get_renderer(ctx)
-    svc = create_stats_service(_get_profile(ctx))
-    stats = svc.get_cluster_stats(campaign_id)
+    svc = create_cluster_service(_get_profile(ctx))
+    stats = svc.get_cluster_stats(campaign_id, nm_id, date_from, date_to)
 
     if not stats:
         renderer.success('No cluster statistics available.')
         return
 
     data = [asdict(s) for s in stats]
-    headers = ['ID', 'Name', 'Views', 'Clicks', 'CTR', 'Orders', 'Spend']
+    headers = [
+        'Norm Query', 'Views', 'Clicks', 'CTR',
+        'Orders', 'Spend', 'Avg Pos',
+    ]
     rows = [
         [
-            str(s.cluster_id),
-            s.cluster_name,
+            s.norm_query,
             str(s.views),
             str(s.clicks),
             f'{s.ctr:.2f}%',
             str(s.orders),
             str(s.spend),
+            f'{s.avg_pos:.1f}',
         ]
         for s in stats
     ]

@@ -12,13 +12,20 @@ from wb.domain.models import Campaign, ProductCard
 from wb.services.campaigns import CampaignService
 
 RAW_CAMPAIGN: dict = {
-    'advertId': 100,
-    'name': 'Test Campaign',
+    'id': 100,
     'status': 9,
-    'type': 8,
-    'paymentType': 'cpm',
-    'dailyBudget': 5000,
-    'createTime': '2026-03-01T00:00:00',
+    'bid_type': 'manual',
+    'currency': 'RUB',
+    'settings': {
+        'name': 'Test Campaign',
+        'payment_type': 'cpm',
+    },
+    'timestamps': {
+        'created': '2026-03-01T00:00:00',
+        'started': None,
+        'updated': None,
+        'deleted': None,
+    },
 }
 
 
@@ -51,9 +58,8 @@ class TestListCampaigns:
         assert campaign.campaign_id == 100
         assert campaign.name == 'Test Campaign'
         assert campaign.status == CampaignStatus.RUNNING
-        assert campaign.campaign_type == CampaignType.AUTO
+        assert campaign.campaign_type == CampaignType.STANDARD
         assert campaign.payment_type == PaymentType.CPM
-        assert campaign.daily_budget == 5000
         assert campaign.create_time == '2026-03-01T00:00:00'
         mock_client.list_campaigns.assert_called_once_with(
             status=None, type_=None,
@@ -147,4 +153,4 @@ class TestGetEligibleItems:
         assert result[0].nm_id == 10
         assert result[0].name == 'Widget'
         assert result[1].nm_id == 20
-        mock_client.get_eligible_items.assert_called_once_with(1)
+        mock_client.get_eligible_items.assert_called_once_with([1])

@@ -138,17 +138,17 @@ def bid_set_item(
         ctx: typer.Context,
         campaign_id: int = typer.Option(..., '--campaign', '-c', help='Campaign ID'),
         nm_id: int = typer.Option(..., '--nm', help='Product NM ID'),
-        cpm: int = typer.Option(..., '--cpm', help='CPM bid value in kopecks'),
-        subject_id: int = typer.Option(0, '--subject', help='Subject scope (0 = all)'),
+        cpm: int = typer.Option(..., '--cpm', help='Bid value in kopecks'),
+        placement: str = typer.Option('search', '--placement', help='Placement type'),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
-    """Set a CPM bid for a single item in a campaign."""
+    """Set a bid for a single item in a campaign."""
     from wb.services._factory import create_bid_service
 
     renderer = _get_renderer(ctx)
-    mutation = BidMutation(nm_id=nm_id, cpm=cpm, subject_id=subject_id)
-    action = f'set cpm={cpm} for nm={nm_id} in campaign {campaign_id}'
+    mutation = BidMutation(nm_id=nm_id, bid_kopecks=cpm, placement=placement)
+    action = f'set bid={cpm} for nm={nm_id} in campaign {campaign_id}'
 
     if not (yes or dry_run or renderer.is_json):
         confirmed = typer.confirm(f'About to: {action}. Proceed?', default=False)
@@ -176,9 +176,9 @@ def bid_set_items(
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
-    """Set CPM bids for multiple items from a JSON file.
+    """Set bids for multiple items from a JSON file.
 
-    File format: [{"nm_id": 123, "cpm": 450, "subject_id": 0}, ...]
+    File format: [{"nm_id": 123, "bid_kopecks": 450, "placement": "search"}, ...]
     """
     from wb.services._factory import create_bid_service
 
@@ -198,8 +198,8 @@ def bid_set_items(
         mutations = [
             BidMutation(
                 nm_id=item['nm_id'],
-                cpm=item['cpm'],
-                subject_id=item.get('subject_id', 0),
+                bid_kopecks=item.get('bid_kopecks', item.get('cpm', 0)),
+                placement=item.get('placement', 'search'),
             )
             for item in raw
         ]

@@ -53,8 +53,8 @@ class TestGetBudget:
         """get_budget returns BudgetSnapshot with correct campaign_id."""
         mock_client.get_budget.return_value = {
             'total': 500000,
-            'dailyBudget': 10000,
-            'balance': 350000,
+            'cash': 300000,
+            'netting': 200000,
         }
 
         result = service.get_budget(campaign_id=42)
@@ -62,8 +62,8 @@ class TestGetBudget:
         assert isinstance(result, BudgetSnapshot)
         assert result.campaign_id == 42
         assert result.total == 500000
-        assert result.daily == 10000
-        assert result.balance == 350000
+        assert result.cash == 300000
+        assert result.netting == 200000
         mock_client.get_budget.assert_called_once_with(42)
 
     def test_returns_budget_snapshot_with_zero_values(
@@ -72,8 +72,8 @@ class TestGetBudget:
         """get_budget handles zero values gracefully."""
         mock_client.get_budget.return_value = {
             'total': 0,
-            'dailyBudget': 0,
-            'balance': 0,
+            'cash': 0,
+            'netting': 0,
         }
 
         result = service.get_budget(campaign_id=99)
@@ -81,5 +81,5 @@ class TestGetBudget:
         assert isinstance(result, BudgetSnapshot)
         assert result.campaign_id == 99
         assert result.total == 0
-        assert result.daily == 0
-        assert result.balance == 0
+        assert result.cash == 0
+        assert result.netting == 0

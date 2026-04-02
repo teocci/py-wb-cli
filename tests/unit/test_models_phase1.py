@@ -69,52 +69,62 @@ class TestSearchClusterFromApi:
 
     def test_active_cluster(self):
         data = {
+            'norm_query': 'perfume women',
             'id': 10,
-            'keyword': 'perfume women',
-            'count': 42,
             'bid': 150,
-            'recommendedBid': 200,
+            'nm_id': 555,
         }
         cluster = SearchCluster.from_api(data, is_active=True)
+        assert cluster.norm_query == 'perfume women'
         assert cluster.cluster_id == 10
-        assert cluster.cluster_name == 'perfume women'
-        assert cluster.count == 42
         assert cluster.is_active is True
         assert cluster.bid == 150
-        assert cluster.recommended_bid == 200
+        assert cluster.nm_id == 555
 
     def test_inactive_cluster(self):
-        data = {'id': 20, 'keyword': 'cologne men'}
+        data = {'norm_query': 'cologne men'}
         cluster = SearchCluster.from_api(data, is_active=False)
-        assert cluster.cluster_id == 20
+        assert cluster.norm_query == 'cologne men'
         assert cluster.is_active is False
 
     def test_defaults(self):
         data = {}
         cluster = SearchCluster.from_api(data)
         assert cluster.cluster_id == 0
-        assert cluster.cluster_name == ''
-        assert cluster.count == 0
+        assert cluster.norm_query == ''
         assert cluster.bid == 0
+
+    def test_from_normquery_list(self):
+        cluster = SearchCluster.from_normquery_list('test phrase', is_active=True)
+        assert cluster.norm_query == 'test phrase'
+        assert cluster.is_active is True
+
+    def test_from_bid_api(self):
+        data = {'advert_id': 123, 'bid': 700, 'nm_id': 456, 'norm_query': 'phrase'}
+        cluster = SearchCluster.from_bid_api(data)
+        assert cluster.norm_query == 'phrase'
+        assert cluster.bid == 700
+        assert cluster.nm_id == 456
 
 
 class TestBudgetSnapshotFromApi:
     """Tests for BudgetSnapshot.from_api()."""
 
     def test_full_payload(self):
-        data = {'total': 50000, 'dailyBudget': 5000, 'balance': 30000}
+        data = {'total': 50000, 'cash': 30000, 'netting': 20000, 'currency': 'RUB'}
         snap = BudgetSnapshot.from_api(data, campaign_id=111)
         assert snap.campaign_id == 111
         assert snap.total == 50000
-        assert snap.daily == 5000
-        assert snap.balance == 30000
+        assert snap.cash == 30000
+        assert snap.netting == 20000
+        assert snap.currency == 'RUB'
 
     def test_zero_defaults(self):
         data = {}
         snap = BudgetSnapshot.from_api(data, campaign_id=0)
         assert snap.total == 0
-        assert snap.daily == 0
-        assert snap.balance == 0
+        assert snap.cash == 0
+        assert snap.netting == 0
 
 
 class TestCampaignStatsFromApi:
@@ -127,9 +137,12 @@ class TestCampaignStatsFromApi:
             'clicks': 500,
             'ctr': 5.0,
             'orders': 50,
-            'sum': 25000,
+            'sum': 25000.0,
             'cpc': 50.0,
-            'cpm': 2500.0,
+            'cr': 1.5,
+            'atbs': 9,
+            'shks': 8,
+            'currency': 'RUB',
         }
         stats = CampaignStats.from_api(data)
         assert stats.campaign_id == 999
@@ -137,15 +150,18 @@ class TestCampaignStatsFromApi:
         assert stats.clicks == 500
         assert stats.ctr == 5.0
         assert stats.orders == 50
-        assert stats.spend == 25000
+        assert stats.spend == 25000.0
         assert stats.cpc == 50.0
-        assert stats.cpm == 2500.0
+        assert stats.cr == 1.5
+        assert stats.atbs == 9
+        assert stats.shks == 8
+        assert stats.currency == 'RUB'
 
     def test_empty_payload(self):
         stats = CampaignStats.from_api({})
         assert stats.campaign_id == 0
         assert stats.views == 0
-        assert stats.spend == 0
+        assert stats.spend == 0.0
 
 
 class TestClusterStatsFromApi:
@@ -153,26 +169,31 @@ class TestClusterStatsFromApi:
 
     def test_full_payload(self):
         data = {
-            'id': 77,
-            'keyword': 'eau de parfum',
+            'norm_query': 'eau de parfum',
             'views': 3000,
             'clicks': 120,
             'ctr': 4.0,
+            'cpc': 50.0,
+            'cpm': 2000.0,
             'orders': 15,
-            'sum': 6000,
+            'spend': 6000,
+            'avg_pos': 3.6,
+            'atbs': 68,
+            'shks': 10,
+            'currency': 'RUB',
         }
         stats = ClusterStats.from_api(data)
-        assert stats.cluster_id == 77
-        assert stats.cluster_name == 'eau de parfum'
+        assert stats.norm_query == 'eau de parfum'
         assert stats.views == 3000
         assert stats.clicks == 120
         assert stats.orders == 15
         assert stats.spend == 6000
+        assert stats.avg_pos == 3.6
+        assert stats.atbs == 68
 
     def test_empty_payload(self):
         stats = ClusterStats.from_api({})
-        assert stats.cluster_id == 0
-        assert stats.cluster_name == ''
+        assert stats.norm_query == ''
 
 
 class TestAccountBalance:

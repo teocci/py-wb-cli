@@ -31,7 +31,14 @@
       "WebFetch(domain:dev.wildberries.ru)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=short)",
       "Bash(.venv/Scripts/python -m wb auth --help)",
-      "Bash(.venv/Scripts/python -c \":*)"
+      "Bash(.venv/Scripts/python -c \":*)",
+      "Bash(/d/libs/python311/python -m venv .venv)",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"set-bid\\\\|set_bid\\\\|excluded\" /d/teocci/code/python/py-wb-cli --include=*.md --exclude-dir=.venv)",
+      "WebFetch(domain:openapi.wildberries.ru)",
+      "WebFetch(domain:advert-api.wildberries.ru)",
+      "Bash(grep -n \"^get$\\\\|^post$\\\\|^put$\\\\|^patch$\\\\|^delete$\" \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\dev-wb-adv.md\")"
     ]
   }
 }

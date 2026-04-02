@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from wb.core.exceptions import ValidationError
-from wb.domain.enums import CampaignType
 from wb.domain.models import BidMutation, CampaignCreate, MutationResult, PlacementConfig
 from wb.services.bids import BidService
 from wb.services.budgets import BudgetService
@@ -116,8 +115,7 @@ class TestCampaignServiceCreate:
     def test_calls_client_with_payload(self, campaign_svc, mock_client):
         mock_client.create_campaign.return_value = {'advertId': 99}
         params = CampaignCreate(
-            name='Test', campaign_type=CampaignType.AUTO,
-            daily_budget=5000, nm_ids=[100],
+            name='Test', nm_ids=[100], bid_type='manual',
         )
         result = campaign_svc.create_campaign(params)
         mock_client.create_campaign.assert_called_once()
@@ -125,9 +123,7 @@ class TestCampaignServiceCreate:
         assert result.success is True
 
     def test_dry_run_skips_client(self, campaign_svc, mock_client):
-        params = CampaignCreate(
-            name='Test', campaign_type=CampaignType.AUTO, daily_budget=5000,
-        )
+        params = CampaignCreate(name='Test')
         result = campaign_svc.create_campaign(params, dry_run=True)
         mock_client.create_campaign.assert_not_called()
         assert result.dry_run is True
@@ -164,7 +160,7 @@ class TestCampaignServiceSetPlacements:
     """Tests for CampaignService.set_placements()."""
 
     def test_calls_client_with_payload(self, campaign_svc, mock_client):
-        config = PlacementConfig(search_enabled=True, catalog_enabled=False)
+        config = PlacementConfig(search_enabled=True, recommendations_enabled=False)
         result = campaign_svc.set_placements(10, config)
         mock_client.set_placements.assert_called_once()
         assert result.success is True
@@ -207,7 +203,7 @@ class TestBidServiceSetItemBid:
     """Tests for BidService.set_item_bid()."""
 
     def test_calls_client_with_payload(self, bid_svc, mock_client):
-        mutation = BidMutation(nm_id=123, cpm=500, subject_id=0)
+        mutation = BidMutation(nm_id=123, bid_kopecks=500)
         result = bid_svc.set_item_bid(10, mutation)
         mock_client.set_item_bid.assert_called_once_with(
             mutation.to_api(10)
@@ -215,31 +211,31 @@ class TestBidServiceSetItemBid:
         assert result.success is True
 
     def test_dry_run_skips_client(self, bid_svc, mock_client):
-        mutation = BidMutation(nm_id=1, cpm=100)
+        mutation = BidMutation(nm_id=1, bid_kopecks=100)
         result = bid_svc.set_item_bid(5, mutation, dry_run=True)
         mock_client.set_item_bid.assert_not_called()
         assert result.dry_run is True
 
-    def test_raises_on_zero_cpm(self, bid_svc):
+    def test_raises_on_zero_bid(self, bid_svc):
         with pytest.raises(ValidationError):
-            bid_svc.set_item_bid(1, BidMutation(nm_id=1, cpm=0))
+            bid_svc.set_item_bid(1, BidMutation(nm_id=1, bid_kopecks=0))
 
-    def test_raises_on_negative_cpm(self, bid_svc):
+    def test_raises_on_negative_bid(self, bid_svc):
         with pytest.raises(ValidationError):
-            bid_svc.set_item_bid(1, BidMutation(nm_id=1, cpm=-50))
+            bid_svc.set_item_bid(1, BidMutation(nm_id=1, bid_kopecks=-50))
 
 
 class TestBidServiceSetItemBids:
     """Tests for BidService.set_item_bids()."""
 
     def test_returns_result_per_mutation(self, bid_svc, mock_client):
-        mutations = [BidMutation(nm_id=1, cpm=100), BidMutation(nm_id=2, cpm=200)]
+        mutations = [BidMutation(nm_id=1, bid_kopecks=100), BidMutation(nm_id=2, bid_kopecks=200)]
         results = bid_svc.set_item_bids(10, mutations)
         assert len(results) == 2
         assert mock_client.set_item_bid.call_count == 2
 
     def test_dry_run_calls_nothing(self, bid_svc, mock_client):
-        mutations = [BidMutation(nm_id=1, cpm=100)]
+        mutations = [BidMutation(nm_id=1, bid_kopecks=100)]
         results = bid_svc.set_item_bids(5, mutations, dry_run=True)
         mock_client.set_item_bid.assert_not_called()
         assert all(r.dry_run for r in results)
@@ -271,53 +267,53 @@ class TestCampaignCreate:
 
     def test_to_api_basic(self):
         params = CampaignCreate(
-            name='Test', campaign_type=CampaignType.AUTO,
-            daily_budget=5000, nm_ids=[10, 20],
+            name='Test', nm_ids=[10, 20],
+            bid_type='manual', placement_types=['search'],
         )
         payload = params.to_api()
         assert payload['name'] == 'Test'
-        assert payload['type'] == CampaignType.AUTO.value
-        assert payload['dailyBudget'] == 5000
         assert payload['nms'] == [10, 20]
+        assert payload['bid_type'] == 'manual'
+        assert payload['placement_types'] == ['search']
 
-    def test_to_api_with_subject(self):
+    def test_to_api_with_unified_bid(self):
         params = CampaignCreate(
-            name='T', campaign_type=CampaignType.AUTO,
-            daily_budget=1000, subject_id=42,
+            name='T', bid_type='unified',
+            placement_types=['search', 'recommendations'],
         )
         payload = params.to_api()
-        assert payload['subjectId'] == 42
+        assert payload['bid_type'] == 'unified'
+        assert payload['placement_types'] == ['search', 'recommendations']
 
-    def test_to_api_no_nms_excludes_key(self):
-        params = CampaignCreate(
-            name='T', campaign_type=CampaignType.AUTO, daily_budget=1000,
-        )
+    def test_to_api_empty_nms(self):
+        params = CampaignCreate(name='T')
         payload = params.to_api()
-        assert 'nms' not in payload
+        assert payload['nms'] == []
 
 
 class TestBidMutation:
     """Tests for BidMutation.to_api()."""
 
     def test_to_api_payload(self):
-        m = BidMutation(nm_id=123, cpm=400, subject_id=0)
+        m = BidMutation(nm_id=123, bid_kopecks=400, placement='search')
         payload = m.to_api(campaign_id=99)
-        assert payload['advertId'] == 99
-        assert payload['cpm'] == 400
-        assert payload['type'] == 8
-        assert payload['param'] == 0
+        assert payload['advert_id'] == 99
+        nm_bids = payload['nm_bids']
+        assert len(nm_bids) == 1
+        assert nm_bids[0]['nm_id'] == 123
+        assert nm_bids[0]['bid_kopecks'] == 400
+        assert nm_bids[0]['placement'] == 'search'
 
 
 class TestPlacementConfig:
     """Tests for PlacementConfig.to_api()."""
 
     def test_to_api_payload(self):
-        config = PlacementConfig(search_enabled=True, catalog_enabled=False)
+        config = PlacementConfig(
+            search_enabled=True, recommendations_enabled=False,
+        )
         payload = config.to_api(campaign_id=5)
-        assert payload['advertId'] == 5
-        params = payload['params']
-        assert len(params) == 2
-        search_place = next(p for p in params if p['place'] == 1)
-        catalog_place = next(p for p in params if p['place'] == 2)
-        assert search_place['active'] is True
-        assert catalog_place['active'] is False
+        assert payload['advert_id'] == 5
+        placements = payload['placements']
+        assert placements['search'] is True
+        assert placements['recommendations'] is False

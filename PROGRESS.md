@@ -8,8 +8,9 @@
 | 0.2.0 | Phase 1 | 2026-03-18 | Read-only visibility - campaigns, budgets, bids, stats, clusters |
 | 0.3.0 | Phase 2 | 2026-03-18 | Core write controls - lifecycle, items, bids, budget, placements |
 | 0.3.1 | Auth | 2026-03-19 | Dual auth - portal session support, env var fallback, /ping fix |
+| 0.3.2 | API Fix | 2026-04-02 | Full API migration - all dead endpoints replaced with current WB API |
 
-## Current Version: 0.3.1
+## Current Version: 0.3.2
 
 ## Phase Status
 
@@ -231,6 +232,54 @@ Added:
 
 - **355 tests passed** (0 failures, 1 pre-existing env-dependent skip)
 - Portal client tests cover: auth, generate_token, list_products, cookie validation, JRPC counter
+
+---
+
+## API Fix (v0.3.2) - COMPLETED
+
+### What happened
+
+Live testing on 2026-04-02 revealed that **10 of 12 endpoint paths** in the codebase return HTTP 404. WB migrated their entire Promotion API without deprecation notice. Only `/ping` and `/adv/v1/budget` survived.
+
+### What was fixed
+
+- **Constants**: All 14 dead `EP_*` constants replaced with current paths from `dev-wb-adv.md`
+- **8 new normquery constants** added for search cluster API (`EP_NQ_LIST`, `EP_NQ_GET_BIDS`, etc.)
+- **Domain models**: Campaign, AccountBalance, BudgetSnapshot, CampaignStats, SearchCluster, ClusterStats — all `from_api()` rewritten for new response shapes
+- **CampaignCreate, BidMutation, PlacementConfig** — `to_api()` rewritten for new request formats
+- **MinusPhraseSet** — added `from_api()` and `to_api()` methods
+- **HTTP client**: Added `put()` and `patch()` methods
+- **PromotionClient**: All methods rewritten — new endpoints, HTTP methods (POST→GET, GET→POST), payload shapes
+- **Cluster read commands**: Migrated from dead `auto/*` API to working `normquery/*` API with required `--nm` parameter
+- **ClusterService**: Complete rewrite for normquery API (list, active, inactive, bids, stats, minus phrases)
+- **StatsService**: Removed dead `get_cluster_stats` (moved to ClusterService)
+- **All CLI commands**: Updated for new model fields and signatures
+- **CLAUDE.md**: Added API documentation rule (only use `dev-wb-adv.md`)
+- **FIXES.md**: Created fix progress log
+
+### Endpoint migration summary
+
+| Count | Change |
+|-------|--------|
+| 10 | Dead paths replaced |
+| 3 | HTTP method changes (POST→GET, GET→POST, DELETE→GET) |
+| 8 | New normquery endpoints added |
+| 2 | New HTTP methods (put, patch) in client |
+
+### Write endpoint verification (campaign 35495276)
+
+| Endpoint | Result |
+|---|---|
+| `POST /adv/v2/seacat/save-ad` | 200 — created |
+| `GET /adv/v0/start` | 400 — expected (no budget) |
+| `GET /adv/v0/pause` | 400 — expected (not active) |
+| `POST /adv/v0/rename` | 200 — renamed |
+| `GET /adv/v0/stop` | 400 — expected (not active) |
+| `GET /adv/v0/delete` | 200 — deleted |
+
+### Test results
+
+- **366 tests passed** (0 failures)
 
 ---
 

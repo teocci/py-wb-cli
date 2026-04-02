@@ -120,7 +120,7 @@ def campaign_get(
         ['Daily Budget', str(campaign.daily_budget)],
         ['Created', campaign.create_time or ''],
         ['Started', campaign.start_time or ''],
-        ['Ended', campaign.end_time or ''],
+        ['Updated', campaign.updated_time or ''],
     ]
     renderer.display(data, headers=headers, title=f'Campaign {campaign_id}')
 
@@ -220,18 +220,16 @@ def _log_mutation(profile: str | None, command: str, result) -> None:
 def campaign_create(
         ctx: typer.Context,
         name: str = typer.Option(..., '--name', '-n', help='Campaign name'),
-        daily_budget: int = typer.Option(
-            ..., '--daily-budget', help='Daily budget in kopecks',
-        ),
         nms: str = typer.Option(
             ..., '--nms', help='Comma-separated product NM IDs',
         ),
-        type_: str = typer.Option(
-            'auto', '--type', '-t',
-            help='Campaign type (auto, search_plus_catalog)',
+        bid_type: str = typer.Option(
+            'manual', '--bid-type',
+            help='Bid type (manual, unified)',
         ),
-        subject_id: int | None = typer.Option(
-            None, '--subject', help='Subject category ID',
+        placements: str = typer.Option(
+            'search', '--placements',
+            help='Comma-separated placement types (search, recommendations)',
         ),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
@@ -240,23 +238,21 @@ def campaign_create(
     from wb.services._factory import create_campaign_service
 
     renderer = _get_renderer(ctx)
-    campaign_type = _parse_type(type_)
-    if campaign_type is None:
-        raise typer.BadParameter(f'Invalid campaign type: {type_!r}')
 
     try:
         nm_list = [int(x.strip()) for x in nms.split(',') if x.strip()]
     except ValueError:
         raise typer.BadParameter('--nms must be comma-separated integers')
 
+    placement_list = [p.strip() for p in placements.split(',') if p.strip()]
+
     params = CampaignCreate(
         name=name,
-        campaign_type=campaign_type,
-        daily_budget=daily_budget,
         nm_ids=nm_list,
-        subject_id=subject_id,
+        bid_type=bid_type,
+        placement_types=placement_list,
     )
-    action = f'create campaign "{name}" ({campaign_type.name})'
+    action = f'create campaign "{name}" bid_type={bid_type}'
     _confirm_or_abort(renderer, action, yes or dry_run)
 
     svc = create_campaign_service(_get_profile(ctx))
@@ -463,10 +459,10 @@ def campaign_set_placements(
     from wb.services._factory import create_campaign_service
 
     renderer = _get_renderer(ctx)
-    config = PlacementConfig(search_enabled=search, catalog_enabled=catalog)
+    config = PlacementConfig(search_enabled=search, recommendations_enabled=catalog)
     action = (
         f'set placements for campaign {campaign_id}: '
-        f'search={search}, catalog={catalog}'
+        f'search={search}, recommendations={catalog}'
     )
     _confirm_or_abort(renderer, action, yes or dry_run)
 

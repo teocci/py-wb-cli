@@ -10,9 +10,6 @@ from wb.domain.enums import (
     PaymentType,
 )
 
-# CPM campaign type code for auto campaigns in the WB API
-_AUTO_CAMPAIGN_TYPE_CODE = 8
-
 __all__ = [
     'Campaign',
     'ProductCard',
@@ -43,9 +40,11 @@ class Campaign:
         status: Current campaign lifecycle status.
         campaign_type: Type of campaign.
         payment_type: Billing model (CPM/CPC).
+        bid_type: Bid strategy ('manual' or 'unified').
+        currency: Currency code.
         daily_budget: Daily budget in kopecks.
         start_time: ISO timestamp of campaign start.
-        end_time: ISO timestamp of campaign end.
+        updated_time: ISO timestamp of last update.
         create_time: ISO timestamp of creation.
     """
 
@@ -54,24 +53,29 @@ class Campaign:
     status: CampaignStatus
     campaign_type: CampaignType
     payment_type: PaymentType
+    bid_type: str = 'manual'
+    currency: str = 'RUB'
     daily_budget: int = 0
     start_time: str | None = None
-    end_time: str | None = None
+    updated_time: str | None = None
     create_time: str | None = None
 
     @classmethod
     def from_api(cls, data: dict) -> Campaign:
-        """Create from WB API response payload."""
+        """Create from WB /api/advert/v2/adverts response payload."""
+        settings = data.get('settings', {})
+        timestamps = data.get('timestamps', {})
         return cls(
-            campaign_id=data['advertId'],
-            name=data.get('name', ''),
+            campaign_id=data['id'],
+            name=settings.get('name', ''),
             status=CampaignStatus(data['status']),
-            campaign_type=CampaignType(data['type']),
-            payment_type=PaymentType(data.get('paymentType', 'cpm')),
-            daily_budget=data.get('dailyBudget', 0),
-            start_time=data.get('startTime'),
-            end_time=data.get('endTime'),
-            create_time=data.get('createTime'),
+            campaign_type=CampaignType(data.get('type', 9)),
+            payment_type=PaymentType(settings.get('payment_type', 'cpm')),
+            bid_type=data.get('bid_type', 'manual'),
+            currency=data.get('currency', 'RUB'),
+            start_time=timestamps.get('started'),
+            updated_time=timestamps.get('updated'),
+            create_time=timestamps.get('created'),
         )
 
 
@@ -131,39 +135,61 @@ class ItemBid:
 
 @dataclass(slots=True)
 class SearchCluster:
-    """A search cluster attached to a campaign + product pair.
+    """A search cluster (normquery) attached to a campaign + product pair.
 
     Attributes:
-        cluster_id: Cluster identifier.
-        cluster_name: Human-readable cluster label.
-        count: Number of queries in the cluster.
+        norm_query: Normalized query string (cluster identifier).
+        cluster_id: Legacy cluster ID (kept for backward compat).
         is_active: Whether the cluster is currently active.
-        bid: Current bid on this cluster.
-        recommended_bid: Platform-recommended bid.
+        bid: Current bid on this cluster in kopecks.
+        nm_id: Product nomenclature ID associated with this cluster.
     """
 
-    cluster_id: int
-    cluster_name: str
-    count: int = 0
+    norm_query: str
+    cluster_id: int = 0
     is_active: bool = True
     bid: int = 0
-    recommended_bid: int = 0
+    nm_id: int = 0
 
     @classmethod
     def from_api(cls, data: dict, is_active: bool = True) -> SearchCluster:
-        """Create from WB API response payload.
+        """Create from WB API normquery/list response payload.
 
         Args:
             data: Raw API dict for a cluster.
             is_active: Whether this cluster is active.
         """
         return cls(
+            norm_query=data.get('norm_query', ''),
             cluster_id=data.get('id', 0),
-            cluster_name=data.get('keyword', ''),
-            count=data.get('count', 0),
             is_active=is_active,
             bid=data.get('bid', 0),
-            recommended_bid=data.get('recommendedBid', 0),
+            nm_id=data.get('nm_id', 0),
+        )
+
+    @classmethod
+    def from_normquery_list(
+        cls, phrase: str, is_active: bool = True,
+    ) -> SearchCluster:
+        """Create from a plain phrase string in normquery list arrays.
+
+        Args:
+            phrase: The normalized query phrase string.
+            is_active: Whether the phrase is in the active list.
+        """
+        return cls(norm_query=phrase, is_active=is_active)
+
+    @classmethod
+    def from_bid_api(cls, data: dict) -> SearchCluster:
+        """Create from /adv/v0/normquery/get-bids response item.
+
+        Args:
+            data: Raw API dict with advert_id, bid, nm_id, norm_query.
+        """
+        return cls(
+            norm_query=data.get('norm_query', ''),
+            bid=data.get('bid', 0),
+            nm_id=data.get('nm_id', 0),
         )
 
 
@@ -187,14 +213,16 @@ class BudgetSnapshot:
     Attributes:
         campaign_id: Campaign identifier.
         total: Total budget allocated.
-        daily: Daily budget limit.
-        balance: Remaining balance.
+        cash: Cash portion of the budget.
+        netting: Netting portion of the budget.
+        currency: Currency code.
     """
 
     campaign_id: int
     total: int = 0
-    daily: int = 0
-    balance: int = 0
+    cash: int = 0
+    netting: int = 0
+    currency: str = ''
 
     @classmethod
     def from_api(cls, data: dict, campaign_id: int) -> BudgetSnapshot:
@@ -207,8 +235,9 @@ class BudgetSnapshot:
         return cls(
             campaign_id=campaign_id,
             total=data.get('total', 0),
-            daily=data.get('dailyBudget', 0),
-            balance=data.get('balance', 0),
+            cash=data.get('cash', 0),
+            netting=data.get('netting', 0),
+            currency=data.get('currency', ''),
         )
 
 
@@ -224,7 +253,10 @@ class CampaignStats:
         orders: Total orders attributed.
         spend: Total spend in kopecks.
         cpc: Cost per click.
-        cpm: Cost per mille.
+        cr: Conversion rate.
+        atbs: Add-to-basket count.
+        shks: Units shipped.
+        currency: Currency code.
     """
 
     campaign_id: int
@@ -232,58 +264,79 @@ class CampaignStats:
     clicks: int = 0
     ctr: float = 0.0
     orders: int = 0
-    spend: int = 0
+    spend: float = 0.0
     cpc: float = 0.0
-    cpm: float = 0.0
+    cr: float = 0.0
+    atbs: int = 0
+    shks: int = 0
+    currency: str = 'RUB'
 
     @classmethod
     def from_api(cls, data: dict) -> CampaignStats:
-        """Create from WB API /adv/v2/fullstats response payload."""
+        """Create from WB API /adv/v3/fullstats response payload."""
         return cls(
             campaign_id=data.get('advertId', 0),
             views=data.get('views', 0),
             clicks=data.get('clicks', 0),
             ctr=data.get('ctr', 0.0),
             orders=data.get('orders', 0),
-            spend=data.get('sum', 0),
+            spend=data.get('sum', 0.0),
             cpc=data.get('cpc', 0.0),
-            cpm=data.get('cpm', 0.0),
+            cr=data.get('cr', 0.0),
+            atbs=data.get('atbs', 0),
+            shks=data.get('shks', 0),
+            currency=data.get('currency', 'RUB'),
         )
 
 
 @dataclass(slots=True)
 class ClusterStats:
-    """Statistics for a single search cluster.
+    """Statistics for a single search cluster (normquery).
 
     Attributes:
-        cluster_id: Cluster identifier.
-        cluster_name: Cluster label.
+        norm_query: Normalized query string.
         views: Impressions.
         clicks: Clicks.
         ctr: Click-through rate.
+        cpc: Cost per click.
+        cpm: Cost per mille.
         orders: Orders.
         spend: Spend in kopecks.
+        avg_pos: Average position.
+        atbs: Add-to-basket count.
+        shks: Units shipped.
+        currency: Currency code.
     """
 
-    cluster_id: int
-    cluster_name: str = ''
+    norm_query: str = ''
     views: int = 0
     clicks: int = 0
     ctr: float = 0.0
+    cpc: float = 0.0
+    cpm: float = 0.0
     orders: int = 0
     spend: int = 0
+    avg_pos: float = 0.0
+    atbs: int = 0
+    shks: int = 0
+    currency: str = 'RUB'
 
     @classmethod
     def from_api(cls, data: dict) -> ClusterStats:
-        """Create from WB API cluster stats response payload."""
+        """Create from WB API normquery stats response payload."""
         return cls(
-            cluster_id=data.get('id', 0),
-            cluster_name=data.get('keyword', ''),
+            norm_query=data.get('norm_query', ''),
             views=data.get('views', 0),
             clicks=data.get('clicks', 0),
             ctr=data.get('ctr', 0.0),
+            cpc=data.get('cpc', 0.0),
+            cpm=data.get('cpm', 0.0),
             orders=data.get('orders', 0),
-            spend=data.get('sum', 0),
+            spend=data.get('spend', 0),
+            avg_pos=data.get('avg_pos', 0.0),
+            atbs=data.get('atbs', 0),
+            shks=data.get('shks', 0),
+            currency=data.get('currency', 'RUB'),
         )
 
 
@@ -294,12 +347,33 @@ class MinusPhraseSet:
     Attributes:
         campaign_id: Campaign identifier.
         nm_id: Product nomenclature ID.
-        phrases: List of excluded phrases.
+        phrases: List of excluded phrases (norm_queries).
     """
 
     campaign_id: int
     nm_id: int
     phrases: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_api(cls, data: dict) -> MinusPhraseSet:
+        """Create from WB API get-minus response payload.
+
+        Args:
+            data: Raw API dict with advert_id, nm_id, norm_queries.
+        """
+        return cls(
+            campaign_id=data.get('advert_id', 0),
+            nm_id=data.get('nm_id', 0),
+            phrases=data.get('norm_queries', []),
+        )
+
+    def to_api(self) -> dict:
+        """Serialize to WB API set-minus request payload."""
+        return {
+            'advert_id': self.campaign_id,
+            'nm_id': self.nm_id,
+            'norm_queries': self.phrases,
+        }
 
 
 @dataclass(slots=True)
@@ -333,11 +407,15 @@ class AccountBalance:
         balance: Available balance in kopecks.
         net: Net amount.
         bonus: Bonus balance.
+        currency: Currency code.
+        cashbacks: List of cashback entries.
     """
 
     balance: int = 0
     net: int = 0
     bonus: int = 0
+    currency: str = 'RUB'
+    cashbacks: list[dict] = field(default_factory=list)
 
     @classmethod
     def from_api(cls, data: dict) -> AccountBalance:
@@ -346,6 +424,8 @@ class AccountBalance:
             balance=data.get('balance', 0),
             net=data.get('net', 0),
             bonus=data.get('bonus', 0),
+            currency=data.get('currency', 'RUB'),
+            cashbacks=data.get('cashbacks', []),
         )
 
 
@@ -370,61 +450,59 @@ class MutationResult:
 
 @dataclass(slots=True)
 class CampaignCreate:
-    """Parameters for creating a new campaign.
+    """Parameters for creating a new campaign via /adv/v2/seacat/save-ad.
 
     Attributes:
         name: Campaign display name.
-        campaign_type: Type of campaign to create.
-        daily_budget: Daily budget limit in kopecks.
         nm_ids: Product nomenclature IDs to include.
-        subject_id: Subject category ID (optional).
+        bid_type: Bid strategy ('manual' or 'unified').
+        placement_types: Placement types to enable.
     """
 
     name: str
-    campaign_type: CampaignType
-    daily_budget: int
     nm_ids: list[int] = field(default_factory=list)
-    subject_id: int | None = None
+    bid_type: str = 'manual'
+    placement_types: list[str] = field(default_factory=lambda: ['search'])
 
     def to_api(self) -> dict:
-        """Serialize to WB API create-campaign payload."""
-        payload: dict = {
-            'type': self.campaign_type.value,
+        """Serialize to WB API /adv/v2/seacat/save-ad payload."""
+        return {
             'name': self.name,
-            'dailyBudget': self.daily_budget,
+            'nms': self.nm_ids,
+            'bid_type': self.bid_type,
+            'placement_types': self.placement_types,
         }
-        if self.nm_ids:
-            payload['nms'] = self.nm_ids
-        if self.subject_id is not None:
-            payload['subjectId'] = self.subject_id
-        return payload
 
 
 @dataclass(slots=True)
 class BidMutation:
-    """A single CPM bid change for an item in a campaign.
+    """A bid change for product cards in a campaign.
 
     Attributes:
         nm_id: Product nomenclature ID.
-        cpm: New CPM bid value in kopecks.
-        subject_id: Subject category scope (0 = all subjects).
+        bid_kopecks: New bid value in kopecks.
+        placement: Placement type ('search', 'recommendations', 'combined').
     """
 
     nm_id: int
-    cpm: int
-    subject_id: int = 0
+    bid_kopecks: int
+    placement: str = 'search'
 
     def to_api(self, campaign_id: int) -> dict:
-        """Serialize to WB API set-bid payload.
+        """Serialize to WB API PATCH /api/advert/v1/bids payload.
 
         Args:
             campaign_id: Campaign this bid belongs to.
         """
         return {
-            'advertId': campaign_id,
-            'type': _AUTO_CAMPAIGN_TYPE_CODE,
-            'cpm': self.cpm,
-            'param': self.subject_id,
+            'advert_id': campaign_id,
+            'nm_bids': [
+                {
+                    'nm_id': self.nm_id,
+                    'bid_kopecks': self.bid_kopecks,
+                    'placement': self.placement,
+                },
+            ],
         }
 
 
@@ -434,32 +512,24 @@ class PlacementConfig:
 
     Attributes:
         search_enabled: Whether search placement is active.
-        catalog_enabled: Whether catalog placement is active.
-        booster_enabled: Whether booster placement is active.
+        recommendations_enabled: Whether recommendations placement is active.
     """
 
     search_enabled: bool = True
-    catalog_enabled: bool = True
-    booster_enabled: bool = False
+    recommendations_enabled: bool = False
 
     def to_api(self, campaign_id: int) -> dict:
-        """Serialize to WB API update-params payload.
+        """Serialize to PUT /adv/v0/auction/placements payload item.
 
         Args:
             campaign_id: Campaign to apply placements to.
         """
         return {
-            'advertId': campaign_id,
-            'params': [
-                {
-                    'active': self.search_enabled,
-                    'place': 1,
-                },
-                {
-                    'active': self.catalog_enabled,
-                    'place': 2,
-                },
-            ],
+            'advert_id': campaign_id,
+            'placements': {
+                'search': self.search_enabled,
+                'recommendations': self.recommendations_enabled,
+            },
         }
 
 

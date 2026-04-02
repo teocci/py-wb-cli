@@ -23,25 +23,33 @@ __all__ = [
     'PING_PATH',
     'PORTAL_AUTH_HEADER',
     'PORTAL_SESSION_HEADER',
-    'EP_CAMPAIGN_LIST',
+    'EP_CAMPAIGN_COUNT',
+    'EP_CAMPAIGN_INFO',
     'EP_CAMPAIGN_FULLSTATS',
     'EP_ELIGIBLE_SUBJECTS',
     'EP_ELIGIBLE_ITEMS',
     'EP_RECOMMENDED_BID',
     'EP_ACCOUNT_BALANCE',
     'EP_CAMPAIGN_BUDGET',
-    'EP_CLUSTER_ACTIVE',
-    'EP_CLUSTER_ALL',
-    'EP_CLUSTER_STATS',
     'EP_CAMPAIGN_START',
     'EP_CAMPAIGN_PAUSE',
     'EP_CAMPAIGN_STOP',
     'EP_CAMPAIGN_RENAME',
+    'EP_CAMPAIGN_DELETE',
     'EP_CAMPAIGN_CREATE',
     'EP_CAMPAIGN_ITEMS',
     'EP_CAMPAIGN_PLACEMENTS',
     'EP_BUDGET_DEPOSIT',
     'EP_BID_SET',
+    'EP_BID_MIN',
+    'EP_NQ_LIST',
+    'EP_NQ_GET_BIDS',
+    'EP_NQ_SET_BIDS',
+    'EP_NQ_DEL_BIDS',
+    'EP_NQ_GET_MINUS',
+    'EP_NQ_SET_MINUS',
+    'EP_NQ_STATS',
+    'EP_NQ_STATS_DAILY',
     'EP_PORTAL_AUTH_TOKEN',
     'EP_PORTAL_TOKENS_JRPC',
     'EP_PORTAL_TABLE_LIST',
@@ -107,27 +115,38 @@ PORTAL_AUTH_HEADER = 'authorizev3'
 PORTAL_SESSION_HEADER = 'wb-seller-lk'
 
 # ── Promotion API endpoint paths (read) ──────────────────────────────
-EP_CAMPAIGN_LIST = '/adv/v1/promotion/adverts'
-EP_CAMPAIGN_FULLSTATS = '/adv/v2/fullstats'
-EP_ELIGIBLE_SUBJECTS = '/adv/v1/promotion/subjects'
-EP_ELIGIBLE_ITEMS = '/adv/v1/promotion/nms'
-EP_RECOMMENDED_BID = '/adv/v2/promotion/recommended_cpm'
-EP_ACCOUNT_BALANCE = '/adv/v1/account/balance'
+# Source: dev-wb-adv.md (verified live 2026-04-02)
+EP_CAMPAIGN_COUNT = '/adv/v1/promotion/count'
+EP_CAMPAIGN_INFO = '/api/advert/v2/adverts'
+EP_CAMPAIGN_FULLSTATS = '/adv/v3/fullstats'
+EP_ELIGIBLE_SUBJECTS = '/adv/v1/supplier/subjects'
+EP_ELIGIBLE_ITEMS = '/adv/v2/supplier/nms'
+EP_RECOMMENDED_BID = '/api/advert/v0/bids/recommendations'
+EP_ACCOUNT_BALANCE = '/adv/v1/balance'
 EP_CAMPAIGN_BUDGET = '/adv/v1/budget'
-EP_CLUSTER_ACTIVE = '/adv/v1/auto/active-words'
-EP_CLUSTER_ALL = '/adv/v1/auto/words'
-EP_CLUSTER_STATS = '/adv/v2/auto/stat-words'
 
 # ── Promotion API endpoint paths (write) ─────────────────────────────
+EP_CAMPAIGN_CREATE = '/adv/v2/seacat/save-ad'
 EP_CAMPAIGN_START = '/adv/v0/start'
 EP_CAMPAIGN_PAUSE = '/adv/v0/pause'
 EP_CAMPAIGN_STOP = '/adv/v0/stop'
-EP_CAMPAIGN_RENAME = '/adv/v1/rename'
-EP_CAMPAIGN_CREATE = '/adv/v1/promotion/adverts'
-EP_CAMPAIGN_ITEMS = '/adv/v1/promotion/nms'
-EP_CAMPAIGN_PLACEMENTS = '/adv/v1/auto/update-params'
+EP_CAMPAIGN_RENAME = '/adv/v0/rename'
+EP_CAMPAIGN_DELETE = '/adv/v0/delete'
+EP_CAMPAIGN_ITEMS = '/adv/v0/auction/nms'
+EP_CAMPAIGN_PLACEMENTS = '/adv/v0/auction/placements'
 EP_BUDGET_DEPOSIT = '/adv/v1/budget/deposit'
-EP_BID_SET = '/adv/v1/cpm'
+EP_BID_SET = '/api/advert/v1/bids'
+EP_BID_MIN = '/api/advert/v1/bids/min'
+
+# ── Normquery API endpoint paths (search clusters) ──────────────────
+EP_NQ_LIST = '/adv/v0/normquery/list'
+EP_NQ_GET_BIDS = '/adv/v0/normquery/get-bids'
+EP_NQ_SET_BIDS = '/adv/v0/normquery/bids'
+EP_NQ_DEL_BIDS = '/adv/v0/normquery/bids'
+EP_NQ_GET_MINUS = '/adv/v0/normquery/get-minus'
+EP_NQ_SET_MINUS = '/adv/v0/normquery/set-minus'
+EP_NQ_STATS = '/adv/v0/normquery/stats'
+EP_NQ_STATS_DAILY = '/adv/v1/normquery/stats'
 
 # ── Seller portal endpoint paths ─────────────────────────────────────
 EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'

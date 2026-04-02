@@ -11,19 +11,22 @@ from wb.core.constants import (
     EP_BUDGET_DEPOSIT,
     EP_CAMPAIGN_BUDGET,
     EP_CAMPAIGN_CREATE,
+    EP_CAMPAIGN_DELETE,
     EP_CAMPAIGN_FULLSTATS,
+    EP_CAMPAIGN_INFO,
     EP_CAMPAIGN_ITEMS,
-    EP_CAMPAIGN_LIST,
     EP_CAMPAIGN_PAUSE,
     EP_CAMPAIGN_PLACEMENTS,
     EP_CAMPAIGN_RENAME,
     EP_CAMPAIGN_START,
     EP_CAMPAIGN_STOP,
-    EP_CLUSTER_ACTIVE,
-    EP_CLUSTER_ALL,
-    EP_CLUSTER_STATS,
     EP_ELIGIBLE_ITEMS,
     EP_ELIGIBLE_SUBJECTS,
+    EP_NQ_GET_BIDS,
+    EP_NQ_GET_MINUS,
+    EP_NQ_LIST,
+    EP_NQ_STATS,
+    EP_NQ_STATS_DAILY,
     EP_RECOMMENDED_BID,
 )
 
@@ -49,23 +52,28 @@ class PromotionClient:
             self,
             status: list[int] | None = None,
             type_: list[int] | None = None,
+            ids: list[int] | None = None,
     ) -> list[dict]:
-        """List all campaigns, optionally filtered by status or type.
+        """List campaigns via /api/advert/v2/adverts.
 
         Args:
             status: Campaign status codes to include.
             type_: Campaign type codes to include.
+            ids: Specific campaign IDs to fetch (max 50).
 
         Returns:
             List of raw campaign dicts from the API.
         """
         params: dict[str, Any] = {}
+        if ids:
+            params['ids'] = ','.join(str(i) for i in ids)
         if status:
-            params['status'] = status
+            params['statuses'] = ','.join(str(s) for s in status)
         if type_:
-            params['type'] = type_
-        result = self._http.get(EP_CAMPAIGN_LIST, params=params)
-        return result if isinstance(result, list) else []
+            params['payment_type'] = type_[0] if type_ else None
+        result = self._http.get(EP_CAMPAIGN_INFO, params=params)
+        adverts = result.get('adverts', []) if isinstance(result, dict) else []
+        return adverts if isinstance(adverts, list) else []
 
     def get_campaign(self, campaign_id: int) -> dict | None:
         """Retrieve a single campaign by ID.
@@ -76,9 +84,9 @@ class PromotionClient:
         Returns:
             Campaign dict if found, None otherwise.
         """
-        campaigns = self.list_campaigns()
+        campaigns = self.list_campaigns(ids=[campaign_id])
         for c in campaigns:
-            if c.get('advertId') == campaign_id:
+            if c.get('id') == campaign_id:
                 return c
         return None
 
@@ -91,17 +99,17 @@ class PromotionClient:
         result = self._http.get(EP_ELIGIBLE_SUBJECTS)
         return result if isinstance(result, list) else []
 
-    def get_eligible_items(self, subject_id: int) -> list[dict]:
-        """Retrieve product cards eligible for a given subject.
+    def get_eligible_items(self, subject_ids: list[int]) -> list[dict]:
+        """Retrieve product cards for given subjects via POST.
 
         Args:
-            subject_id: Subject category ID.
+            subject_ids: Subject category IDs to query.
 
         Returns:
-            List of product card dicts.
+            List of product card dicts with title, nm, subjectId.
         """
-        result = self._http.get(
-            EP_ELIGIBLE_ITEMS, params={'id': subject_id}
+        result = self._http.post(
+            EP_ELIGIBLE_ITEMS, json_body=subject_ids,
         )
         return result if isinstance(result, list) else []
 
@@ -134,21 +142,22 @@ class PromotionClient:
             date_from: str,
             date_to: str,
     ) -> list[dict]:
-        """Retrieve campaign statistics for a date range.
+        """Retrieve campaign statistics via GET /adv/v3/fullstats.
 
         Args:
-            campaign_ids: Campaign IDs to query.
+            campaign_ids: Campaign IDs to query (max 50).
             date_from: Start date (YYYY-MM-DD).
             date_to: End date (YYYY-MM-DD).
 
         Returns:
             List of campaign stats dicts.
         """
-        body = [
-            {'id': cid, 'dates': [date_from, date_to]}
-            for cid in campaign_ids
-        ]
-        result = self._http.post(EP_CAMPAIGN_FULLSTATS, json_body=body)
+        params = {
+            'ids': ','.join(str(i) for i in campaign_ids),
+            'beginDate': date_from,
+            'endDate': date_to,
+        }
+        result = self._http.get(EP_CAMPAIGN_FULLSTATS, params=params)
         return result if isinstance(result, list) else []
 
     def get_recommended_bids(self, campaign_id: int) -> list[dict]:
@@ -165,45 +174,95 @@ class PromotionClient:
         )
         return result if isinstance(result, list) else []
 
-    def get_active_clusters(self, campaign_id: int) -> dict:
-        """Retrieve active search clusters for a campaign.
+    def get_cluster_list(
+            self, items: list[dict],
+    ) -> dict:
+        """Retrieve active/inactive cluster lists via POST normquery/list.
 
         Args:
-            campaign_id: Target campaign identifier.
+            items: List of {advertId, nmId} dicts (max 100).
 
         Returns:
-            Response dict containing active cluster data.
+            Response dict with items[].normQueries.active/excluded.
         """
-        result = self._http.get(
-            EP_CLUSTER_ACTIVE, params={'id': campaign_id}
+        result = self._http.post(
+            EP_NQ_LIST, json_body={'items': items}
         )
         return result if isinstance(result, dict) else {}
 
-    def get_all_clusters(self, campaign_id: int) -> dict:
-        """Retrieve all search clusters and bids for a campaign.
+    def get_cluster_bids(
+            self, items: list[dict],
+    ) -> dict:
+        """Retrieve cluster bids via POST normquery/get-bids.
 
         Args:
-            campaign_id: Target campaign identifier.
+            items: List of {advert_id, nm_id} dicts (max 100).
 
         Returns:
-            Response dict containing all cluster data.
+            Response dict with bids[].
         """
-        result = self._http.get(
-            EP_CLUSTER_ALL, params={'id': campaign_id}
+        result = self._http.post(
+            EP_NQ_GET_BIDS, json_body={'items': items}
         )
         return result if isinstance(result, dict) else {}
 
-    def get_cluster_stats(self, campaign_id: int) -> dict:
-        """Retrieve search cluster statistics for a campaign.
+    def get_cluster_stats(
+            self,
+            date_from: str,
+            date_to: str,
+            items: list[dict],
+    ) -> dict:
+        """Retrieve cluster stats via POST normquery/stats.
 
         Args:
-            campaign_id: Target campaign identifier.
+            date_from: Start date (YYYY-MM-DD).
+            date_to: End date (YYYY-MM-DD).
+            items: List of {advert_id, nm_id} dicts (max 100).
 
         Returns:
-            Response dict containing cluster statistics.
+            Response dict with stats[].stats[].
         """
-        result = self._http.get(
-            EP_CLUSTER_STATS, params={'id': campaign_id}
+        result = self._http.post(
+            EP_NQ_STATS,
+            json_body={'from': date_from, 'to': date_to, 'items': items},
+        )
+        return result if isinstance(result, dict) else {}
+
+    def get_cluster_stats_daily(
+            self,
+            date_from: str,
+            date_to: str,
+            items: list[dict],
+    ) -> dict:
+        """Retrieve daily cluster stats via POST normquery/stats v1.
+
+        Args:
+            date_from: Start date (YYYY-MM-DD).
+            date_to: End date (YYYY-MM-DD).
+            items: List of {advertId, nmId} dicts (max 100).
+
+        Returns:
+            Response dict with items[].dailyStats[].
+        """
+        result = self._http.post(
+            EP_NQ_STATS_DAILY,
+            json_body={'from': date_from, 'to': date_to, 'items': items},
+        )
+        return result if isinstance(result, dict) else {}
+
+    def get_minus_phrases(
+            self, items: list[dict],
+    ) -> dict:
+        """Retrieve minus phrases via POST normquery/get-minus.
+
+        Args:
+            items: List of {advert_id, nm_id} dicts (max 100).
+
+        Returns:
+            Response dict with items[].norm_queries[].
+        """
+        result = self._http.post(
+            EP_NQ_GET_MINUS, json_body={'items': items}
         )
         return result if isinstance(result, dict) else {}
 
@@ -246,13 +305,13 @@ class PromotionClient:
         )
 
     def delete_campaign(self, campaign_id: int) -> None:
-        """Delete a campaign.
+        """Delete a campaign via GET /adv/v0/delete.
 
         Args:
             campaign_id: Target campaign identifier.
         """
-        self._http.delete(
-            EP_CAMPAIGN_LIST, params={'ids': [campaign_id]}
+        self._http.get(
+            EP_CAMPAIGN_DELETE, params={'id': campaign_id}
         )
 
     def create_campaign(self, payload: dict) -> dict:
@@ -298,28 +357,32 @@ class PromotionClient:
             campaign_id: Target campaign identifier.
             payload: Placement params payload (from PlacementConfig.to_api).
         """
-        self._http.post(EP_CAMPAIGN_PLACEMENTS, json_body=payload)
+        self._http.put(
+            EP_CAMPAIGN_PLACEMENTS,
+            json_body={'placements': [payload]},
+        )
 
     def deposit_budget(self, campaign_id: int, amount: int) -> None:
         """Deposit funds into a campaign budget.
 
         Args:
             campaign_id: Target campaign identifier.
-            amount: Amount to deposit in kopecks.
+            amount: Amount to deposit.
         """
         self._http.post(
             EP_BUDGET_DEPOSIT,
+            params={'id': campaign_id},
             json_body={
                 'sum': amount,
-                'advertId': campaign_id,
                 'type': _DEPOSIT_TYPE_ADD,
+                'return': True,
             },
         )
 
     def set_item_bid(self, payload: dict) -> None:
-        """Set a CPM bid for a campaign item.
+        """Set a bid for a campaign item.
 
         Args:
             payload: Bid payload dict (from BidMutation.to_api).
         """
-        self._http.post(EP_BID_SET, json_body=payload)
+        self._http.patch(EP_BID_SET, json_body={'bids': [payload]})

@@ -30,8 +30,8 @@ def _make_budget(campaign_id: int = 100) -> BudgetSnapshot:
     return BudgetSnapshot(
         campaign_id=campaign_id,
         total=50000,
-        daily=5000,
-        balance=30000,
+        cash=30000,
+        netting=20000,
     )
 
 
@@ -84,5 +84,5 @@ class TestBudgetGet:
         parsed = json.loads(result.output)
         assert parsed['campaign_id'] == 100
         assert parsed['total'] == 50000
-        assert parsed['daily'] == 5000
-        assert parsed['balance'] == 30000
+        assert parsed['cash'] == 30000
+        assert parsed['netting'] == 20000

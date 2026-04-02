@@ -83,21 +83,27 @@ class BidService:
         Raises:
             ValidationError: If CPM is not positive.
         """
-        if mutation.cpm <= 0:
-            raise ValidationError(f'CPM must be positive, got {mutation.cpm}')
+        if mutation.bid_kopecks <= 0:
+            raise ValidationError(
+                f'Bid must be positive, got {mutation.bid_kopecks}'
+            )
         action = (
-            f'set cpm={mutation.cpm} for nm={mutation.nm_id} '
+            f'set bid={mutation.bid_kopecks} for nm={mutation.nm_id} '
             f'in campaign {campaign_id}'
         )
         if dry_run:
             return MutationResult(
                 success=True, action=action, target_id=str(campaign_id),
-                dry_run=True, message=f'Would set CPM to {mutation.cpm}',
+                dry_run=True,
+                message=f'Would set bid to {mutation.bid_kopecks}',
             )
         self._client.set_item_bid(mutation.to_api(campaign_id))
         return MutationResult(
             success=True, action=action, target_id=str(campaign_id),
-            message=f'CPM set to {mutation.cpm} for nm={mutation.nm_id}',
+            message=(
+                f'Bid set to {mutation.bid_kopecks} '
+                f'for nm={mutation.nm_id}'
+            ),
         )
 
     def set_item_bids(

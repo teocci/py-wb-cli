@@ -9,8 +9,8 @@ from wb.core.constants import (
     EP_BID_SET,
     EP_BUDGET_DEPOSIT,
     EP_CAMPAIGN_CREATE,
+    EP_CAMPAIGN_DELETE,
     EP_CAMPAIGN_ITEMS,
-    EP_CAMPAIGN_LIST,
     EP_CAMPAIGN_PAUSE,
     EP_CAMPAIGN_PLACEMENTS,
     EP_CAMPAIGN_RENAME,
@@ -74,10 +74,10 @@ class TestRenameCampaign:
 class TestDeleteCampaign:
     """Tests for delete_campaign()."""
 
-    def test_deletes_with_ids_param(self, client, mock_http):
+    def test_deletes_with_get_request(self, client, mock_http):
         client.delete_campaign(55)
-        mock_http.delete.assert_called_once_with(
-            EP_CAMPAIGN_LIST, params={'ids': [55]}
+        mock_http.get.assert_called_once_with(
+            EP_CAMPAIGN_DELETE, params={'id': 55}
         )
 
 
@@ -123,11 +123,11 @@ class TestRemoveItems:
 class TestSetPlacements:
     """Tests for set_placements()."""
 
-    def test_posts_payload(self, client, mock_http):
-        payload = {'advertId': 1, 'params': []}
+    def test_puts_payload(self, client, mock_http):
+        payload = {'advert_id': 1, 'placements': {'search': True, 'recommendations': False}}
         client.set_placements(1, payload)
-        mock_http.post.assert_called_once_with(
-            EP_CAMPAIGN_PLACEMENTS, json_body=payload
+        mock_http.put.assert_called_once_with(
+            EP_CAMPAIGN_PLACEMENTS, json_body={'placements': [payload]}
         )
 
 
@@ -138,14 +138,15 @@ class TestDepositBudget:
         client.deposit_budget(20, 5000)
         mock_http.post.assert_called_once_with(
             EP_BUDGET_DEPOSIT,
-            json_body={'sum': 5000, 'advertId': 20, 'type': 1},
+            params={'id': 20},
+            json_body={'sum': 5000, 'type': 1, 'return': True},
         )
 
 
 class TestSetItemBid:
     """Tests for set_item_bid()."""
 
-    def test_posts_bid_payload(self, client, mock_http):
-        payload = {'advertId': 5, 'type': 8, 'cpm': 300, 'param': 0}
+    def test_patches_bid_payload(self, client, mock_http):
+        payload = {'advert_id': 5, 'nm_bids': [{'nm_id': 123, 'bid_kopecks': 300, 'placement': 'search'}]}
         client.set_item_bid(payload)
-        mock_http.post.assert_called_once_with(EP_BID_SET, json_body=payload)
+        mock_http.patch.assert_called_once_with(EP_BID_SET, json_body={'bids': [payload]})

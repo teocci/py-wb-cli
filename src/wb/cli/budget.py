@@ -68,8 +68,8 @@ def budget_get(
     rows = [
         ['Campaign ID', str(budget.campaign_id)],
         ['Total', str(budget.total)],
-        ['Daily', str(budget.daily)],
-        ['Balance', str(budget.balance)],
+        ['Cash', str(budget.cash)],
+        ['Netting', str(budget.netting)],
     ]
     renderer.display(data, headers=headers, title=f'Budget — Campaign {campaign_id}')
 

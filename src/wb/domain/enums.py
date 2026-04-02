@@ -22,28 +22,34 @@ class CampaignStatus(IntEnum):
     """Wildberries campaign lifecycle status.
 
     Attributes:
+        DELETED: Campaign has been deleted.
         READY: Campaign created but not yet launched.
+        ARCHIVED: Campaign has been archived.
+        DECLINED: Campaign was declined by moderation.
         RUNNING: Campaign is actively serving ads.
         PAUSED: Campaign is temporarily paused.
-        ARCHIVED: Campaign has been archived.
     """
 
+    DELETED = -1
     READY = 4
+    ARCHIVED = 7
+    DECLINED = 8
     RUNNING = 9
     PAUSED = 11
-    ARCHIVED = 7
 
 
 class CampaignType(IntEnum):
     """Wildberries campaign type identifier.
 
     Attributes:
-        AUTO: Automatic campaign managed by WB algorithms.
-        SEARCH_PLUS_CATALOG: Combined search and catalog placement.
+        SEARCH_PLUS_CATALOG: Combined search and catalog placement (type 6).
+        AUTO: Deprecated automatic campaign type.
+        STANDARD: Standard or custom bid campaigns (new default).
     """
 
-    AUTO = 8
     SEARCH_PLUS_CATALOG = 6
+    AUTO = 8
+    STANDARD = 9
 
 
 class PaymentType(str, Enum):
@@ -76,11 +82,11 @@ class BidType(str, Enum):
     """Bid management strategy.
 
     Attributes:
-        AUTO: Bid is managed automatically by the platform.
-        MANUAL: Bid is set and adjusted manually.
+        UNIFIED: Standard bid managed uniformly across placements.
+        MANUAL: Bid is set and adjusted manually per placement.
     """
 
-    AUTO = 'auto'
+    UNIFIED = 'unified'
     MANUAL = 'manual'
 
 

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from wb.core.exceptions import ValidationError
-from wb.domain.models import CampaignStats, ClusterStats
+from wb.domain.models import CampaignStats
 from wb.services.stats import StatsService
 
 
@@ -34,28 +34,6 @@ RAW_CAMPAIGN_STATS: dict = {
     'cpm': 15000.0,
 }
 
-RAW_CLUSTER_STATS: list[dict] = [
-    {
-        'id': 1,
-        'keyword': 'sneakers',
-        'views': 2000,
-        'clicks': 100,
-        'ctr': 5.0,
-        'orders': 5,
-        'sum': 30000,
-    },
-    {
-        'id': 2,
-        'keyword': 'running shoes',
-        'views': 1500,
-        'clicks': 75,
-        'ctr': 5.0,
-        'orders': 3,
-        'sum': 22500,
-    },
-]
-
-
 class TestGetCampaignStats:
     """Tests for StatsService.get_campaign_stats."""
 
@@ -75,7 +53,7 @@ class TestGetCampaignStats:
         assert result.orders == 10
         assert result.spend == 75000
         assert result.cpc == 300.0
-        assert result.cpm == 15000.0
+        assert result.cr == 0.0
         mock_client.get_campaign_stats.assert_called_once_with(
             [100], '2026-03-01', '2026-03-15',
         )
@@ -146,35 +124,3 @@ class TestGetCampaignsStats:
         assert result == []
 
 
-class TestGetClusterStats:
-    """Tests for StatsService.get_cluster_stats."""
-
-    def test_returns_cluster_stats_from_words(
-        self, service: StatsService, mock_client: MagicMock,
-    ) -> None:
-        """get_cluster_stats returns list of ClusterStats from words response."""
-        mock_client.get_cluster_stats.return_value = {
-            'words': RAW_CLUSTER_STATS,
-        }
-
-        result = service.get_cluster_stats(100)
-
-        assert len(result) == 2
-        assert all(isinstance(s, ClusterStats) for s in result)
-        assert result[0].cluster_id == 1
-        assert result[0].cluster_name == 'sneakers'
-        assert result[0].views == 2000
-        assert result[0].spend == 30000
-        assert result[1].cluster_id == 2
-        assert result[1].cluster_name == 'running shoes'
-        mock_client.get_cluster_stats.assert_called_once_with(100)
-
-    def test_empty_words_returns_empty_list(
-        self, service: StatsService, mock_client: MagicMock,
-    ) -> None:
-        """get_cluster_stats returns empty list when words key is empty."""
-        mock_client.get_cluster_stats.return_value = {'words': []}
-
-        result = service.get_cluster_stats(100)
-
-        assert result == []

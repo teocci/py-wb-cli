@@ -164,6 +164,44 @@ class WbHttpClient:
         """
         return self.request('POST', path, params=params, json_body=json_body)
 
+    def put(
+            self,
+            path: str,
+            *,
+            params: dict[str, Any] | None = None,
+            json_body: Any | None = None,
+    ) -> Any:
+        """HTTP PUT request.
+
+        Args:
+            path: API endpoint path.
+            params: Query parameters.
+            json_body: JSON request body.
+
+        Returns:
+            Parsed JSON response body, or None for empty responses.
+        """
+        return self.request('PUT', path, params=params, json_body=json_body)
+
+    def patch(
+            self,
+            path: str,
+            *,
+            params: dict[str, Any] | None = None,
+            json_body: Any | None = None,
+    ) -> Any:
+        """HTTP PATCH request.
+
+        Args:
+            path: API endpoint path.
+            params: Query parameters.
+            json_body: JSON request body.
+
+        Returns:
+            Parsed JSON response body, or None for empty responses.
+        """
+        return self.request('PATCH', path, params=params, json_body=json_body)
+
     def delete(
             self,
             path: str,

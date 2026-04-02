@@ -6,7 +6,7 @@ import re
 
 from wb.client.promotion import PromotionClient
 from wb.core.exceptions import ValidationError
-from wb.domain.models import CampaignStats, ClusterStats
+from wb.domain.models import CampaignStats
 
 __all__ = ['StatsService']
 
@@ -93,15 +93,3 @@ class StatsService:
         )
         return [CampaignStats.from_api(item) for item in raw]
 
-    def get_cluster_stats(self, campaign_id: int) -> list[ClusterStats]:
-        """Retrieve statistics for all clusters in a campaign.
-
-        Args:
-            campaign_id: Target campaign identifier.
-
-        Returns:
-            List of ClusterStats domain objects.
-        """
-        raw = self._client.get_cluster_stats(campaign_id)
-        words = raw.get('words', [])
-        return [ClusterStats.from_api(w) for w in words]

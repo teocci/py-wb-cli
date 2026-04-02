@@ -16,16 +16,18 @@ class TestCampaignStatus:
     @pytest.mark.parametrize(
         ('member', 'value'),
         [
+            ('DELETED', -1),
             ('READY', 4),
+            ('ARCHIVED', 7),
+            ('DECLINED', 8),
             ('RUNNING', 9),
             ('PAUSED', 11),
-            ('ARCHIVED', 7),
         ],
     )
     def test_member_values(self, member: str, value: int) -> None:
         assert CampaignStatus[member] == value
 
-    @pytest.mark.parametrize('value', [4, 9, 11, 7])
+    @pytest.mark.parametrize('value', [-1, 4, 7, 8, 9, 11])
     def test_construct_from_value(self, value: int) -> None:
         status = CampaignStatus(value)
         assert status.value == value
@@ -37,14 +39,15 @@ class TestCampaignType:
     @pytest.mark.parametrize(
         ('member', 'value'),
         [
-            ('AUTO', 8),
             ('SEARCH_PLUS_CATALOG', 6),
+            ('AUTO', 8),
+            ('STANDARD', 9),
         ],
     )
     def test_member_values(self, member: str, value: int) -> None:
         assert CampaignType[member] == value
 
-    @pytest.mark.parametrize('value', [8, 6])
+    @pytest.mark.parametrize('value', [6, 8, 9])
     def test_construct_from_value(self, value: int) -> None:
         campaign_type = CampaignType(value)
         assert campaign_type.value == value

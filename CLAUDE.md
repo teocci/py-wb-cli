@@ -39,6 +39,7 @@ python -m wb auth --help
 | 0.2.0 | Phase 1 - Read-only visibility |
 | 0.3.0 | Phase 2 - Core write controls |
 | 0.3.1 | Auth - Dual auth (portal session + env var fallback) |
+| 0.3.2 | API Fix - Full endpoint migration to current WB API |
 | 0.4.0 | Phase 3 - Search-cluster control |
 | 0.5.0 | Phase 4 - Analytics bridge |
 | 0.6.0 | Phase 5 - Optimization workflows |
@@ -114,6 +115,13 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 | `WB_TOKEN_EXPIRATION` | Token expiration timestamp |
 
 Full design: `wb_cli_authorization_plan.md`
+
+## API Documentation
+
+- **Authoritative source**: `dev-wb-adv.md` (extracted from `https://dev.wildberries.ru/en`)
+- **Never** use endpoint paths from memory or older code — always verify against `dev-wb-adv.md`
+- WB deprecates endpoints without notice; if any call returns 404, check the docs for the new path
+- All endpoint constants live in `src/wb/core/constants.py` — no hardcoded paths elsewhere
 
 ## Key Design Decisions
 

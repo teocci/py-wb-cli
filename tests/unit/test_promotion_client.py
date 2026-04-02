@@ -9,12 +9,14 @@ from wb.core.constants import (
     EP_ACCOUNT_BALANCE,
     EP_CAMPAIGN_BUDGET,
     EP_CAMPAIGN_FULLSTATS,
-    EP_CAMPAIGN_LIST,
-    EP_CLUSTER_ACTIVE,
-    EP_CLUSTER_ALL,
-    EP_CLUSTER_STATS,
+    EP_CAMPAIGN_INFO,
     EP_ELIGIBLE_ITEMS,
     EP_ELIGIBLE_SUBJECTS,
+    EP_NQ_GET_BIDS,
+    EP_NQ_GET_MINUS,
+    EP_NQ_LIST,
+    EP_NQ_STATS,
+    EP_NQ_STATS_DAILY,
     EP_RECOMMENDED_BID,
 )
 
@@ -35,23 +37,25 @@ class TestListCampaigns:
     """Tests for list_campaigns()."""
 
     def test_returns_list(self, client, mock_http):
-        mock_http.get.return_value = [{'advertId': 1}, {'advertId': 2}]
+        mock_http.get.return_value = {
+            'adverts': [{'id': 1}, {'id': 2}],
+        }
         result = client.list_campaigns()
         assert len(result) == 2
-        mock_http.get.assert_called_once_with(EP_CAMPAIGN_LIST, params={})
 
     def test_with_status_filter(self, client, mock_http):
-        mock_http.get.return_value = []
-        client.list_campaigns(status=[9])
+        mock_http.get.return_value = {'adverts': []}
+        client.list_campaigns(status=[9, 11])
         mock_http.get.assert_called_once_with(
-            EP_CAMPAIGN_LIST, params={'status': [9]},
+            EP_CAMPAIGN_INFO, params={'statuses': '9,11'},
         )
 
-    def test_with_type_filter(self, client, mock_http):
-        mock_http.get.return_value = []
-        client.list_campaigns(type_=[8])
+    def test_with_ids(self, client, mock_http):
+        mock_http.get.return_value = {'adverts': [{'id': 42}]}
+        result = client.list_campaigns(ids=[42])
+        assert len(result) == 1
         mock_http.get.assert_called_once_with(
-            EP_CAMPAIGN_LIST, params={'type': [8]},
+            EP_CAMPAIGN_INFO, params={'ids': '42'},
         )
 
     def test_returns_empty_on_none_response(self, client, mock_http):
@@ -64,20 +68,22 @@ class TestGetCampaign:
     """Tests for get_campaign()."""
 
     def test_found(self, client, mock_http):
-        mock_http.get.return_value = [
-            {'advertId': 10, 'name': 'Test'},
-            {'advertId': 20, 'name': 'Other'},
-        ]
+        mock_http.get.return_value = {
+            'adverts': [
+                {'id': 10, 'settings': {'name': 'Test'}},
+                {'id': 20, 'settings': {'name': 'Other'}},
+            ],
+        }
         result = client.get_campaign(10)
-        assert result == {'advertId': 10, 'name': 'Test'}
+        assert result == {'id': 10, 'settings': {'name': 'Test'}}
 
     def test_not_found(self, client, mock_http):
-        mock_http.get.return_value = [{'advertId': 99}]
+        mock_http.get.return_value = {'adverts': [{'id': 99}]}
         result = client.get_campaign(1)
         assert result is None
 
     def test_empty_list(self, client, mock_http):
-        mock_http.get.return_value = []
+        mock_http.get.return_value = {'adverts': []}
         result = client.get_campaign(1)
         assert result is None
 
@@ -92,11 +98,11 @@ class TestEligible:
         mock_http.get.assert_called_once_with(EP_ELIGIBLE_SUBJECTS)
 
     def test_get_eligible_items(self, client, mock_http):
-        mock_http.get.return_value = [{'nmId': 555}]
-        result = client.get_eligible_items(42)
+        mock_http.post.return_value = [{'nm': 555, 'title': 'Test', 'subjectId': 42}]
+        result = client.get_eligible_items([42])
         assert len(result) == 1
-        mock_http.get.assert_called_once_with(
-            EP_ELIGIBLE_ITEMS, params={'id': 42},
+        mock_http.post.assert_called_once_with(
+            EP_ELIGIBLE_ITEMS, json_body=[42],
         )
 
     def test_subjects_none_response(self, client, mock_http):
@@ -104,8 +110,8 @@ class TestEligible:
         assert client.get_eligible_subjects() == []
 
     def test_items_none_response(self, client, mock_http):
-        mock_http.get.return_value = None
-        assert client.get_eligible_items(1) == []
+        mock_http.post.return_value = None
+        assert client.get_eligible_items([1]) == []
 
 
 class TestBalance:
@@ -135,26 +141,30 @@ class TestBalance:
 
 
 class TestCampaignStats:
-    """Tests for campaign statistics."""
+    """Tests for campaign statistics (GET /adv/v3/fullstats)."""
 
     def test_get_campaign_stats(self, client, mock_http):
-        mock_http.post.return_value = [{'advertId': 1, 'views': 100}]
+        mock_http.get.return_value = [{'advertId': 1, 'views': 100}]
         result = client.get_campaign_stats([1], '2026-03-01', '2026-03-07')
         assert len(result) == 1
-        mock_http.post.assert_called_once_with(
+        mock_http.get.assert_called_once_with(
             EP_CAMPAIGN_FULLSTATS,
-            json_body=[{'id': 1, 'dates': ['2026-03-01', '2026-03-07']}],
+            params={
+                'ids': '1',
+                'beginDate': '2026-03-01',
+                'endDate': '2026-03-07',
+            },
         )
 
     def test_multiple_campaigns(self, client, mock_http):
-        mock_http.post.return_value = [{'advertId': 1}, {'advertId': 2}]
+        mock_http.get.return_value = [{'advertId': 1}, {'advertId': 2}]
         result = client.get_campaign_stats(
             [1, 2], '2026-03-01', '2026-03-07',
         )
         assert len(result) == 2
 
     def test_none_response(self, client, mock_http):
-        mock_http.post.return_value = None
+        mock_http.get.return_value = None
         assert client.get_campaign_stats([1], '2026-03-01', '2026-03-07') == []
 
 
@@ -175,36 +185,69 @@ class TestRecommendedBids:
 
 
 class TestClusters:
-    """Tests for cluster endpoints."""
+    """Tests for normquery cluster endpoints."""
 
-    def test_get_active_clusters(self, client, mock_http):
-        mock_http.get.return_value = {'words': [{'id': 1}]}
-        result = client.get_active_clusters(10)
-        assert result == {'words': [{'id': 1}]}
-        mock_http.get.assert_called_once_with(
-            EP_CLUSTER_ACTIVE, params={'id': 10},
+    def test_get_cluster_list(self, client, mock_http):
+        mock_http.post.return_value = {'items': [{'advertId': 10}]}
+        items = [{'advertId': 10, 'nmId': 20}]
+        result = client.get_cluster_list(items)
+        assert result == {'items': [{'advertId': 10}]}
+        mock_http.post.assert_called_once_with(
+            EP_NQ_LIST, json_body={'items': items},
         )
 
-    def test_get_all_clusters(self, client, mock_http):
-        mock_http.get.return_value = {'words': []}
-        result = client.get_all_clusters(10)
-        assert result == {'words': []}
-        mock_http.get.assert_called_once_with(
-            EP_CLUSTER_ALL, params={'id': 10},
+    def test_get_cluster_bids(self, client, mock_http):
+        mock_http.post.return_value = {'bids': []}
+        items = [{'advert_id': 10, 'nm_id': 20}]
+        result = client.get_cluster_bids(items)
+        assert result == {'bids': []}
+        mock_http.post.assert_called_once_with(
+            EP_NQ_GET_BIDS, json_body={'items': items},
         )
 
     def test_get_cluster_stats(self, client, mock_http):
-        mock_http.get.return_value = {'words': [{'id': 5}]}
-        result = client.get_cluster_stats(10)
-        assert result == {'words': [{'id': 5}]}
-        mock_http.get.assert_called_once_with(
-            EP_CLUSTER_STATS, params={'id': 10},
+        mock_http.post.return_value = {'stats': []}
+        items = [{'advert_id': 10, 'nm_id': 20}]
+        result = client.get_cluster_stats('2025-12-01', '2025-12-31', items)
+        assert result == {'stats': []}
+        mock_http.post.assert_called_once_with(
+            EP_NQ_STATS,
+            json_body={
+                'from': '2025-12-01',
+                'to': '2025-12-31',
+                'items': items,
+            },
         )
 
-    def test_active_none_response(self, client, mock_http):
-        mock_http.get.return_value = None
-        assert client.get_active_clusters(1) == {}
+    def test_get_cluster_stats_daily(self, client, mock_http):
+        mock_http.post.return_value = {'items': []}
+        items = [{'advertId': 10, 'nmId': 20}]
+        result = client.get_cluster_stats_daily(
+            '2025-12-01', '2025-12-31', items,
+        )
+        assert result == {'items': []}
+        mock_http.post.assert_called_once_with(
+            EP_NQ_STATS_DAILY,
+            json_body={
+                'from': '2025-12-01',
+                'to': '2025-12-31',
+                'items': items,
+            },
+        )
 
-    def test_all_none_response(self, client, mock_http):
-        mock_http.get.return_value = None
-        assert client.get_all_clusters(1) == {}
+    def test_get_minus_phrases(self, client, mock_http):
+        mock_http.post.return_value = {'items': []}
+        items = [{'advert_id': 10, 'nm_id': 20}]
+        result = client.get_minus_phrases(items)
+        assert result == {'items': []}
+        mock_http.post.assert_called_once_with(
+            EP_NQ_GET_MINUS, json_body={'items': items},
+        )
+
+    def test_cluster_list_none_response(self, client, mock_http):
+        mock_http.post.return_value = None
+        assert client.get_cluster_list([]) == {}
+
+    def test_cluster_bids_none_response(self, client, mock_http):
+        mock_http.post.return_value = None
+        assert client.get_cluster_bids([]) == {}

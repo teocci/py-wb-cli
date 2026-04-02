@@ -26,7 +26,7 @@ def _make_campaign(
         campaign_id=campaign_id,
         name=name,
         status=CampaignStatus.RUNNING,
-        campaign_type=CampaignType.AUTO,
+        campaign_type=CampaignType.STANDARD,
         payment_type=PaymentType.CPM,
         daily_budget=5000,
         create_time='2026-03-01',

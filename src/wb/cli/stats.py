@@ -74,7 +74,7 @@ def stats_campaign(
         ['Orders', str(stats.orders)],
         ['Spend', str(stats.spend)],
         ['CPC', f'{stats.cpc:.2f}'],
-        ['CPM', f'{stats.cpm:.2f}'],
+        ['CR', f'{stats.cr:.2f}'],
     ]
     renderer.display(data, headers=headers, title=f'Stats — Campaign {campaign_id}')
 

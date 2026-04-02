@@ -81,7 +81,7 @@ class CampaignService:
         Returns:
             List of ProductCard domain objects.
         """
-        raw = self._client.get_eligible_items(subject_id)
+        raw = self._client.get_eligible_items([subject_id])
         return [ProductCard.from_api(item) for item in raw]
 
     def create_campaign(
@@ -98,7 +98,7 @@ class CampaignService:
         Returns:
             MutationResult with the new campaign ID on success.
         """
-        action = f'create campaign "{params.name}" type={params.campaign_type.name}'
+        action = f'create campaign "{params.name}" bid_type={params.bid_type}'
         if dry_run:
             return MutationResult(
                 success=True, action=action, target_id='new',
@@ -309,7 +309,7 @@ class CampaignService:
         """
         desc = (
             f'search={config.search_enabled}, '
-            f'catalog={config.catalog_enabled}'
+            f'recommendations={config.recommendations_enabled}'
         )
         action = f'set placements for campaign {campaign_id}: {desc}'
         if dry_run:

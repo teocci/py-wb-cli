@@ -1,4 +1,4 @@
-"""Tests for wb.services.clusters.ClusterService."""
+"""Tests for wb.services.clusters.ClusterService (normquery API)."""
 
 from __future__ import annotations
 
@@ -6,36 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from wb.domain.models import SearchCluster
+from wb.domain.models import ClusterStats, MinusPhraseSet, SearchCluster
 from wb.services.clusters import ClusterService
-
-
-RAW_CLUSTER_ACTIVE: dict = {
-    'id': 1,
-    'keyword': 'sneakers',
-    'count': 120,
-    'isActive': True,
-    'bid': 500,
-    'recommendedBid': 700,
-}
-
-RAW_CLUSTER_INACTIVE: dict = {
-    'id': 2,
-    'keyword': 'boots',
-    'count': 80,
-    'isActive': False,
-    'bid': 0,
-    'recommendedBid': 400,
-}
-
-RAW_CLUSTER_WITH_BID: dict = {
-    'id': 3,
-    'keyword': 'loafers',
-    'count': 50,
-    'isActive': True,
-    'bid': 300,
-    'recommendedBid': 500,
-}
 
 
 @pytest.fixture()
@@ -53,33 +25,58 @@ def service(mock_client: MagicMock) -> ClusterService:
 class TestListClusters:
     """Tests for ClusterService.list_clusters."""
 
-    def test_parses_words_with_is_active(
+    def test_parses_normquery_list_response(
         self, service: ClusterService, mock_client: MagicMock,
     ) -> None:
-        """list_clusters parses words list and respects isActive field."""
-        mock_client.get_all_clusters.return_value = {
-            'words': [RAW_CLUSTER_ACTIVE, RAW_CLUSTER_INACTIVE],
+        """list_clusters parses active + excluded from normquery/list."""
+        mock_client.get_cluster_list.return_value = {
+            'items': [{
+                'advertId': 100,
+                'nmId': 200,
+                'normQueries': {
+                    'active': ['sneakers', 'boots'],
+                    'excluded': ['sandals'],
+                },
+            }],
         }
 
-        result = service.list_clusters(campaign_id=100)
+        result = service.list_clusters(campaign_id=100, nm_id=200)
 
-        assert len(result) == 2
+        assert len(result) == 3
         assert all(isinstance(c, SearchCluster) for c in result)
-        assert result[0].cluster_id == 1
-        assert result[0].cluster_name == 'sneakers'
+        assert result[0].norm_query == 'sneakers'
         assert result[0].is_active is True
-        assert result[0].bid == 500
-        assert result[1].cluster_id == 2
-        assert result[1].is_active is False
-        mock_client.get_all_clusters.assert_called_once_with(100)
+        assert result[1].norm_query == 'boots'
+        assert result[1].is_active is True
+        assert result[2].norm_query == 'sandals'
+        assert result[2].is_active is False
+        mock_client.get_cluster_list.assert_called_once_with(
+            [{'advertId': 100, 'nmId': 200}]
+        )
 
     def test_empty_response(
         self, service: ClusterService, mock_client: MagicMock,
     ) -> None:
         """list_clusters returns empty list for empty response."""
-        mock_client.get_all_clusters.return_value = {'words': []}
+        mock_client.get_cluster_list.return_value = {'items': []}
 
-        result = service.list_clusters(campaign_id=100)
+        result = service.list_clusters(campaign_id=100, nm_id=200)
+
+        assert result == []
+
+    def test_null_active_and_excluded(
+        self, service: ClusterService, mock_client: MagicMock,
+    ) -> None:
+        """list_clusters handles null active/excluded arrays."""
+        mock_client.get_cluster_list.return_value = {
+            'items': [{
+                'advertId': 100,
+                'nmId': 200,
+                'normQueries': {'active': None, 'excluded': None},
+            }],
+        }
+
+        result = service.list_clusters(campaign_id=100, nm_id=200)
 
         assert result == []
 
@@ -87,94 +84,148 @@ class TestListClusters:
 class TestGetActiveClusters:
     """Tests for ClusterService.get_active_clusters."""
 
-    def test_returns_active_clusters(
+    def test_filters_active_only(
         self, service: ClusterService, mock_client: MagicMock,
     ) -> None:
-        """get_active_clusters returns clusters from active-words response."""
-        mock_client.get_active_clusters.return_value = {
-            'words': [
-                {'id': 1, 'keyword': 'sneakers', 'count': 120, 'bid': 500, 'recommendedBid': 700},
-            ],
+        """get_active_clusters returns only active clusters."""
+        mock_client.get_cluster_list.return_value = {
+            'items': [{
+                'advertId': 100,
+                'nmId': 200,
+                'normQueries': {
+                    'active': ['sneakers'],
+                    'excluded': ['boots'],
+                },
+            }],
         }
 
-        result = service.get_active_clusters(campaign_id=100)
+        result = service.get_active_clusters(campaign_id=100, nm_id=200)
 
         assert len(result) == 1
+        assert result[0].norm_query == 'sneakers'
         assert result[0].is_active is True
-        assert result[0].cluster_name == 'sneakers'
-        mock_client.get_active_clusters.assert_called_once_with(100)
-
-    def test_empty_response(
-        self, service: ClusterService, mock_client: MagicMock,
-    ) -> None:
-        """get_active_clusters returns empty list when no active clusters."""
-        mock_client.get_active_clusters.return_value = {'words': []}
-
-        result = service.get_active_clusters(campaign_id=100)
-
-        assert result == []
 
 
 class TestGetInactiveClusters:
     """Tests for ClusterService.get_inactive_clusters."""
 
-    def test_filters_inactive_from_all_clusters(
+    def test_filters_inactive_only(
         self, service: ClusterService, mock_client: MagicMock,
     ) -> None:
-        """get_inactive_clusters returns only inactive clusters."""
-        mock_client.get_all_clusters.return_value = {
-            'words': [RAW_CLUSTER_ACTIVE, RAW_CLUSTER_INACTIVE],
+        """get_inactive_clusters returns only excluded clusters."""
+        mock_client.get_cluster_list.return_value = {
+            'items': [{
+                'advertId': 100,
+                'nmId': 200,
+                'normQueries': {
+                    'active': ['sneakers'],
+                    'excluded': ['boots'],
+                },
+            }],
         }
 
-        result = service.get_inactive_clusters(campaign_id=100)
+        result = service.get_inactive_clusters(campaign_id=100, nm_id=200)
 
         assert len(result) == 1
-        assert result[0].cluster_id == 2
+        assert result[0].norm_query == 'boots'
         assert result[0].is_active is False
-
-    def test_empty_when_all_active(
-        self, service: ClusterService, mock_client: MagicMock,
-    ) -> None:
-        """get_inactive_clusters returns empty when all clusters are active."""
-        mock_client.get_all_clusters.return_value = {
-            'words': [RAW_CLUSTER_ACTIVE],
-        }
-
-        result = service.get_inactive_clusters(campaign_id=100)
-
-        assert result == []
 
 
 class TestGetClusterBids:
     """Tests for ClusterService.get_cluster_bids."""
 
-    def test_filters_clusters_with_bid(
+    def test_parses_bids_response(
         self, service: ClusterService, mock_client: MagicMock,
     ) -> None:
-        """get_cluster_bids returns only clusters with bid > 0."""
-        mock_client.get_all_clusters.return_value = {
-            'words': [
-                RAW_CLUSTER_ACTIVE,
-                RAW_CLUSTER_INACTIVE,
-                RAW_CLUSTER_WITH_BID,
+        """get_cluster_bids returns clusters from get-bids response."""
+        mock_client.get_cluster_bids.return_value = {
+            'bids': [
+                {'advert_id': 100, 'nm_id': 200, 'norm_query': 'sneakers', 'bid': 500},
+                {'advert_id': 100, 'nm_id': 200, 'norm_query': 'boots', 'bid': 300},
             ],
         }
 
-        result = service.get_cluster_bids(campaign_id=100)
+        result = service.get_cluster_bids(campaign_id=100, nm_id=200)
 
         assert len(result) == 2
-        bid_ids = {c.cluster_id for c in result}
-        assert bid_ids == {1, 3}
-        assert all(c.bid > 0 for c in result)
+        assert result[0].norm_query == 'sneakers'
+        assert result[0].bid == 500
+        mock_client.get_cluster_bids.assert_called_once_with(
+            [{'advert_id': 100, 'nm_id': 200}]
+        )
 
-    def test_empty_when_no_bids(
+    def test_empty_bids(
         self, service: ClusterService, mock_client: MagicMock,
     ) -> None:
-        """get_cluster_bids returns empty when no clusters have bids."""
-        mock_client.get_all_clusters.return_value = {
-            'words': [RAW_CLUSTER_INACTIVE],
-        }
+        """get_cluster_bids returns empty when no bids."""
+        mock_client.get_cluster_bids.return_value = {'bids': []}
 
-        result = service.get_cluster_bids(campaign_id=100)
+        result = service.get_cluster_bids(campaign_id=100, nm_id=200)
 
         assert result == []
+
+
+class TestGetClusterStats:
+    """Tests for ClusterService.get_cluster_stats."""
+
+    def test_parses_stats_response(
+        self, service: ClusterService, mock_client: MagicMock,
+    ) -> None:
+        """get_cluster_stats returns ClusterStats from normquery/stats."""
+        mock_client.get_cluster_stats.return_value = {
+            'stats': [{
+                'advert_id': 100,
+                'nm_id': 200,
+                'stats': [
+                    {
+                        'norm_query': 'sneakers',
+                        'views': 1000,
+                        'clicks': 50,
+                        'ctr': 5.0,
+                        'orders': 5,
+                        'spend': 250,
+                        'avg_pos': 3.2,
+                    },
+                ],
+            }],
+        }
+
+        result = service.get_cluster_stats(100, 200, '2025-12-01', '2025-12-31')
+
+        assert len(result) == 1
+        assert isinstance(result[0], ClusterStats)
+        assert result[0].norm_query == 'sneakers'
+        assert result[0].views == 1000
+
+
+class TestGetMinusPhrases:
+    """Tests for ClusterService.get_minus_phrases."""
+
+    def test_parses_minus_response(
+        self, service: ClusterService, mock_client: MagicMock,
+    ) -> None:
+        """get_minus_phrases returns MinusPhraseSet from get-minus."""
+        mock_client.get_minus_phrases.return_value = {
+            'items': [{
+                'advert_id': 100,
+                'nm_id': 200,
+                'norm_queries': ['boots', 'sandals'],
+            }],
+        }
+
+        result = service.get_minus_phrases(campaign_id=100, nm_id=200)
+
+        assert isinstance(result, MinusPhraseSet)
+        assert result.campaign_id == 100
+        assert result.nm_id == 200
+        assert result.phrases == ['boots', 'sandals']
+
+    def test_empty_response(
+        self, service: ClusterService, mock_client: MagicMock,
+    ) -> None:
+        """get_minus_phrases returns empty set when no data."""
+        mock_client.get_minus_phrases.return_value = {'items': []}
+
+        result = service.get_minus_phrases(campaign_id=100, nm_id=200)
+
+        assert result.phrases == []

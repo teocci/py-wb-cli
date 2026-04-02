@@ -179,7 +179,6 @@ class TestCampaignCreate:
             [
                 'campaign', 'create',
                 '--name', 'Test',
-                '--daily-budget', '5000',
                 '--nms', '100,200',
                 '--yes',
             ],
@@ -198,7 +197,6 @@ class TestCampaignCreate:
             [
                 'campaign', 'create',
                 '--name', 'Test',
-                '--daily-budget', '5000',
                 '--nms', '100',
                 '--dry-run',
             ],
@@ -207,7 +205,7 @@ class TestCampaignCreate:
 
     def test_create_missing_name_fails(self):
         result = runner.invoke(
-            app, ['campaign', 'create', '--daily-budget', '1000', '--nms', '1']
+            app, ['campaign', 'create', '--nms', '1']
         )
         assert result.exit_code != 0
 
@@ -282,7 +280,7 @@ class TestCampaignSetPlacements:
         assert result.exit_code == 0
         call_args = svc.set_placements.call_args
         config = call_args[0][1]
-        assert config.catalog_enabled is False
+        assert config.recommendations_enabled is False
 
 
 # ── Budget write commands ──────────────────────────────────────────────

@@ -1,4 +1,4 @@
-"""Tests for cluster CLI commands."""
+"""Tests for cluster CLI commands (normquery API)."""
 
 from __future__ import annotations
 
@@ -14,29 +14,25 @@ from wb.domain.models import ClusterStats, SearchCluster
 runner = CliRunner()
 
 CLUSTER_FACTORY = 'wb.services._factory.create_cluster_service'
-STATS_FACTORY = 'wb.services._factory.create_stats_service'
 
 
 def _make_cluster(
-        cluster_id: int = 10,
         is_active: bool = True,
+        norm_query: str = 'perfume',
 ) -> SearchCluster:
     """Create a SearchCluster instance for testing."""
     return SearchCluster(
-        cluster_id=cluster_id,
-        cluster_name='perfume',
-        count=42,
+        norm_query=norm_query,
         is_active=is_active,
         bid=150,
-        recommended_bid=200,
+        nm_id=100,
     )
 
 
-def _make_cluster_stats(cluster_id: int = 10) -> ClusterStats:
+def _make_cluster_stats(norm_query: str = 'perfume') -> ClusterStats:
     """Create a ClusterStats instance for testing."""
     return ClusterStats(
-        cluster_id=cluster_id,
-        cluster_name='perfume',
+        norm_query=norm_query,
         views=5000,
         clicks=250,
         ctr=5.0,
@@ -68,14 +64,13 @@ class TestClusterList:
         mock_factory.return_value = svc
 
         result = runner.invoke(
-            app, ['--json', 'cluster', 'list', '--campaign', '42'],
+            app, ['--json', 'cluster', 'list', '--campaign', '42', '--nm', '100'],
         )
         assert result.exit_code == 0
 
         parsed = json.loads(result.output)
         assert isinstance(parsed, list)
-        assert parsed[0]['cluster_id'] == 10
-        assert parsed[0]['cluster_name'] == 'perfume'
+        assert parsed[0]['norm_query'] == 'perfume'
         assert parsed[0]['is_active'] is True
 
     @patch(CLUSTER_FACTORY)
@@ -86,7 +81,7 @@ class TestClusterList:
         mock_factory.return_value = svc
 
         result = runner.invoke(
-            app, ['--json', 'cluster', 'list', '--campaign', '42'],
+            app, ['--json', 'cluster', 'list', '--campaign', '42', '--nm', '100'],
         )
         assert result.exit_code == 0
         assert 'No clusters found' in result.output
@@ -103,7 +98,7 @@ class TestClusterActive:
         mock_factory.return_value = svc
 
         result = runner.invoke(
-            app, ['--json', 'cluster', 'active', '--campaign', '42'],
+            app, ['--json', 'cluster', 'active', '--campaign', '42', '--nm', '100'],
         )
         assert result.exit_code == 0
 
@@ -120,12 +115,12 @@ class TestClusterInactive:
         """JSON output contains only inactive clusters."""
         svc = MagicMock()
         svc.get_inactive_clusters.return_value = [
-            _make_cluster(cluster_id=20, is_active=False),
+            _make_cluster(is_active=False),
         ]
         mock_factory.return_value = svc
 
         result = runner.invoke(
-            app, ['--json', 'cluster', 'inactive', '--campaign', '42'],
+            app, ['--json', 'cluster', 'inactive', '--campaign', '42', '--nm', '100'],
         )
         assert result.exit_code == 0
 
@@ -145,20 +140,20 @@ class TestClusterBids:
         mock_factory.return_value = svc
 
         result = runner.invoke(
-            app, ['--json', 'cluster', 'bids', '--campaign', '42'],
+            app, ['--json', 'cluster', 'bids', '--campaign', '42', '--nm', '100'],
         )
         assert result.exit_code == 0
 
         parsed = json.loads(result.output)
         assert isinstance(parsed, list)
         assert parsed[0]['bid'] == 150
-        assert parsed[0]['recommended_bid'] == 200
+        assert parsed[0]['nm_id'] == 100
 
 
 class TestClusterStats:
     """Tests for the 'cluster stats' command."""
 
-    @patch(STATS_FACTORY)
+    @patch(CLUSTER_FACTORY)
     def test_cluster_stats_json(self, mock_factory: MagicMock) -> None:
         """JSON output contains cluster statistics."""
         svc = MagicMock()
@@ -166,12 +161,16 @@ class TestClusterStats:
         mock_factory.return_value = svc
 
         result = runner.invoke(
-            app, ['--json', 'cluster', 'stats', '--campaign', '42'],
+            app, [
+                '--json', 'cluster', 'stats',
+                '--campaign', '42', '--nm', '100',
+                '--from', '2025-12-01', '--to', '2025-12-31',
+            ],
         )
         assert result.exit_code == 0
 
         parsed = json.loads(result.output)
         assert isinstance(parsed, list)
-        assert parsed[0]['cluster_id'] == 10
+        assert parsed[0]['norm_query'] == 'perfume'
         assert parsed[0]['views'] == 5000
         assert parsed[0]['spend'] == 12000
