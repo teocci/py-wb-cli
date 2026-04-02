@@ -9,8 +9,9 @@
 | 0.3.0 | Phase 2 | 2026-03-18 | Core write controls - lifecycle, items, bids, budget, placements |
 | 0.3.1 | Auth | 2026-03-19 | Dual auth - portal session support, env var fallback, /ping fix |
 | 0.3.2 | API Fix | 2026-04-02 | Full API migration - all dead endpoints replaced with current WB API |
+| 0.4.0 | Phase 3 | 2026-04-02 | Search-cluster control - cluster bid mutations, minus phrases, daily stats |
 
-## Current Version: 0.3.2
+## Current Version: 0.4.0
 
 ## Phase Status
 
@@ -19,7 +20,7 @@
 | 0 | Foundation | COMPLETED | 0.1.0 |
 | 1 | Read-only operational visibility | COMPLETED | 0.2.0 |
 | 2 | Core write controls | COMPLETED | 0.3.0 |
-| 3 | Search-cluster control | PENDING | - |
+| 3 | Search-cluster control | COMPLETED | 0.4.0 |
 | 4 | Analytics bridge | PENDING | - |
 | 5 | Optimization workflows | PENDING | - |
 
@@ -283,15 +284,47 @@ Live testing on 2026-04-02 revealed that **10 of 12 endpoint paths** in the code
 
 ---
 
-## Phase 3 - Search-cluster Control (PENDING)
+## Phase 3 - Search-cluster Control (v0.4.0) - COMPLETED
 
-### Planned scope
+### What was built
 
-- Cluster bid listing and mutations
-- Minus phrase workflows (list, set, clear)
-- Planning diffs for cluster changes
+- **New domain model**: `ClusterBidMutation` (nm_id, norm_query, bid + `to_api()`) — replaces unused `ClusterBid`
+- **PromotionClient write methods**: `set_cluster_bids`, `delete_cluster_bids`, `set_minus_phrases`
+- **ClusterService write methods**: `set_cluster_bids`, `delete_cluster_bids`, `set_minus_phrases`, `clear_minus_phrases` — all with dry-run support and validation (max 100 bids, max 1000 phrases, positive bids)
+- **ClusterService read addition**: `get_cluster_stats_daily` — daily breakdown stats via normquery v1 API
+- **CLI write commands** (all with `--dry-run` and `--yes`, audit logging on execute):
+  - `wb cluster set-bids --campaign --nm --query --bid` — set single cluster bid
+  - `wb cluster set-bids-file --campaign --file` — batch set from JSON file
+  - `wb cluster delete-bids --campaign --nm --query --bid` — delete single cluster bid
+  - `wb cluster delete-bids-file --campaign --file` — batch delete from JSON file
+  - `wb cluster stats-daily --campaign --nm --from --to` — daily stats
+- **Minus phrase sub-app** (`wb cluster minus ...`):
+  - `wb cluster minus list --campaign --nm` — list current minus phrases
+  - `wb cluster minus set --campaign --nm --phrases` — set minus phrases (comma-separated)
+  - `wb cluster minus clear --campaign --nm` — clear all minus phrases
 
-### Expected version: 0.4.0
+### File structure additions
+
+```
+src/wb/
+  domain/
+    models.py        # +ClusterBidMutation, -ClusterBid (replaced)
+  client/
+    promotion.py     # +set_cluster_bids, delete_cluster_bids, set_minus_phrases
+  services/
+    clusters.py      # +5 methods (set/delete bids, set/clear minus, stats-daily)
+  cli/
+    cluster.py       # +8 commands, minus_app sub-app, _confirm_or_abort, _log_mutation
+tests/unit/
+  test_promotion_client_write.py  # +5 tests
+  test_cluster_service.py         # +20 tests
+  test_cli_cluster.py             # +14 tests
+```
+
+### Test results
+
+- **405 tests passed** (0 failures)
+- 39 new tests covering: client write methods, service write methods (dry-run, execute, validation), CLI write commands, minus phrase commands, daily stats
 
 ---
 

@@ -22,9 +22,12 @@ from wb.core.constants import (
     EP_CAMPAIGN_STOP,
     EP_ELIGIBLE_ITEMS,
     EP_ELIGIBLE_SUBJECTS,
+    EP_NQ_DEL_BIDS,
     EP_NQ_GET_BIDS,
     EP_NQ_GET_MINUS,
     EP_NQ_LIST,
+    EP_NQ_SET_BIDS,
+    EP_NQ_SET_MINUS,
     EP_NQ_STATS,
     EP_NQ_STATS_DAILY,
     EP_RECOMMENDED_BID,
@@ -386,3 +389,30 @@ class PromotionClient:
             payload: Bid payload dict (from BidMutation.to_api).
         """
         self._http.patch(EP_BID_SET, json_body={'bids': [payload]})
+
+    def set_cluster_bids(self, bids: list[dict]) -> None:
+        """Set bids for search clusters via POST normquery/bids.
+
+        Args:
+            bids: List of bid dicts (max 100), each with
+                  advert_id, nm_id, norm_query, bid.
+        """
+        self._http.post(EP_NQ_SET_BIDS, json_body={'bids': bids})
+
+    def delete_cluster_bids(self, bids: list[dict]) -> None:
+        """Delete bids from search clusters via DELETE normquery/bids.
+
+        Args:
+            bids: List of bid dicts (max 100), each with
+                  advert_id, nm_id, norm_query, bid.
+        """
+        self._http.delete(EP_NQ_DEL_BIDS, json_body={'bids': bids})
+
+    def set_minus_phrases(self, payload: dict) -> None:
+        """Set or clear minus phrases via POST normquery/set-minus.
+
+        Args:
+            payload: Dict with advert_id, nm_id, norm_queries.
+                     Empty norm_queries list clears all minus phrases.
+        """
+        self._http.post(EP_NQ_SET_MINUS, json_body=payload)

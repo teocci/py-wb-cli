@@ -15,7 +15,7 @@ __all__ = [
     'ProductCard',
     'ItemBid',
     'SearchCluster',
-    'ClusterBid',
+    'ClusterBidMutation',
     'BudgetSnapshot',
     'CampaignStats',
     'ClusterStats',
@@ -194,16 +194,31 @@ class SearchCluster:
 
 
 @dataclass(slots=True)
-class ClusterBid:
-    """Bid mutation for a search cluster.
+class ClusterBidMutation:
+    """A bid change for a search cluster in a campaign.
 
     Attributes:
-        cluster_id: Target cluster ID.
-        bid: New bid value.
+        nm_id: Product nomenclature ID.
+        norm_query: Normalized query string (cluster identifier).
+        bid: New bid value in kopecks.
     """
 
-    cluster_id: int
+    nm_id: int
+    norm_query: str
     bid: int
+
+    def to_api(self, campaign_id: int) -> dict:
+        """Serialize to WB API POST /adv/v0/normquery/bids payload item.
+
+        Args:
+            campaign_id: Campaign this bid belongs to.
+        """
+        return {
+            'advert_id': campaign_id,
+            'nm_id': self.nm_id,
+            'norm_query': self.norm_query,
+            'bid': self.bid,
+        }
 
 
 @dataclass(slots=True)

@@ -16,6 +16,9 @@ from wb.core.constants import (
     EP_CAMPAIGN_RENAME,
     EP_CAMPAIGN_START,
     EP_CAMPAIGN_STOP,
+    EP_NQ_DEL_BIDS,
+    EP_NQ_SET_BIDS,
+    EP_NQ_SET_MINUS,
 )
 
 
@@ -150,3 +153,55 @@ class TestSetItemBid:
         payload = {'advert_id': 5, 'nm_bids': [{'nm_id': 123, 'bid_kopecks': 300, 'placement': 'search'}]}
         client.set_item_bid(payload)
         mock_http.patch.assert_called_once_with(EP_BID_SET, json_body={'bids': [payload]})
+
+
+class TestSetClusterBids:
+    """Tests for set_cluster_bids()."""
+
+    def test_posts_bids_payload(self, client, mock_http):
+        bids = [
+            {'advert_id': 10, 'nm_id': 200, 'norm_query': 'sneakers', 'bid': 500},
+        ]
+        client.set_cluster_bids(bids)
+        mock_http.post.assert_called_once_with(
+            EP_NQ_SET_BIDS, json_body={'bids': bids}
+        )
+
+    def test_returns_none(self, client, mock_http):
+        result = client.set_cluster_bids([])
+        assert result is None
+
+
+class TestDeleteClusterBids:
+    """Tests for delete_cluster_bids()."""
+
+    def test_deletes_bids_payload(self, client, mock_http):
+        bids = [
+            {'advert_id': 10, 'nm_id': 200, 'norm_query': 'boots', 'bid': 300},
+        ]
+        client.delete_cluster_bids(bids)
+        mock_http.delete.assert_called_once_with(
+            EP_NQ_DEL_BIDS, json_body={'bids': bids}
+        )
+
+
+class TestSetMinusPhrases:
+    """Tests for set_minus_phrases()."""
+
+    def test_posts_minus_payload(self, client, mock_http):
+        payload = {
+            'advert_id': 10,
+            'nm_id': 200,
+            'norm_queries': ['boots', 'sandals'],
+        }
+        client.set_minus_phrases(payload)
+        mock_http.post.assert_called_once_with(
+            EP_NQ_SET_MINUS, json_body=payload
+        )
+
+    def test_clear_with_empty_list(self, client, mock_http):
+        payload = {'advert_id': 10, 'nm_id': 200, 'norm_queries': []}
+        client.set_minus_phrases(payload)
+        mock_http.post.assert_called_once_with(
+            EP_NQ_SET_MINUS, json_body=payload
+        )
