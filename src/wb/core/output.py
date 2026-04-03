@@ -138,10 +138,19 @@ class OutputRenderer:
     ) -> None:
         """Render an error message regardless of output format.
 
+        When JSON output is active, emits a structured JSON error
+        to stdout so agents can parse it programmatically.
+
         Args:
             message: Primary error description.
             details: Optional additional context.
         """
+        if self.is_json:
+            error_data: dict = {'status': 'error', 'error': {'message': message}}
+            if details:
+                error_data['error']['details'] = details
+            _stdout_console.print(render_json(error_data), highlight=False)
+            return
         render_error(message, details=details)
 
     def success(self, message: str) -> None:

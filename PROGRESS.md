@@ -13,8 +13,9 @@
 | 0.5.0 | Phase 4 | 2026-04-03 | Analytics bridge - sales funnel, search reports, CSV exports |
 | 0.6.0 | Phase 5 | 2026-04-03 | Optimization workflows - recommendation engine, guarded apply |
 | 0.8.0 | Phase 7 | 2026-04-03 | Local SQLite cache - historical snapshots, wb budget history |
+| 0.9.0 | Agent Fixes | 2026-04-03 | Agent-critical fixes - JSON errors, per-NM stats, Campaign nm_ids |
 
-## Current Version: 0.8.0
+## Current Version: 0.9.0
 
 ## Phase Status
 
@@ -28,6 +29,7 @@
 | 5 | Optimization workflows | COMPLETED | 0.6.0 |
 | 6 | Agent platform support | COMPLETED | 0.7.0 |
 | 7 | Local SQLite cache + historical snapshots | COMPLETED | 0.8.0 |
+| A1 | Agent-critical fixes | COMPLETED | 0.9.0 |
 
 ---
 
@@ -561,6 +563,60 @@ tests/unit/
 
 - **604 tests passed** (0 failures)
 - 65 new tests covering: SQLite schema, round-trip persistence, upsert, filters, CacheService orchestration, error swallowing, CLI commands
+
+---
+
+## Agent-Critical Fixes (v0.9.0) - COMPLETED
+
+### Context
+
+During a real agent session ("top 3 products and their ad spend"), the CLI had blockers:
+- Campaign `get` dropped product NM IDs (agent bypassed CLI for raw HTTP)
+- Campaign stats lost per-NM breakdown (agent manually aggregated from raw API)
+- Errors were colored text, not JSON (agent couldn't parse failures)
+- Interactive prompts blocked automated calls
+
+### What was built
+
+- **Structured JSON errors**: `error_code` field on all exception classes, `to_dict()` method, JSON error output when `--json` is active in `main()` entry point
+- **No interactive prompts**: Removed `prompt=True` from auth options, added `--yes` to `auth logout`, all confirms skip in JSON mode
+- **Campaign.nm_ids**: Campaign model now parses `nm_settings[]` from API response, displays in `campaign get`
+- **Per-NM stats breakdown**: New `NmStats` and `DayStats` dataclasses, `CampaignStats.from_api()` parses nested `days[].apps[].nms[]` structure, aggregates per-NM totals — JSON output includes full breakdown
+- **Exit code consistency**: All hardcoded `typer.Exit(code=N)` replaced with `ExitCode` enum
+- **Shared CLI helpers**: New `_helpers.py` module eliminates copy-pasted `_get_renderer`, `_get_profile`, `_confirm_or_abort` from 8 CLI modules
+- **IMPROVEMENTS.md**: Created comprehensive AI agent improvement roadmap (6 phases, v0.9.0-v1.2.0)
+
+### File structure
+
+```
+src/wb/
+  cli/
+    _helpers.py          # NEW: shared get_renderer, get_profile, confirm_or_abort
+    app.py               # JSON-aware error handler in main()
+    auth.py              # Removed prompt=True, added --yes, ExitCode enum
+    bid.py               # Shared helpers, ExitCode enum
+    budget.py            # Shared helpers
+    campaign.py          # Shared helpers, nm_ids display
+    cluster.py           # Shared helpers, ExitCode enum
+    stats.py             # Shared helpers
+    analytics.py         # Shared helpers, ExitCode enum
+    cache.py             # Shared helpers
+    optimize.py          # Shared helpers
+    portal.py            # ExitCode enum
+  core/
+    exceptions.py        # error_code field, to_dict() on all exceptions
+    output.py            # JSON-aware error() method on OutputRenderer
+  domain/
+    models.py            # Campaign.nm_ids, NmStats, DayStats, enriched CampaignStats
+IMPROVEMENTS.md          # NEW: full AI agent improvement roadmap
+tests/unit/
+  test_agent_improvements.py  # 31 new tests
+```
+
+### Test results
+
+- **635 tests passed** (0 failures)
+- 31 new tests covering: error codes, to_dict(), Campaign.nm_ids, NmStats, DayStats, CampaignStats per-NM aggregation, shared CLI helpers
 
 ---
 

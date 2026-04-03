@@ -7,6 +7,7 @@ import typer
 from wb.auth.profiles import ProfileStore
 from wb.auth.token_validation import validate_promotion_token
 from wb.core.config import Settings
+from wb.core.constants import ExitCode
 from wb.core.exceptions import WbCliError
 
 auth_app = typer.Typer(
@@ -27,7 +28,7 @@ def auth_login(
         ctx: typer.Context,
         profile: str = typer.Option('default', '--profile', '-p', help='Profile name'),
         category: str = typer.Option('promotion', '--category', '-c', help='Token category'),
-        token: str = typer.Option(..., '--token', '-t', help='WB API token', prompt=True, hide_input=True),
+        token: str = typer.Option(..., '--token', '-t', help='WB API token'),
         skip_validation: bool = typer.Option(False, '--skip-validation', help='Skip token validation'),
 ) -> None:
     """Store an API token for a profile."""
@@ -50,12 +51,13 @@ def auth_login(
 @auth_app.command('logout')
 def auth_logout(
         profile: str = typer.Option(None, '--profile', '-p', help='Profile to remove'),
+        yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation prompt'),
 ) -> None:
     """Remove a profile and its tokens."""
     store = _get_profile_store()
     target = profile or store.active_profile_name
 
-    if not typer.confirm(f'Delete profile {target!r}?'):
+    if not yes and not typer.confirm(f'Delete profile {target!r}?'):
         raise typer.Abort()
 
     store.delete_profile(target)
@@ -145,8 +147,8 @@ def auth_status(
             ps = profile.get_portal_session()
             if not ps:
                 typer.secho('Error: Portal session data is missing or corrupted.', fg=typer.colors.RED, err=True)
-                raise typer.Exit(code=5)
-            
+                raise typer.Exit(code=ExitCode.CONFIG_ERROR)
+
             data['portal_user_id'] = ps.get('user_id')
             data['portal_exp'] = ps.get('exp')
         typer.echo(json.dumps(data, indent=2))
@@ -159,7 +161,7 @@ def auth_status(
         ps = profile.get_portal_session()
         if not ps:
             typer.secho('Error: Portal session data is missing or corrupted.', fg=typer.colors.RED, err=True)
-            raise typer.Exit(code=5)
+            raise typer.Exit(code=ExitCode.CONFIG_ERROR)
         
         typer.echo(f'Portal user ID: {ps.get("user_id", "unknown")}')
     typer.echo(f'Last used: {profile.last_used or "never"}')
@@ -179,7 +181,7 @@ def auth_ping(
             fg=typer.colors.RED,
             err=True,
         )
-        raise typer.Exit(code=3)
+        raise typer.Exit(code=ExitCode.AUTH_FAILURE)
 
     typer.echo('Testing API connectivity...')
     try:
@@ -187,7 +189,7 @@ def auth_ping(
         typer.secho('API connection successful.', fg=typer.colors.GREEN)
     except WbCliError as exc:
         typer.secho(f'Connection failed: {exc}', fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=3) from exc
+        raise typer.Exit(code=ExitCode.AUTH_FAILURE) from exc
 
 
 @auth_app.command('login-portal')
@@ -196,14 +198,10 @@ def auth_login_portal(
         authorizev3: str = typer.Option(
             ..., '--authorizev3', '-a',
             help='authorizev3 header value from browser DevTools',
-            prompt=True,
-            hide_input=True,
         ),
         cookie: str = typer.Option(
             ..., '--cookie', '-c',
             help='Browser cookie string (required for portal auth)',
-            prompt=True,
-            hide_input=True,
         ),
         skip_auth: bool = typer.Option(
             False, '--skip-auth',
@@ -274,14 +272,14 @@ def auth_generate_token(
         client = create_portal_client(profile)
     except WbCliError as exc:
         typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=7) from exc
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
 
     typer.echo('Generating token via portal...')
     try:
         token = client.generate_token()
     except WbCliError as exc:
         typer.secho(f'Token generation failed: {exc}', fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=6) from exc
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
 
     masked = f'{token[:8]}...{token[-4:]}' if len(token) > 12 else '***'
     typer.secho('Token generated successfully.', fg=typer.colors.GREEN)

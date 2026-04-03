@@ -215,6 +215,8 @@ def _get_analytics_token(
     settings = Settings()
     if settings.analytics_token:
         return settings.analytics_token
+    if settings.api_token:
+        return settings.api_token
     settings.ensure_config_dir()
     store = ProfileStore(settings.config_dir)
     profile = store.get_profile(profile_name)

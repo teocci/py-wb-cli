@@ -6,8 +6,7 @@ from dataclasses import asdict
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import OutputFormat, VerbosityLevel
+from wb.cli._helpers import get_profile, get_renderer
 
 cache_app = typer.Typer(
     help='Local snapshot cache',
@@ -20,19 +19,6 @@ history_app = typer.Typer(
 )
 
 cache_app.add_typer(history_app, name='history')
-
-
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    return (ctx.obj or {}).get('profile')
 
 
 # ── Cache management commands ─────────────────────────────────────────
@@ -48,8 +34,8 @@ def cache_list(
     """Show cached campaign snapshots (or summary if no campaign given)."""
     from wb.services._factory import create_cache_service
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
     svc = create_cache_service(profile)
 
     if campaign_id is None:
@@ -85,8 +71,8 @@ def cache_snapshot(
     """Capture current WB API state for a campaign to local cache."""
     from wb.services._factory import create_cache_service
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
     svc = create_cache_service(profile)
 
     counts = svc.snapshot_campaign(
@@ -112,8 +98,8 @@ def cache_snapshot_all(ctx: typer.Context) -> None:
     """Capture config snapshots for all active campaigns."""
     from wb.services._factory import create_cache_service
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
     svc = create_cache_service(profile)
 
     counts = svc.snapshot_all(profile)
@@ -133,8 +119,8 @@ def cache_clear(
     """Delete cached rows for this profile (optionally scoped to one campaign)."""
     from wb.services._factory import create_cache_service
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
 
     scope = f'campaign {campaign_id}' if campaign_id else 'all campaigns'
     if not (yes or renderer.is_json):
@@ -164,8 +150,8 @@ def history_campaigns(
     """Show stored campaign config snapshots."""
     from wb.services._factory import create_cache_service
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
     svc = create_cache_service(profile)
 
     snaps = svc.history_campaigns(profile, campaign_id, limit)
@@ -194,8 +180,8 @@ def history_stats(
     """Show stored daily stats snapshots for a campaign."""
     from wb.services._factory import create_cache_service
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
     svc = create_cache_service(profile)
 
     records = svc.history_stats(profile, campaign_id, date_from, date_to, limit)
@@ -221,8 +207,8 @@ def history_clusters(
     """Show stored cluster snapshots for a campaign."""
     from wb.services._factory import create_cache_service
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
     svc = create_cache_service(profile)
 
     records = svc.history_clusters(profile, campaign_id, nm_id, limit)

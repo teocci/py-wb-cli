@@ -8,8 +8,8 @@ from pathlib import Path
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import OutputFormat, VerbosityLevel
+from wb.cli._helpers import get_profile, get_renderer
+from wb.core.constants import ExitCode
 
 analytics_app = typer.Typer(
     help='Analytics operations (requires analytics token)',
@@ -33,21 +33,6 @@ csv_app = typer.Typer(
     no_args_is_help=True,
 )
 analytics_app.add_typer(csv_app, name='csv')
-
-
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    """Build an OutputRenderer from global CLI flags."""
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    """Extract profile name from CLI context."""
-    return (ctx.obj or {}).get('profile')
 
 
 def _parse_int_list(value: str | None) -> list[int] | None:
@@ -90,8 +75,8 @@ def funnel_products(
     """Product cards statistics for a period."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_analytics_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_analytics_service(get_profile(ctx))
     stats = svc.get_product_funnel(
         date_from, date_to,
         nm_ids=_parse_int_list(nm_ids),
@@ -124,9 +109,9 @@ def funnel_history(
     """Product cards statistics per days."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     parsed_ids = _parse_int_list(nm_ids) or []
-    svc = create_analytics_service(_get_profile(ctx))
+    svc = create_analytics_service(get_profile(ctx))
     items = svc.get_product_history(
         date_from, date_to, parsed_ids, aggregation=aggregation,
     )
@@ -152,8 +137,8 @@ def funnel_grouped(
     """Grouped product cards statistics per days."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_analytics_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_analytics_service(get_profile(ctx))
     items = svc.get_grouped_history(
         date_from, date_to,
         brand_names=_parse_str_list(brands),
@@ -185,8 +170,8 @@ def search_main(
     """Main search report page with general info and groups."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_analytics_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_analytics_service(get_profile(ctx))
     data = svc.get_search_report(
         date_from, date_to,
         nm_ids=_parse_int_list(nm_ids),
@@ -215,8 +200,8 @@ def search_groups(
     """Search report groups with pagination."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_analytics_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_analytics_service(get_profile(ctx))
     groups = svc.get_search_groups(
         date_from, date_to,
         nm_ids=_parse_int_list(nm_ids),
@@ -250,8 +235,8 @@ def search_details(
     """Product details within a search report group."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_analytics_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_analytics_service(get_profile(ctx))
     products = svc.get_search_details(
         date_from, date_to,
         subject_id=subject_id,
@@ -282,8 +267,8 @@ def search_texts(
     """Top search texts for a product."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_analytics_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_analytics_service(get_profile(ctx))
     texts = svc.get_search_texts(date_from, date_to, nm_id, limit=limit)
 
     if not texts:
@@ -306,9 +291,9 @@ def search_orders(
     """Orders and positions by product search texts."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     text_list = _parse_str_list(texts) or []
-    svc = create_analytics_service(_get_profile(ctx))
+    svc = create_analytics_service(get_profile(ctx))
     data = svc.get_search_orders(date_from, date_to, nm_id, text_list)
 
     if not data:
@@ -335,15 +320,15 @@ def csv_create(
     """Create a CSV report generation task."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
 
     try:
         params = json.loads(params_file.read_text(encoding='utf-8'))
     except (OSError, json.JSONDecodeError) as exc:
         renderer.error(f'Failed to read params file: {exc}')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
-    svc = create_analytics_service(_get_profile(ctx))
+    svc = create_analytics_service(get_profile(ctx))
     status = svc.create_csv_report(report_type, name, params)
 
     data = asdict(status)
@@ -358,9 +343,9 @@ def csv_list(
     """List CSV report generation tasks."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     id_list = _parse_str_list(ids)
-    svc = create_analytics_service(_get_profile(ctx))
+    svc = create_analytics_service(get_profile(ctx))
     reports = svc.list_csv_reports(id_list)
 
     if not reports:
@@ -380,8 +365,8 @@ def csv_retry(
     """Retry a failed CSV report generation."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_analytics_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_analytics_service(get_profile(ctx))
     message = svc.retry_csv_report(download_id)
     renderer.success(f'Retry requested: {message}')
 
@@ -398,10 +383,10 @@ def csv_download(
     """Download a generated CSV report as ZIP."""
     from wb.services._factory import create_analytics_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     if output is None:
         output = Path(f'report-{download_id}.zip')
 
-    svc = create_analytics_service(_get_profile(ctx))
+    svc = create_analytics_service(get_profile(ctx))
     saved = svc.download_csv_report(download_id, output)
     renderer.success(f'Report saved to {saved}')

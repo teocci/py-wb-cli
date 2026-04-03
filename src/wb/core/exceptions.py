@@ -24,7 +24,10 @@ class WbCliError(Exception):
     Attributes:
         message: Human-readable error description.
         exit_code: Process exit code associated with this error.
+        error_code: Machine-readable error code for programmatic matching.
     """
+
+    error_code: str = 'CLI_ERROR'
 
     def __init__(
             self,
@@ -35,9 +38,22 @@ class WbCliError(Exception):
         self.message = message
         self.exit_code = exit_code
 
+    def to_dict(self) -> dict:
+        """Serialize to a structured error dict for JSON output."""
+        return {
+            'status': 'error',
+            'error': {
+                'code': self.error_code,
+                'message': self.message,
+                'exit_code': int(self.exit_code),
+            },
+        }
+
 
 class ValidationError(WbCliError):
     """Raised when input validation fails."""
+
+    error_code: str = 'VALIDATION_ERROR'
 
     def __init__(self, message: str) -> None:
         super().__init__(message, exit_code=ExitCode.VALIDATION_ERROR)
@@ -46,12 +62,16 @@ class ValidationError(WbCliError):
 class AuthenticationError(WbCliError):
     """Raised when authentication credentials are invalid or expired."""
 
+    error_code: str = 'AUTH_FAILURE'
+
     def __init__(self, message: str) -> None:
         super().__init__(message, exit_code=ExitCode.AUTH_FAILURE)
 
 
 class AuthorizationError(WbCliError):
     """Raised when the token lacks a required permission scope."""
+
+    error_code: str = 'AUTH_MISSING_SCOPE'
 
     def __init__(self, message: str) -> None:
         super().__init__(message, exit_code=ExitCode.AUTH_MISSING_SCOPE)
@@ -64,6 +84,8 @@ class RateLimitError(WbCliError):
         retry_after: Seconds to wait before retrying, if provided by the API.
     """
 
+    error_code: str = 'RATE_LIMITED'
+
     def __init__(
             self,
             message: str,
@@ -71,6 +93,13 @@ class RateLimitError(WbCliError):
     ) -> None:
         super().__init__(message, exit_code=ExitCode.RATE_LIMITED)
         self.retry_after = retry_after
+
+    def to_dict(self) -> dict:
+        """Serialize with retry_after hint."""
+        result = super().to_dict()
+        if self.retry_after is not None:
+            result['error']['retry_after'] = self.retry_after
+        return result
 
 
 class ApiError(WbCliError):
@@ -80,6 +109,8 @@ class ApiError(WbCliError):
         status_code: HTTP status code returned by the API.
         response_body: Raw response body text, if available.
     """
+
+    error_code: str = 'API_ERROR'
 
     def __init__(
             self,
@@ -91,9 +122,18 @@ class ApiError(WbCliError):
         self.status_code = status_code
         self.response_body = response_body
 
+    def to_dict(self) -> dict:
+        """Serialize with HTTP status code."""
+        result = super().to_dict()
+        if self.status_code is not None:
+            result['error']['status_code'] = self.status_code
+        return result
+
 
 class ConfigError(WbCliError):
     """Raised on configuration file or value errors."""
+
+    error_code: str = 'CONFIG_ERROR'
 
     def __init__(self, message: str) -> None:
         super().__init__(message, exit_code=ExitCode.CONFIG_ERROR)

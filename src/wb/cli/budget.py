@@ -7,8 +7,7 @@ from datetime import datetime, timezone
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import OutputFormat, VerbosityLevel
+from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
 
 budget_app = typer.Typer(
     help='Budget and balance management',
@@ -16,28 +15,13 @@ budget_app = typer.Typer(
 )
 
 
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    """Build an OutputRenderer from global CLI flags."""
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    """Extract profile name from CLI context."""
-    return (ctx.obj or {}).get('profile')
-
-
 @budget_app.command('balance')
 def budget_balance(ctx: typer.Context) -> None:
     """Show account balance."""
     from wb.services._factory import create_budget_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_budget_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_budget_service(get_profile(ctx))
     balance = svc.get_balance()
 
     data = asdict(balance)
@@ -60,8 +44,8 @@ def budget_get(
     """Show budget for a campaign."""
     from wb.services._factory import create_budget_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_budget_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_budget_service(get_profile(ctx))
     budget = svc.get_budget(campaign_id)
 
     data = asdict(budget)
@@ -86,21 +70,17 @@ def budget_topup(
     """Deposit funds into a campaign budget."""
     from wb.services._factory import create_audit_logger, create_budget_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     action = f'deposit {amount} kopecks to campaign {campaign_id}'
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    if not (yes or dry_run or renderer.is_json):
-        confirmed = typer.confirm(f'About to: {action}. Proceed?', default=False)
-        if not confirmed:
-            raise typer.Abort()
-
-    svc = create_budget_service(_get_profile(ctx))
+    svc = create_budget_service(get_profile(ctx))
     result = svc.topup(campaign_id, amount, dry_run=dry_run)
 
     if not dry_run:
-        audit = create_audit_logger(_get_profile(ctx))
+        audit = create_audit_logger(get_profile(ctx))
         audit.log(
-            profile=_get_profile(ctx) or 'default',
+            profile=get_profile(ctx) or 'default',
             command='budget topup',
             target_id=result.target_id,
             payload={'action': result.action},
@@ -109,7 +89,7 @@ def budget_topup(
 
     if not dry_run:
         _record_topup_event(
-            profile=_get_profile(ctx) or 'default',
+            profile=get_profile(ctx) or 'default',
             campaign_id=campaign_id,
             amount=amount,
         )
@@ -155,8 +135,8 @@ def budget_history(
     """Show recorded budget topup events from local cache."""
     from wb.services._factory import create_cache_store
 
-    renderer = _get_renderer(ctx)
-    profile = _get_profile(ctx) or 'default'
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx) or 'default'
     store = create_cache_store(profile)
     events = store.list_budget_events(profile, campaign_id, limit)
     data = [asdict(e) for e in events]

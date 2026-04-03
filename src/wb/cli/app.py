@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 
@@ -72,12 +73,20 @@ def version() -> None:
     typer.echo(f'wb-cli {__version__}')
 
 
+def _is_json_mode() -> bool:
+    """Detect --json flag from sys.argv (before Typer context is available)."""
+    return '--json' in sys.argv
+
+
 def main() -> None:
     """CLI entry point with top-level exception handling."""
     try:
         app()
     except WbCliError as exc:
-        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        if _is_json_mode():
+            print(json.dumps(exc.to_dict(), ensure_ascii=False))
+        else:
+            typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
         sys.exit(exc.exit_code)
     except KeyboardInterrupt:
         typer.echo('\nAborted.', err=True)

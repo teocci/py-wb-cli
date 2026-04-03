@@ -8,8 +8,8 @@ from pathlib import Path
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import OutputFormat, VerbosityLevel
+from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
+from wb.core.constants import ExitCode
 from wb.domain.models import ClusterBidMutation
 
 cluster_app = typer.Typer(
@@ -22,40 +22,6 @@ minus_app = typer.Typer(
     no_args_is_help=True,
 )
 cluster_app.add_typer(minus_app, name='minus', help='Minus phrase management')
-
-
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    """Build an OutputRenderer from global CLI flags."""
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    """Extract profile name from CLI context."""
-    return (ctx.obj or {}).get('profile')
-
-
-def _confirm_or_abort(
-        renderer: OutputRenderer,
-        action: str,
-        yes: bool,
-) -> None:
-    """Prompt for confirmation unless --yes is set.
-
-    Args:
-        renderer: Current output renderer.
-        action: Human-readable description of the action.
-        yes: Skip prompt if True.
-    """
-    if yes or renderer.is_json:
-        return
-    confirmed = typer.confirm(f'About to: {action}. Proceed?', default=False)
-    if not confirmed:
-        raise typer.Abort()
 
 
 def _log_mutation(profile: str | None, command: str, result) -> None:
@@ -110,8 +76,8 @@ def cluster_list(
     """List all search clusters for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_cluster_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_cluster_service(get_profile(ctx))
     clusters = svc.list_clusters(campaign_id, nm_id)
 
     if not clusters:
@@ -131,8 +97,8 @@ def cluster_active(
     """List active search clusters for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_cluster_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_cluster_service(get_profile(ctx))
     clusters = svc.get_active_clusters(campaign_id, nm_id)
 
     if not clusters:
@@ -152,8 +118,8 @@ def cluster_inactive(
     """List inactive search clusters for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_cluster_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_cluster_service(get_profile(ctx))
     clusters = svc.get_inactive_clusters(campaign_id, nm_id)
 
     if not clusters:
@@ -173,8 +139,8 @@ def cluster_bids(
     """List clusters with bids set for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_cluster_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_cluster_service(get_profile(ctx))
     clusters = svc.get_cluster_bids(campaign_id, nm_id)
 
     if not clusters:
@@ -200,8 +166,8 @@ def cluster_stats(
     """Show statistics for search clusters in a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_cluster_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_cluster_service(get_profile(ctx))
     stats = svc.get_cluster_stats(campaign_id, nm_id, date_from, date_to)
 
     if not stats:
@@ -231,8 +197,8 @@ def cluster_stats_daily(
     """Show daily statistics for search clusters in a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_cluster_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_cluster_service(get_profile(ctx))
     daily = svc.get_cluster_stats_daily(
         campaign_id, nm_id, date_from, date_to,
     )
@@ -268,16 +234,16 @@ def cluster_set_bids(
     """Set a bid for a single search cluster."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     mutation = ClusterBidMutation(nm_id=nm_id, norm_query=query, bid=bid)
     action = f'set cluster bid={bid} for "{query}" in campaign {campaign_id}'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_cluster_service(_get_profile(ctx))
+    svc = create_cluster_service(get_profile(ctx))
     result = svc.set_cluster_bids(campaign_id, [mutation], dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'cluster set-bids', result)
+        _log_mutation(get_profile(ctx), 'cluster set-bids', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -301,16 +267,16 @@ def cluster_set_bids_file(
     """
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     mutations = _parse_bid_file(renderer, file)
     action = f'set {len(mutations)} cluster bid(s) in campaign {campaign_id}'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_cluster_service(_get_profile(ctx))
+    svc = create_cluster_service(get_profile(ctx))
     result = svc.set_cluster_bids(campaign_id, mutations, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'cluster set-bids-file', result)
+        _log_mutation(get_profile(ctx), 'cluster set-bids-file', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -333,18 +299,18 @@ def cluster_delete_bids(
     """Delete a bid from a single search cluster."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     mutation = ClusterBidMutation(nm_id=nm_id, norm_query=query, bid=bid)
     action = (
         f'delete cluster bid for "{query}" from campaign {campaign_id}'
     )
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_cluster_service(_get_profile(ctx))
+    svc = create_cluster_service(get_profile(ctx))
     result = svc.delete_cluster_bids(campaign_id, [mutation], dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'cluster delete-bids', result)
+        _log_mutation(get_profile(ctx), 'cluster delete-bids', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -368,20 +334,20 @@ def cluster_delete_bids_file(
     """
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     mutations = _parse_bid_file(renderer, file)
     action = (
         f'delete {len(mutations)} cluster bid(s) '
         f'from campaign {campaign_id}'
     )
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_cluster_service(_get_profile(ctx))
+    svc = create_cluster_service(get_profile(ctx))
     result = svc.delete_cluster_bids(campaign_id, mutations, dry_run=dry_run)
 
     if not dry_run:
         _log_mutation(
-            _get_profile(ctx), 'cluster delete-bids-file', result,
+            get_profile(ctx), 'cluster delete-bids-file', result,
         )
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
@@ -400,8 +366,8 @@ def minus_list(
     """List minus phrases for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_cluster_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_cluster_service(get_profile(ctx))
     phrase_set = svc.get_minus_phrases(campaign_id, nm_id)
 
     if not phrase_set.phrases:
@@ -428,26 +394,26 @@ def minus_set(
     """Set minus phrases for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     phrase_list = [p.strip() for p in phrases.split(',') if p.strip()]
 
     if not phrase_list:
         renderer.error('At least one phrase is required. Use "minus clear" to remove all.')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
     action = (
         f'set {len(phrase_list)} minus phrase(s) for '
         f'campaign {campaign_id} nm {nm_id}'
     )
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_cluster_service(_get_profile(ctx))
+    svc = create_cluster_service(get_profile(ctx))
     result = svc.set_minus_phrases(
         campaign_id, nm_id, phrase_list, dry_run=dry_run,
     )
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'cluster minus set', result)
+        _log_mutation(get_profile(ctx), 'cluster minus set', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -464,17 +430,17 @@ def minus_clear(
     """Clear all minus phrases for a campaign/product."""
     from wb.services._factory import create_cluster_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     action = f'clear all minus phrases for campaign {campaign_id} nm {nm_id}'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_cluster_service(_get_profile(ctx))
+    svc = create_cluster_service(get_profile(ctx))
     result = svc.clear_minus_phrases(
         campaign_id, nm_id, dry_run=dry_run,
     )
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'cluster minus clear', result)
+        _log_mutation(get_profile(ctx), 'cluster minus clear', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -502,11 +468,11 @@ def _parse_bid_file(
         raw = json.loads(file.read_text(encoding='utf-8'))
     except (OSError, json.JSONDecodeError) as exc:
         renderer.error(f'Failed to read bid file: {exc}')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
     if not isinstance(raw, list):
         renderer.error('Bid file must contain a JSON array')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
     try:
         return [
@@ -519,4 +485,4 @@ def _parse_bid_file(
         ]
     except (KeyError, TypeError) as exc:
         renderer.error(f'Invalid bid entry: {exc}')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)

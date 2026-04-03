@@ -65,7 +65,7 @@ class AnalyticsService:
             List of ProductFunnelStats domain objects.
         """
         body: dict = {
-            'selectedPeriod': {'begin': begin, 'end': end},
+            'selectedPeriod': {'start': begin, 'end': end},
             'limit': min(limit, _MAX_LIMIT),
             'offset': offset,
         }
@@ -118,7 +118,7 @@ class AnalyticsService:
             )
 
         body = {
-            'selectedPeriod': {'begin': begin, 'end': end},
+            'selectedPeriod': {'start': begin, 'end': end},
             'nmIds': nm_ids,
             'aggregationLevel': aggregation,
         }
@@ -149,7 +149,7 @@ class AnalyticsService:
             List of ProductFunnelHistory domain objects.
         """
         body: dict = {
-            'selectedPeriod': {'begin': begin, 'end': end},
+            'selectedPeriod': {'start': begin, 'end': end},
             'aggregationLevel': aggregation,
         }
         if brand_names:

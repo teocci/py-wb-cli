@@ -43,6 +43,9 @@ python -m wb auth --help
 | 0.4.0 | Phase 3 - Search-cluster control |
 | 0.5.0 | Phase 4 - Analytics bridge |
 | 0.6.0 | Phase 5 - Optimization workflows |
+| 0.7.0 | Phase 6 - Agent platform support (SDK) |
+| 0.8.0 | Phase 7 - Local SQLite cache |
+| 0.9.0 | Agent Fixes - JSON errors, per-NM stats, shared helpers |
 
 ## Project Layout
 
@@ -108,11 +111,15 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 
 | Variable | Purpose |
 |----------|---------|
-| `WB_API_TOKEN` | API token (fallback for profile token) |
+| `WB_API_TOKEN` | API token — used as fallback for **both** promotion and analytics commands |
+| `WB_ANALYTICS_TOKEN` | Dedicated analytics token (takes priority over `WB_API_TOKEN` for analytics) |
 | `WB_AUTHORIZEV3` | Portal authorizev3 key (fallback for portal session) |
 | `WB_PORTAL_COOKIE` | Portal browser cookie (fallback for portal session) |
 | `WB_USER_ID` | Seller user ID |
 | `WB_TOKEN_EXPIRATION` | Token expiration timestamp |
+
+> A single `WB_API_TOKEN` with full-scope permissions is sufficient to run all CLI commands
+> (promotion + analytics). No profile registration needed when env vars are set.
 
 Full design: `wb_cli_authorization_plan.md`
 
@@ -122,6 +129,12 @@ Full design: `wb_cli_authorization_plan.md`
 - **Never** use endpoint paths from memory or older code — always verify against `dev-wb-adv.md`
 - WB deprecates endpoints without notice; if any call returns 404, check the docs for the new path
 - All endpoint constants live in `src/wb/core/constants.py` — no hardcoded paths elsewhere
+
+### Known WB API quirks
+
+| API | Field | Wrong | Correct |
+|-----|-------|-------|---------|
+| Analytics v3 `sales-funnel/*` | `selectedPeriod` start key | `begin` | `start` |
 
 ## Key Design Decisions
 

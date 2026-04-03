@@ -19,6 +19,8 @@ __all__ = [
     'SearchCluster',
     'ClusterBidMutation',
     'BudgetSnapshot',
+    'NmStats',
+    'DayStats',
     'CampaignStats',
     'ClusterStats',
     'MinusPhraseSet',
@@ -45,6 +47,7 @@ class Campaign:
         bid_type: Bid strategy ('manual' or 'unified').
         currency: Currency code.
         daily_budget: Daily budget in kopecks.
+        nm_ids: Product NM IDs included in this campaign.
         start_time: ISO timestamp of campaign start.
         updated_time: ISO timestamp of last update.
         create_time: ISO timestamp of creation.
@@ -58,6 +61,7 @@ class Campaign:
     bid_type: str = 'manual'
     currency: str = 'RUB'
     daily_budget: int = 0
+    nm_ids: list[int] = field(default_factory=list)
     start_time: str | None = None
     updated_time: str | None = None
     create_time: str | None = None
@@ -67,6 +71,8 @@ class Campaign:
         """Create from WB /api/advert/v2/adverts response payload."""
         settings = data.get('settings', {})
         timestamps = data.get('timestamps', {})
+        nm_settings = data.get('nm_settings', [])
+        nm_ids = [item['nm_id'] for item in nm_settings if 'nm_id' in item]
         return cls(
             campaign_id=data['id'],
             name=settings.get('name', ''),
@@ -75,6 +81,7 @@ class Campaign:
             payment_type=PaymentType(settings.get('payment_type', 'cpm')),
             bid_type=data.get('bid_type', 'manual'),
             currency=data.get('currency', 'RUB'),
+            nm_ids=nm_ids,
             start_time=timestamps.get('started'),
             updated_time=timestamps.get('updated'),
             create_time=timestamps.get('created'),
@@ -259,6 +266,101 @@ class BudgetSnapshot:
 
 
 @dataclass(slots=True)
+class NmStats:
+    """Per-product (NM ID) statistics within a campaign.
+
+    Attributes:
+        nm_id: Product nomenclature ID.
+        name: Product display name.
+        views: Total impressions.
+        clicks: Total clicks.
+        ctr: Click-through rate.
+        orders: Total orders.
+        spend: Total ad spend (rubles).
+        cpc: Cost per click.
+        cr: Conversion rate.
+        atbs: Add-to-basket count.
+        shks: Units shipped.
+    """
+
+    nm_id: int
+    name: str = ''
+    views: int = 0
+    clicks: int = 0
+    ctr: float = 0.0
+    orders: int = 0
+    spend: float = 0.0
+    cpc: float = 0.0
+    cr: float = 0.0
+    atbs: int = 0
+    shks: int = 0
+
+    @classmethod
+    def from_api(cls, data: dict) -> NmStats:
+        """Create from a single NM entry in fullstats response."""
+        return cls(
+            nm_id=data.get('nmId', 0),
+            name=data.get('name', ''),
+            views=data.get('views', 0),
+            clicks=data.get('clicks', 0),
+            ctr=data.get('ctr', 0.0),
+            orders=data.get('orders', 0),
+            spend=data.get('sum', 0.0),
+            cpc=data.get('cpc', 0.0),
+            cr=data.get('cr', 0.0),
+            atbs=data.get('atbs', 0),
+            shks=data.get('shks', 0),
+        )
+
+
+@dataclass(slots=True)
+class DayStats:
+    """Per-day statistics with per-NM breakdown.
+
+    Attributes:
+        date: ISO date string for this day.
+        views: Total views for the day.
+        clicks: Total clicks for the day.
+        orders: Total orders for the day.
+        spend: Total spend for the day (rubles).
+        nm_stats: Per-product breakdown for this day.
+    """
+
+    date: str
+    views: int = 0
+    clicks: int = 0
+    orders: int = 0
+    spend: float = 0.0
+    nm_stats: list[NmStats] = field(default_factory=list)
+
+    @classmethod
+    def from_api(cls, data: dict) -> DayStats:
+        """Create from a single day entry in fullstats response."""
+        nm_map: dict[int, NmStats] = {}
+        for app_entry in data.get('apps', []):
+            for nm_data in app_entry.get('nms', []):
+                nm_id = nm_data.get('nmId', 0)
+                if nm_id in nm_map:
+                    existing = nm_map[nm_id]
+                    existing.views += nm_data.get('views', 0)
+                    existing.clicks += nm_data.get('clicks', 0)
+                    existing.orders += nm_data.get('orders', 0)
+                    existing.spend += nm_data.get('sum', 0.0)
+                    existing.atbs += nm_data.get('atbs', 0)
+                    existing.shks += nm_data.get('shks', 0)
+                else:
+                    nm_map[nm_id] = NmStats.from_api(nm_data)
+        return cls(
+            date=data.get('date', ''),
+            views=data.get('views', 0),
+            clicks=data.get('clicks', 0),
+            orders=data.get('orders', 0),
+            spend=data.get('sum', 0.0),
+            nm_stats=list(nm_map.values()),
+        )
+
+
+@dataclass(slots=True)
 class CampaignStats:
     """Aggregated campaign statistics for a date range.
 
@@ -268,12 +370,14 @@ class CampaignStats:
         clicks: Total clicks.
         ctr: Click-through rate.
         orders: Total orders attributed.
-        spend: Total spend in kopecks.
+        spend: Total spend in rubles.
         cpc: Cost per click.
         cr: Conversion rate.
         atbs: Add-to-basket count.
         shks: Units shipped.
         currency: Currency code.
+        days: Per-day breakdown with per-NM stats.
+        nm_stats: Aggregated per-NM stats across all days.
     """
 
     campaign_id: int
@@ -287,10 +391,39 @@ class CampaignStats:
     atbs: int = 0
     shks: int = 0
     currency: str = 'RUB'
+    days: list[DayStats] = field(default_factory=list)
+    nm_stats: list[NmStats] = field(default_factory=list)
 
     @classmethod
     def from_api(cls, data: dict) -> CampaignStats:
-        """Create from WB API /adv/v3/fullstats response payload."""
+        """Create from WB API /adv/v3/fullstats response payload.
+
+        Parses the nested days[].apps[].nms[] structure and
+        aggregates per-NM totals across all days.
+        """
+        days = [DayStats.from_api(d) for d in data.get('days', [])]
+        nm_totals: dict[int, NmStats] = {}
+        for day in days:
+            for nm in day.nm_stats:
+                if nm.nm_id in nm_totals:
+                    t = nm_totals[nm.nm_id]
+                    t.views += nm.views
+                    t.clicks += nm.clicks
+                    t.orders += nm.orders
+                    t.spend += nm.spend
+                    t.atbs += nm.atbs
+                    t.shks += nm.shks
+                else:
+                    nm_totals[nm.nm_id] = NmStats(
+                        nm_id=nm.nm_id,
+                        name=nm.name,
+                        views=nm.views,
+                        clicks=nm.clicks,
+                        orders=nm.orders,
+                        spend=nm.spend,
+                        atbs=nm.atbs,
+                        shks=nm.shks,
+                    )
         return cls(
             campaign_id=data.get('advertId', 0),
             views=data.get('views', 0),
@@ -303,6 +436,8 @@ class CampaignStats:
             atbs=data.get('atbs', 0),
             shks=data.get('shks', 0),
             currency=data.get('currency', 'RUB'),
+            days=days,
+            nm_stats=list(nm_totals.values()),
         )
 
 

@@ -8,29 +8,14 @@ from pathlib import Path
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import OutputFormat, VerbosityLevel
+from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
+from wb.core.constants import ExitCode
 from wb.domain.models import BidMutation
 
 bid_app = typer.Typer(
     help='Bid management',
     no_args_is_help=True,
 )
-
-
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    """Build an OutputRenderer from global CLI flags."""
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    """Extract profile name from CLI context."""
-    return (ctx.obj or {}).get('profile')
 
 
 @bid_app.command('recommend')
@@ -43,8 +28,8 @@ def bid_recommend(
     """Show recommended bids for a campaign."""
     from wb.services._factory import create_bid_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_bid_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_bid_service(get_profile(ctx))
     bids = svc.get_recommended_bids(campaign_id)
 
     if not bids:
@@ -70,8 +55,8 @@ def bid_minimum(
     """Show minimum bids for a campaign."""
     from wb.services._factory import create_bid_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_bid_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_bid_service(get_profile(ctx))
     bids = svc.get_minimum_bids(campaign_id)
 
     if not bids:
@@ -97,8 +82,8 @@ def bid_get_items(
     """Show per-item bid details for a campaign."""
     from wb.services._factory import create_bid_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_bid_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_bid_service(get_profile(ctx))
     bids = svc.get_item_bids(campaign_id)
 
     if not bids:
@@ -146,20 +131,16 @@ def bid_set_item(
     """Set a bid for a single item in a campaign."""
     from wb.services._factory import create_bid_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     mutation = BidMutation(nm_id=nm_id, bid_kopecks=cpm, placement=placement)
     action = f'set bid={cpm} for nm={nm_id} in campaign {campaign_id}'
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    if not (yes or dry_run or renderer.is_json):
-        confirmed = typer.confirm(f'About to: {action}. Proceed?', default=False)
-        if not confirmed:
-            raise typer.Abort()
-
-    svc = create_bid_service(_get_profile(ctx))
+    svc = create_bid_service(get_profile(ctx))
     result = svc.set_item_bid(campaign_id, mutation, dry_run=dry_run)
 
     if not dry_run:
-        _log_bid_mutation(_get_profile(ctx), 'bid set-item', result)
+        _log_bid_mutation(get_profile(ctx), 'bid set-item', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -182,17 +163,17 @@ def bid_set_items(
     """
     from wb.services._factory import create_bid_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
 
     try:
         raw = json.loads(file.read_text(encoding='utf-8'))
     except (OSError, json.JSONDecodeError) as exc:
         renderer.error(f'Failed to read bid file: {exc}')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
     if not isinstance(raw, list):
         renderer.error('Bid file must contain a JSON array')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
     try:
         mutations = [
@@ -205,20 +186,17 @@ def bid_set_items(
         ]
     except (KeyError, TypeError) as exc:
         renderer.error(f'Invalid bid entry: {exc}')
-        raise typer.Exit(2)
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
     action = f'set {len(mutations)} bids in campaign {campaign_id}'
-    if not (yes or dry_run or renderer.is_json):
-        confirmed = typer.confirm(f'About to: {action}. Proceed?', default=False)
-        if not confirmed:
-            raise typer.Abort()
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_bid_service(_get_profile(ctx))
+    svc = create_bid_service(get_profile(ctx))
     results = svc.set_item_bids(campaign_id, mutations, dry_run=dry_run)
 
     for result in results:
         if not dry_run:
-            _log_bid_mutation(_get_profile(ctx), 'bid set-items', result)
+            _log_bid_mutation(get_profile(ctx), 'bid set-items', result)
 
     prefix = '[DRY-RUN] ' if dry_run else ''
     success_count = sum(1 for r in results if r.success)

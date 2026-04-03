@@ -6,29 +6,14 @@ from dataclasses import asdict
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import CampaignStatus, CampaignType, OutputFormat, VerbosityLevel
+from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
+from wb.domain.enums import CampaignStatus, CampaignType
 from wb.domain.models import CampaignCreate, PlacementConfig
 
 campaign_app = typer.Typer(
     help='Campaign management',
     no_args_is_help=True,
 )
-
-
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    """Build an OutputRenderer from global CLI flags."""
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    """Extract profile name from CLI context."""
-    return (ctx.obj or {}).get('profile')
 
 
 def _parse_status(value: str | None) -> CampaignStatus | None:
@@ -70,8 +55,8 @@ def campaign_list(
     """List all campaigns."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_campaign_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_campaign_service(get_profile(ctx))
     campaigns = svc.list_campaigns(
         status=_parse_status(status),
         type_=_parse_type(type_),
@@ -105,12 +90,13 @@ def campaign_get(
     """Get details for a single campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_campaign_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_campaign_service(get_profile(ctx))
     campaign = svc.get_campaign(campaign_id)
 
     data = asdict(campaign)
     headers = ['Field', 'Value']
+    nm_ids_str = ', '.join(str(n) for n in campaign.nm_ids) or 'none'
     rows = [
         ['ID', str(campaign.campaign_id)],
         ['Name', campaign.name],
@@ -118,6 +104,7 @@ def campaign_get(
         ['Type', campaign.campaign_type.name],
         ['Payment', campaign.payment_type.value],
         ['Daily Budget', str(campaign.daily_budget)],
+        ['NM IDs', nm_ids_str],
         ['Created', campaign.create_time or ''],
         ['Started', campaign.start_time or ''],
         ['Updated', campaign.updated_time or ''],
@@ -130,8 +117,8 @@ def campaign_eligible_subjects(ctx: typer.Context) -> None:
     """List subjects eligible for campaign creation."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_campaign_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_campaign_service(get_profile(ctx))
     subjects = svc.get_eligible_subjects()
 
     if not subjects:
@@ -156,8 +143,8 @@ def campaign_eligible_items(
     """List product cards eligible for a subject."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_campaign_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_campaign_service(get_profile(ctx))
     items = svc.get_eligible_items(subject_id)
 
     if not items:
@@ -177,24 +164,6 @@ def campaign_eligible_items(
     ]
     renderer.display(data, headers=headers, title='Eligible Items')
 
-
-def _confirm_or_abort(
-        renderer: OutputRenderer,
-        action: str,
-        yes: bool,
-) -> None:
-    """Prompt for confirmation unless --yes is set.
-
-    Args:
-        renderer: Current output renderer.
-        action: Human-readable description of the action.
-        yes: Skip prompt if True.
-    """
-    if yes or renderer.is_json:
-        return
-    confirmed = typer.confirm(f'About to: {action}. Proceed?', default=False)
-    if not confirmed:
-        raise typer.Abort()
 
 
 def _log_mutation(profile: str | None, command: str, result) -> None:
@@ -237,7 +206,7 @@ def campaign_create(
     """Create a new campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
 
     try:
         nm_list = [int(x.strip()) for x in nms.split(',') if x.strip()]
@@ -253,13 +222,13 @@ def campaign_create(
         placement_types=placement_list,
     )
     action = f'create campaign "{name}" bid_type={bid_type}'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.create_campaign(params, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign create', result)
+        _log_mutation(get_profile(ctx), 'campaign create', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -277,7 +246,7 @@ def campaign_clone(
     """Clone an existing campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
 
     if not nms:
         raise typer.BadParameter('--nms is required for clone (WB API does not return current items)')
@@ -287,12 +256,12 @@ def campaign_clone(
     except ValueError:
         raise typer.BadParameter('--nms must be comma-separated integers')
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     source = svc.get_campaign(campaign_id)
 
     new_name = name or f'{source.name} (copy)'
     action = f'clone campaign {campaign_id} to "{new_name}" with {len(nm_list)} item(s)'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
     params = CampaignCreate(
         name=new_name,
@@ -303,7 +272,7 @@ def campaign_clone(
     result = svc.create_campaign(params, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign clone', result)
+        _log_mutation(get_profile(ctx), 'campaign clone', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -319,14 +288,14 @@ def campaign_start(
     """Start a campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    _confirm_or_abort(renderer, f'start campaign {campaign_id}', yes or dry_run)
+    renderer = get_renderer(ctx)
+    confirm_or_abort(renderer, f'start campaign {campaign_id}', yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.start_campaign(campaign_id, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign start', result)
+        _log_mutation(get_profile(ctx), 'campaign start', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -342,14 +311,14 @@ def campaign_pause(
     """Pause a running campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    _confirm_or_abort(renderer, f'pause campaign {campaign_id}', yes or dry_run)
+    renderer = get_renderer(ctx)
+    confirm_or_abort(renderer, f'pause campaign {campaign_id}', yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.pause_campaign(campaign_id, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign pause', result)
+        _log_mutation(get_profile(ctx), 'campaign pause', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -365,14 +334,14 @@ def campaign_stop(
     """Stop (archive) a campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    _confirm_or_abort(renderer, f'stop campaign {campaign_id}', yes or dry_run)
+    renderer = get_renderer(ctx)
+    confirm_or_abort(renderer, f'stop campaign {campaign_id}', yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.stop_campaign(campaign_id, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign stop', result)
+        _log_mutation(get_profile(ctx), 'campaign stop', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -389,15 +358,15 @@ def campaign_rename(
     """Rename a campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     action = f'rename campaign {campaign_id} to "{name}"'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.rename_campaign(campaign_id, name, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign rename', result)
+        _log_mutation(get_profile(ctx), 'campaign rename', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -413,14 +382,14 @@ def campaign_delete(
     """Delete a campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
-    _confirm_or_abort(renderer, f'delete campaign {campaign_id}', yes or dry_run)
+    renderer = get_renderer(ctx)
+    confirm_or_abort(renderer, f'delete campaign {campaign_id}', yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.delete_campaign(campaign_id, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign delete', result)
+        _log_mutation(get_profile(ctx), 'campaign delete', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -439,20 +408,20 @@ def campaign_add_items(
     """Add product items to a campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     try:
         nm_list = [int(x.strip()) for x in nms.split(',') if x.strip()]
     except ValueError:
         raise typer.BadParameter('--nms must be comma-separated integers')
 
     action = f'add {len(nm_list)} item(s) to campaign {campaign_id}'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.add_items(campaign_id, nm_list, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign add-items', result)
+        _log_mutation(get_profile(ctx), 'campaign add-items', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -471,20 +440,20 @@ def campaign_remove_items(
     """Remove product items from a campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     try:
         nm_list = [int(x.strip()) for x in nms.split(',') if x.strip()]
     except ValueError:
         raise typer.BadParameter('--nms must be comma-separated integers')
 
     action = f'remove {len(nm_list)} item(s) from campaign {campaign_id}'
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.remove_items(campaign_id, nm_list, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign remove-items', result)
+        _log_mutation(get_profile(ctx), 'campaign remove-items', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -502,19 +471,19 @@ def campaign_set_placements(
     """Set placement configuration for a campaign."""
     from wb.services._factory import create_campaign_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     config = PlacementConfig(search_enabled=search, recommendations_enabled=catalog)
     action = (
         f'set placements for campaign {campaign_id}: '
         f'search={search}, recommendations={catalog}'
     )
-    _confirm_or_abort(renderer, action, yes or dry_run)
+    confirm_or_abort(renderer, action, yes or dry_run)
 
-    svc = create_campaign_service(_get_profile(ctx))
+    svc = create_campaign_service(get_profile(ctx))
     result = svc.set_placements(campaign_id, config, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(_get_profile(ctx), 'campaign set-placements', result)
+        _log_mutation(get_profile(ctx), 'campaign set-placements', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')

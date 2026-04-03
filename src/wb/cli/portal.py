@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+from wb.core.constants import ExitCode
 from wb.core.exceptions import WbCliError
 
 portal_app = typer.Typer(
@@ -33,13 +34,13 @@ def portal_products(
         client = _get_portal_client()
     except WbCliError as exc:
         typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=7) from exc
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
 
     try:
         raw_cards = client.list_products(page_size=limit, search=search)
     except WbCliError as exc:
         typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=6) from exc
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
 
     cards = [PortalProductCard.from_portal(c) for c in raw_cards]
 

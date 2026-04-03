@@ -131,3 +131,37 @@ Throwaway campaign 35495276 used for testing:
 | `/adv/v0/delete` | GET | 200 | Deleted OK |
 
 All write endpoints confirmed working. 400 errors are expected (can't start without budget, can't pause/stop non-active campaign).
+
+---
+
+## Fix 9 — Analytics token fallback + selectedPeriod key
+
+**Status:** DONE (2026-04-03)
+
+### Problem 1 — Analytics commands fail when only `WB_API_TOKEN` is set
+
+`_get_analytics_token()` in `src/wb/services/_factory.py` checked `settings.analytics_token`
+(`WB_ANALYTICS_TOKEN`) but skipped `settings.api_token` (`WB_API_TOKEN`), then fell through to
+the profile store and raised `ConfigError: Profile 'default' does not exist` even though a valid
+token was present in `.env`.
+
+**Fix:** Added `if settings.api_token: return settings.api_token` as a second fallback, after
+`settings.analytics_token` and before the profile store lookup.
+
+> If your token covers all WB scopes (Content, Analytics, Promotion, etc.), a single `WB_API_TOKEN`
+> in `.env` is sufficient — no separate `WB_ANALYTICS_TOKEN` needed.
+
+### Problem 2 — `selectedPeriod` used wrong field name `begin` instead of `start`
+
+All three methods in `src/wb/services/analytics.py` built the request body as:
+```python
+'selectedPeriod': {'begin': begin, 'end': end}
+```
+The WB Analytics v3 API requires `start`, not `begin`:
+```python
+'selectedPeriod': {'start': begin, 'end': end}
+```
+This caused every `analytics sales-funnel` command to return `HTTP 400 Bad Request`.
+
+**Fix:** Replaced all three occurrences (`get_product_funnel`, `get_product_history`,
+`get_grouped_funnel`) with `'start'`.

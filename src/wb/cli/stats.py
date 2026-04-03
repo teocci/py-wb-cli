@@ -6,28 +6,12 @@ from dataclasses import asdict
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import OutputFormat, VerbosityLevel
+from wb.cli._helpers import get_profile, get_renderer
 
 stats_app = typer.Typer(
     help='Campaign and cluster statistics',
     no_args_is_help=True,
 )
-
-
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    """Build an OutputRenderer from global CLI flags."""
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    """Extract profile name from CLI context."""
-    return (ctx.obj or {}).get('profile')
 
 
 def _parse_ids(ids_str: str) -> list[int]:
@@ -60,8 +44,8 @@ def stats_campaign(
     """Show statistics for a single campaign."""
     from wb.services._factory import create_stats_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_stats_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_stats_service(get_profile(ctx))
     stats = svc.get_campaign_stats(campaign_id, date_from, date_to)
 
     data = asdict(stats)
@@ -89,9 +73,9 @@ def stats_campaigns(
     """Show statistics for multiple campaigns."""
     from wb.services._factory import create_stats_service
 
-    renderer = _get_renderer(ctx)
+    renderer = get_renderer(ctx)
     campaign_ids = _parse_ids(ids)
-    svc = create_stats_service(_get_profile(ctx))
+    svc = create_stats_service(get_profile(ctx))
     stats_list = svc.get_campaigns_stats(campaign_ids, date_from, date_to)
 
     if not stats_list:

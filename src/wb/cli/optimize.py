@@ -6,28 +6,12 @@ from dataclasses import asdict
 
 import typer
 
-from wb.core.output import OutputRenderer
-from wb.domain.enums import OutputFormat, VerbosityLevel
+from wb.cli._helpers import get_profile, get_renderer
 
 optimize_app = typer.Typer(
     help='Optimization workflows (recommendation-first)',
     no_args_is_help=True,
 )
-
-
-def _get_renderer(ctx: typer.Context) -> OutputRenderer:
-    """Build an OutputRenderer from global CLI flags."""
-    obj = ctx.obj or {}
-    fmt = OutputFormat.JSON if obj.get('json_output') else OutputFormat.TABLE
-    verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
-    if obj.get('verbose'):
-        verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
-
-
-def _get_profile(ctx: typer.Context) -> str | None:
-    """Extract profile name from CLI context."""
-    return (ctx.obj or {}).get('profile')
 
 
 def _confirm_apply(renderer: OutputRenderer, count: int, yes: bool) -> None:
@@ -104,8 +88,8 @@ def optimize_plan(
     """Show full optimization plan for a campaign (read-only)."""
     from wb.services._factory import create_optimizer_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_optimizer_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_all(campaign_id, nm_id, date_from, date_to)
     _render_decisions(renderer, decisions, 'Optimization Plan')
 
@@ -124,8 +108,8 @@ def optimize_run(
     """Generate and optionally apply full optimization plan."""
     from wb.services._factory import create_optimizer_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_optimizer_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_all(campaign_id, nm_id, date_from, date_to)
     _render_decisions(renderer, decisions, 'Optimization Plan')
 
@@ -156,8 +140,8 @@ def optimize_clusters(
     """Optimize search cluster bids for a campaign/product."""
     from wb.services._factory import create_optimizer_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_optimizer_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_clusters(campaign_id, nm_id, date_from, date_to)
     _render_decisions(renderer, decisions, 'Cluster Optimization')
 
@@ -182,8 +166,8 @@ def optimize_budget(
     """Optimize campaign budget allocation."""
     from wb.services._factory import create_optimizer_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_optimizer_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_budget(campaign_id)
     _render_decisions(renderer, decisions, 'Budget Optimization')
 
@@ -209,8 +193,8 @@ def optimize_negatives(
     """Recommend minus phrases based on cluster waste."""
     from wb.services._factory import create_optimizer_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_optimizer_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_negatives(campaign_id, nm_id, date_from, date_to)
     _render_decisions(renderer, decisions, 'Negative Phrase Recommendations')
 
@@ -237,8 +221,8 @@ def optimize_portfolio(
     """Optimize product mix in a campaign."""
     from wb.services._factory import create_optimizer_service
 
-    renderer = _get_renderer(ctx)
-    svc = create_optimizer_service(_get_profile(ctx))
+    renderer = get_renderer(ctx)
+    svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_portfolio(campaign_id, date_from, date_to)
     _render_decisions(renderer, decisions, 'Portfolio Optimization')
 
