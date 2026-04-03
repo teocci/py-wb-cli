@@ -10,8 +10,9 @@
 | 0.3.1 | Auth | 2026-03-19 | Dual auth - portal session support, env var fallback, /ping fix |
 | 0.3.2 | API Fix | 2026-04-02 | Full API migration - all dead endpoints replaced with current WB API |
 | 0.4.0 | Phase 3 | 2026-04-02 | Search-cluster control - cluster bid mutations, minus phrases, daily stats |
+| 0.5.0 | Phase 4 | 2026-04-03 | Analytics bridge - sales funnel, search reports, CSV exports |
 
-## Current Version: 0.4.0
+## Current Version: 0.5.0
 
 ## Phase Status
 
@@ -21,7 +22,7 @@
 | 1 | Read-only operational visibility | COMPLETED | 0.2.0 |
 | 2 | Core write controls | COMPLETED | 0.3.0 |
 | 3 | Search-cluster control | COMPLETED | 0.4.0 |
-| 4 | Analytics bridge | PENDING | - |
+| 4 | Analytics bridge | COMPLETED | 0.5.0 |
 | 5 | Optimization workflows | PENDING | - |
 
 ---
@@ -328,15 +329,67 @@ tests/unit/
 
 ---
 
-## Phase 4 - Analytics Bridge (PENDING)
+## Phase 4 - Analytics Bridge (v0.5.0) - COMPLETED
 
-### Planned scope
+### What was built
 
-- Search-query reporting
-- Sales-funnel access
-- CSV report workflows
+- **New `AnalyticsClient`** (`client/analytics.py`): Typed wrapper for Analytics API with 12 methods — 3 sales funnel, 5 search report, 4 CSV report operations
+- **New domain models** (`domain/analytics_models.py`): 7 dataclasses (`ProductFunnelStats`, `FunnelHistoryDay`, `ProductFunnelHistory`, `SearchReportProduct`, `SearchReportGroup`, `SearchTextEntry`, `CsvReportStatus`) + 2 enums (`ReportType`, `AggregationLevel`)
+- **New `AnalyticsService`** (`services/analytics.py`): 12 service methods with validation (nm_ids 1-20 for history, limit max 1000), UUID generation for CSV tasks, file download
+- **WbHttpClient.request_raw()**: Binary download method for ZIP files; refactored `_handle_response` to use shared `_check_error_status`
+- **Analytics token support**: `WB_ANALYTICS_TOKEN` env var, `_get_analytics_token()` priority chain, `create_analytics_client/service` factories
+- **12 CLI commands** across 3 nested sub-apps:
+  - `wb analytics sales-funnel products|history|grouped`
+  - `wb analytics search-report main|groups|details|search-texts|orders`
+  - `wb analytics csv create|list|retry|download`
+- All endpoints use separate Analytics token (bit 2), base URL `seller-analytics-api.wildberries.ru`
 
-### Expected version: 0.5.0
+### File structure additions
+
+```
+src/wb/
+  domain/
+    analytics_models.py   # NEW: 7 dataclasses + 2 enums
+  client/
+    analytics.py          # NEW: AnalyticsClient (12 methods)
+    http.py               # +request_raw(), +_check_error_status()
+  services/
+    analytics.py          # NEW: AnalyticsService (12 methods)
+    _factory.py           # +_get_analytics_token, create_analytics_client/service
+  cli/
+    analytics.py          # NEW: 12 commands, 3 sub-apps
+    app.py                # +analytics_app registration
+  core/
+    constants.py          # +12 analytics endpoint constants
+    config.py             # +analytics_token env var
+tests/unit/
+  test_analytics_models.py    # 20 tests
+  test_analytics_client.py    # 22 tests
+  test_analytics_service.py   # 19 tests
+  test_cli_analytics.py       # 12 tests
+```
+
+### API endpoints integrated
+
+| Endpoint | Method | Purpose | Rate Limit |
+|----------|--------|---------|------------|
+| `/api/analytics/v3/sales-funnel/products` | POST | Product stats per period | 3/min |
+| `/api/analytics/v3/sales-funnel/products/history` | POST | Product stats per days | 3/min |
+| `/api/analytics/v3/sales-funnel/grouped/history` | POST | Grouped stats per days | 3/min |
+| `/api/v2/search-report/report` | POST | Main search report | 3/min |
+| `/api/v2/search-report/table/groups` | POST | Groups pagination | 3/min |
+| `/api/v2/search-report/table/details` | POST | Product details | 3/min |
+| `/api/v2/search-report/product/search-texts` | POST | Top search texts | 3/min |
+| `/api/v2/search-report/product/orders` | POST | Orders by texts | 3/min |
+| `/api/v2/nm-report/downloads` | POST | Create CSV report | 3/min |
+| `/api/v2/nm-report/downloads` | GET | List reports | 3/min |
+| `/api/v2/nm-report/downloads/retry` | POST | Retry failed report | 3/min |
+| `/api/v2/nm-report/downloads/file/{id}` | GET | Download ZIP | 3/min |
+
+### Test results
+
+- **474 tests passed** (0 failures)
+- 69 new tests covering: domain models, analytics client, analytics service, CLI commands
 
 ---
 

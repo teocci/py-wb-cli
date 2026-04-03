@@ -38,7 +38,21 @@
       "Bash(grep -r \"set-bid\\\\|set_bid\\\\|excluded\" /d/teocci/code/python/py-wb-cli --include=*.md --exclude-dir=.venv)",
       "WebFetch(domain:openapi.wildberries.ru)",
       "WebFetch(domain:advert-api.wildberries.ru)",
-      "Bash(grep -n \"^get$\\\\|^post$\\\\|^put$\\\\|^patch$\\\\|^delete$\" \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\dev-wb-adv.md\")"
+      "Bash(grep -n \"^get$\\\\|^post$\\\\|^put$\\\\|^patch$\\\\|^delete$\" \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\dev-wb-adv.md\")",
+      "Read(//d D:/teocci/code/python/**)",
+      "Bash(find . -name \"*.py\" -type f -exec grep -l \"ClusterBid\\\\|MinusPhraseSet\\\\|SearchCluster\" {} \\\\;)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -x -q)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -x -v)",
+      "Bash(.venv/Scripts/python -m wb cluster --help)",
+      "Bash(.venv/Scripts/python -m wb cluster minus --help)",
+      "Bash(.venv/Scripts/python -m wb version)",
+      "Bash(cd /d \"D:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\")",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(curl:*)",
+      "Bash(.venv/Scripts/python -m wb analytics --help)",
+      "Bash(.venv/Scripts/python -m wb analytics sales-funnel --help)",
+      "Bash(.venv/Scripts/python -m wb analytics search-report --help)",
+      "Bash(.venv/Scripts/python -m wb analytics csv --help)"
     ]
   }
 }

@@ -6,7 +6,7 @@ from wb.auth.profiles import ProfileStore
 from wb.client.http import WbHttpClient
 from wb.client.promotion import PromotionClient
 from wb.core.config import Settings
-from wb.core.constants import PROMOTION_BASE_URL
+from wb.core.constants import ANALYTICS_BASE_URL, PROMOTION_BASE_URL
 from wb.storage.audit import AuditLogger
 
 __all__ = [
@@ -18,6 +18,8 @@ __all__ = [
     'create_stats_service',
     'create_cluster_service',
     'create_bid_service',
+    'create_analytics_client',
+    'create_analytics_service',
 ]
 
 
@@ -185,3 +187,59 @@ def create_bid_service(profile_name: str | None = None):
     """
     from wb.services.bids import BidService
     return BidService(create_promotion_client(profile_name))
+
+
+# ── Analytics factories ──────────────────────────────────────────────
+
+
+def _get_analytics_token(
+        profile_name: str | None = None,
+        cli_token: str | None = None,
+) -> str:
+    """Retrieve the analytics token using the unified priority chain.
+
+    Priority: CLI flag > WB_ANALYTICS_TOKEN env var/.env > profiles.json
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+        cli_token: Token passed via CLI flag (highest priority).
+
+    Returns:
+        Analytics API token string.
+    """
+    if cli_token:
+        return cli_token
+    settings = Settings()
+    if settings.analytics_token:
+        return settings.analytics_token
+    settings.ensure_config_dir()
+    store = ProfileStore(settings.config_dir)
+    profile = store.get_profile(profile_name)
+    return profile.get_token('analytics')
+
+
+def create_analytics_client(
+        profile_name: str | None = None,
+):
+    """Create an AnalyticsClient from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured AnalyticsClient instance.
+    """
+    from wb.client.analytics import AnalyticsClient
+    token = _get_analytics_token(profile_name)
+    http = WbHttpClient(base_url=ANALYTICS_BASE_URL, token=token)
+    return AnalyticsClient(http)
+
+
+def create_analytics_service(profile_name: str | None = None):
+    """Create an AnalyticsService from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+    """
+    from wb.services.analytics import AnalyticsService
+    return AnalyticsService(create_analytics_client(profile_name))

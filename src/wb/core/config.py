@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     user_id: int | None = None
     token_expiration: int | None = None
 
+    # ── Analytics env var fallback ───────────────────────────────────
+    analytics_token: str | None = None
+
     # ── Portal session env var fallbacks ──────────────────────────────
     authorizev3: str | None = None
     portal_cookie: str | None = None

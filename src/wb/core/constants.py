@@ -53,6 +53,18 @@ __all__ = [
     'EP_PORTAL_AUTH_TOKEN',
     'EP_PORTAL_TOKENS_JRPC',
     'EP_PORTAL_TABLE_LIST',
+    'EP_FUNNEL_PRODUCTS',
+    'EP_FUNNEL_HISTORY',
+    'EP_FUNNEL_GROUPED',
+    'EP_SEARCH_REPORT',
+    'EP_SEARCH_GROUPS',
+    'EP_SEARCH_DETAILS',
+    'EP_SEARCH_TEXTS',
+    'EP_SEARCH_ORDERS',
+    'EP_CSV_CREATE',
+    'EP_CSV_LIST',
+    'EP_CSV_RETRY',
+    'EP_CSV_DOWNLOAD',
 ]
 
 from enum import IntEnum
@@ -147,6 +159,21 @@ EP_NQ_GET_MINUS = '/adv/v0/normquery/get-minus'
 EP_NQ_SET_MINUS = '/adv/v0/normquery/set-minus'
 EP_NQ_STATS = '/adv/v0/normquery/stats'
 EP_NQ_STATS_DAILY = '/adv/v1/normquery/stats'
+
+# ── Analytics API endpoint paths ─────────────────────────────────────
+# Source: docs/swagger/11-analytics.yaml
+EP_FUNNEL_PRODUCTS = '/api/analytics/v3/sales-funnel/products'
+EP_FUNNEL_HISTORY = '/api/analytics/v3/sales-funnel/products/history'
+EP_FUNNEL_GROUPED = '/api/analytics/v3/sales-funnel/grouped/history'
+EP_SEARCH_REPORT = '/api/v2/search-report/report'
+EP_SEARCH_GROUPS = '/api/v2/search-report/table/groups'
+EP_SEARCH_DETAILS = '/api/v2/search-report/table/details'
+EP_SEARCH_TEXTS = '/api/v2/search-report/product/search-texts'
+EP_SEARCH_ORDERS = '/api/v2/search-report/product/orders'
+EP_CSV_CREATE = '/api/v2/nm-report/downloads'
+EP_CSV_LIST = '/api/v2/nm-report/downloads'
+EP_CSV_RETRY = '/api/v2/nm-report/downloads/retry'
+EP_CSV_DOWNLOAD = '/api/v2/nm-report/downloads/file'
 
 # ── Seller portal endpoint paths ─────────────────────────────────────
 EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'

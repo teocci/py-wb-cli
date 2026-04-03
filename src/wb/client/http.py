@@ -221,6 +221,95 @@ class WbHttpClient:
         """
         return self.request('DELETE', path, params=params, json_body=json_body)
 
+    def request_raw(
+            self,
+            method: str,
+            path: str,
+            *,
+            params: dict[str, Any] | None = None,
+    ) -> bytes:
+        """Make an HTTP request returning raw response bytes.
+
+        Used for binary downloads (ZIP files, etc.). Reuses the
+        same retry logic as ``request()``.
+
+        Args:
+            method: HTTP method (GET, POST, etc.).
+            path: API endpoint path.
+            params: Query parameters.
+
+        Returns:
+            Raw response content as bytes.
+
+        Raises:
+            AuthenticationError: On 401 responses.
+            RateLimitError: On 429 after all retries exhausted.
+            ApiError: On other non-success responses after retries.
+        """
+        last_exception: Exception | None = None
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = self._client.request(
+                    method,
+                    path,
+                    params=params,
+                    headers={'Accept': 'application/octet-stream'},
+                )
+                self._check_error_status(response)
+                return response.content
+            except RateLimitError as exc:
+                last_exception = exc
+                self._retry_or_raise(
+                    attempt, exc, exc.retry_after, 'Rate limited'
+                )
+            except ApiError as exc:
+                if exc.status_code not in _RETRYABLE_STATUS_CODES:
+                    raise
+                last_exception = exc
+                self._retry_or_raise(
+                    attempt, exc, None,
+                    f'Retryable error {exc.status_code}',
+                )
+            except httpx.TimeoutException as exc:
+                last_exception = exc
+                self._retry_or_raise(attempt, exc, None, 'Timeout')
+
+        raise ApiError(
+            'Max retries exhausted',
+            status_code=None,
+            response_body=None,
+        ) from last_exception
+
+    def _check_error_status(self, response: httpx.Response) -> None:
+        """Check response status and raise on errors.
+
+        Args:
+            response: The httpx Response object.
+
+        Raises:
+            AuthenticationError: On 401.
+            RateLimitError: On 429.
+            ApiError: On other error status codes.
+        """
+        if response.status_code == 401:
+            raise AuthenticationError(
+                'Authentication failed - check your API token'
+            )
+        if response.status_code == 429:
+            retry_after = response.headers.get('Retry-After')
+            retry_seconds = float(retry_after) if retry_after else None
+            raise RateLimitError(
+                'Rate limited by WB API',
+                retry_after=retry_seconds,
+            )
+        if response.status_code >= 400:
+            raise ApiError(
+                f'WB API error: HTTP {response.status_code}',
+                status_code=response.status_code,
+                response_body=response.text,
+            )
+
     def _retry_or_raise(
             self,
             attempt: int,
@@ -274,26 +363,7 @@ class WbHttpClient:
             RateLimitError: On 429.
             ApiError: On other error status codes.
         """
-        if response.status_code == 401:
-            raise AuthenticationError(
-                'Authentication failed - check your API token'
-            )
-
-        if response.status_code == 429:
-            retry_after = response.headers.get('Retry-After')
-            retry_seconds = float(retry_after) if retry_after else None
-            raise RateLimitError(
-                'Rate limited by WB API',
-                retry_after=retry_seconds,
-            )
-
-        if response.status_code >= 400:
-            body = response.text
-            raise ApiError(
-                f'WB API error: HTTP {response.status_code}',
-                status_code=response.status_code,
-                response_body=body,
-            )
+        self._check_error_status(response)
 
         if response.status_code == 204 or not response.content:
             return None
