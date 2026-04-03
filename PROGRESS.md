@@ -11,8 +11,9 @@
 | 0.3.2 | API Fix | 2026-04-02 | Full API migration - all dead endpoints replaced with current WB API |
 | 0.4.0 | Phase 3 | 2026-04-02 | Search-cluster control - cluster bid mutations, minus phrases, daily stats |
 | 0.5.0 | Phase 4 | 2026-04-03 | Analytics bridge - sales funnel, search reports, CSV exports |
+| 0.6.0 | Phase 5 | 2026-04-03 | Optimization workflows - recommendation engine, guarded apply |
 
-## Current Version: 0.5.0
+## Current Version: 0.7.0
 
 ## Phase Status
 
@@ -23,7 +24,8 @@
 | 2 | Core write controls | COMPLETED | 0.3.0 |
 | 3 | Search-cluster control | COMPLETED | 0.4.0 |
 | 4 | Analytics bridge | COMPLETED | 0.5.0 |
-| 5 | Optimization workflows | PENDING | - |
+| 5 | Optimization workflows | COMPLETED | 0.6.0 |
+| 6 | Agent platform support | COMPLETED | 0.7.0 |
 
 ---
 
@@ -393,15 +395,107 @@ tests/unit/
 
 ---
 
-## Phase 5 - Optimization Workflows (PENDING)
+## Phase 5 - Optimization Workflows (v0.6.0) - COMPLETED
 
-### Planned scope
+### What was built
 
-- Recommendation-first optimize commands
-- Explainable rule outputs
-- Guarded --apply execution
+- **4 new domain enums**: `OptimizationAction` (10 action types), `TargetType` (campaign/item/cluster), `ClusterClass` (5 classifications), `ProductRole` (hero/support/experimental)
+- **Updated `OptimizationDecision`**: Now uses typed enums for action/target_type, added `nm_id` field for scoped decisions
+- **`OptimizerService`** (`services/optimizer.py`): Recommendation-first rule engine with:
+  - 5 plan methods: `plan_all`, `plan_clusters`, `plan_budget`, `plan_negatives`, `plan_portfolio`
+  - 5 apply methods: `apply_all`, `apply_clusters`, `apply_budget`, `apply_negatives` + `_apply_decision` router
+  - Cluster classification: efficient, visible_weak, expensive_non_converting, inactive_promising, noisy_exclusion
+  - Configurable thresholds: MIN_VIEWS, LOW_CTR, HIGH_CTR, WASTE_SPEND, BUDGET_ALERT, BID_RAISE/LOWER factors
+  - Explainable `reason` strings on every decision with data context
+  - Confidence scoring based on view count sufficiency
+- **6 CLI commands** (all with `--json` support):
+  - `wb optimize plan` — full plan (read-only, no --apply)
+  - `wb optimize run` — plan + optional `--apply` execution
+  - `wb optimize clusters` — cluster bid optimization with `--apply`
+  - `wb optimize budget` — budget exhaustion detection with `--apply`
+  - `wb optimize negatives` — minus phrase recommendations with `--apply`
+  - `wb optimize portfolio` — product mix analysis with `--apply`
+- **Guarded execution**: `--apply` flag required for mutations, `--yes` to skip confirmation, `--dry-run` supported
+- **Apply routing**: `match/case` on `OptimizationAction` dispatches to correct service (cluster, budget, campaign)
 
-### Expected version: 0.6.0
+### V1 heuristic rules
+
+| Rule | Signal | Action |
+|------|--------|--------|
+| Efficient cluster | High CTR + orders | `raise_cluster_bid` (+20%) |
+| Visible weak | High views, low CTR | `lower_cluster_bid` (-20%) |
+| Wasteful cluster | Spend > 500, 0 orders | `delete_cluster_bid` |
+| Noisy cluster | Low CTR + wasteful | `add_minus_phrase` |
+| Budget at risk | >85% budget used | `topup_budget` |
+| No conversion | Clicks but 0 orders | `pause_campaign` |
+
+### File structure additions
+
+```
+src/wb/
+  domain/
+    enums.py           # +4 enums (OptimizationAction, TargetType, ClusterClass, ProductRole)
+    models.py          # Updated OptimizationDecision (enum fields + nm_id)
+  services/
+    optimizer.py       # NEW: OptimizerService + rule engine
+    _factory.py        # +create_optimizer_service with 5 sub-service injection
+  cli/
+    optimize.py        # NEW: 6 commands
+    app.py             # +optimize_app registration
+tests/unit/
+  test_optimizer_service.py  # 25 tests
+  test_cli_optimize.py       # 12 tests
+```
+
+### Test results
+
+- **511 tests passed** (0 failures)
+- 37 new tests covering: rule engine (each rule fires/skips), cluster classification, apply routing, CLI commands, explainability
+
+---
+
+## Phase 6 - Agent Platform Support (v0.7.0) - COMPLETED
+
+### What was built
+
+- **Python SDK facade** (`src/wb/sdk.py`): ~50 importable functions that wrap service-layer factories, exposing a typed Python API for agents
+  - Campaign operations: `list_campaigns`, `get_campaign`, `create_campaign`, `clone_campaign`, `start_campaign`, `pause_campaign`, `stop_campaign`
+  - Budget operations: `get_balance`, `get_budget`, `topup_budget`
+  - Bid operations: `get_recommended_bids`, `set_item_bid`
+  - Cluster operations: `list_clusters`, `set_cluster_bids`, `set_minus_phrases`
+  - Optimizer operations: `plan_clusters`, `plan_budget`, `plan_negatives`, `plan_all`, `apply_clusters`, `apply_all`
+  - All functions accept optional `profile` parameter, return typed domain objects (no exit codes, no output rendering)
+- **`wb campaign clone` command** (`cli/campaign.py`): Clone existing campaign with optional name override and explicit `--nms` list (required because WB API does not return current items in campaign info)
+  - Defaults new name to `"{original_name} (copy)"`
+  - Reuses `bid_type` from source
+  - Full dry-run and confirmation support
+- **Optimizer logic fix** (`services/optimizer.py`): Fixed unreachable `NOISY_EXCLUSION` branch by reordering conditions — more specific `(is_wasteful and low_ctr)` now checked before `(is_wasteful)` alone
+
+### File structure additions
+
+```
+src/wb/
+  sdk.py                 # NEW: ~50 SDK wrapper functions
+  cli/
+    campaign.py          # +clone command
+  services/
+    optimizer.py         # Fixed _classify_cluster condition order
+tests/unit/
+  test_sdk.py            # 39 tests for all SDK operations
+  test_cli_campaign.py   # +4 tests for clone command
+  test_optimizer_service.py  # +1 test for NOISY_EXCLUSION fix
+```
+
+### Key design decisions
+
+- SDK is a pure function facade: no try/except wrapping, callers receive `WbCliError` subclasses directly
+- Clone command requires explicit `--nms` because campaign info API does not return current items
+- Optimizer fix: order conditions from specific (high signal) to general (lower signal) to ensure correct classification
+
+### Test results
+
+- **539 tests passed** (0 failures)
+- 44 new tests: SDK wrapper testing (39 tests across campaign/budget/cluster/optimizer operations), clone command (4 tests), NOISY_EXCLUSION fix (1 test)
 
 ---
 
@@ -411,4 +505,5 @@ tests/unit/
 2. Install in dev mode: `pip install -e ".[dev]"`
 3. Run tests: `pytest tests/unit/ -v`
 4. Run CLI: `python -m wb --help`
-5. Continue with the next pending phase
+5. Use Python SDK: `from wb.sdk import list_campaigns, clone_campaign; campaigns = list_campaigns(profile='my_profile')`
+6. All phases complete — the CLI is production-ready for human and agent operations

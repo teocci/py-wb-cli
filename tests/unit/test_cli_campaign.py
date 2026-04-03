@@ -103,6 +103,100 @@ class TestCampaignGet:
         assert parsed['status'] == CampaignStatus.RUNNING
 
 
+class TestCampaignClone:
+    """Tests for the 'campaign clone' command."""
+
+    def test_campaign_clone_help(self) -> None:
+        """Help flag exits cleanly with usage information."""
+        result = runner.invoke(app, ['campaign', 'clone', '--help'])
+        assert result.exit_code == 0
+        assert 'clone' in result.output.lower()
+
+    @patch(FACTORY_PATH)
+    def test_campaign_clone_requires_nms(self, mock_factory: MagicMock) -> None:
+        """Clone command fails when --nms is not provided."""
+        svc = MagicMock()
+        svc.get_campaign.return_value = _make_campaign()
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['campaign', 'clone', '100', '--yes'])
+        assert result.exit_code != 0
+        assert '--nms is required' in result.output
+
+    @patch(FACTORY_PATH)
+    def test_campaign_clone_success(self, mock_factory: MagicMock) -> None:
+        """Clone command creates a copy with default name."""
+        from wb.domain.models import MutationResult
+
+        svc = MagicMock()
+        svc.get_campaign.return_value = _make_campaign(campaign_id=100, name='Original')
+        svc.create_campaign.return_value = MutationResult(
+            success=True,
+            action='create',
+            target_id='200',
+            message='Campaign 200 created',
+        )
+        mock_factory.return_value = svc
+
+        result = runner.invoke(
+            app,
+            ['campaign', 'clone', '100', '--nms', '10,20', '--yes'],
+        )
+        assert result.exit_code == 0
+        assert 'created' in result.output.lower()
+
+    @patch(FACTORY_PATH)
+    def test_campaign_clone_custom_name(self, mock_factory: MagicMock) -> None:
+        """Clone command uses custom name when provided."""
+        from wb.domain.models import MutationResult
+
+        svc = MagicMock()
+        svc.get_campaign.return_value = _make_campaign(campaign_id=100, name='Original')
+        svc.create_campaign.return_value = MutationResult(
+            success=True,
+            action='create',
+            target_id='200',
+            message='Campaign 200 created',
+        )
+        mock_factory.return_value = svc
+
+        result = runner.invoke(
+            app,
+            ['campaign', 'clone', '100', '--name', 'MyClone', '--nms', '10,20', '--yes'],
+        )
+        assert result.exit_code == 0
+        # Verify get_campaign was called
+        svc.get_campaign.assert_called_once_with(100)
+        # Verify create_campaign was called with correct params
+        create_call = svc.create_campaign.call_args
+        params = create_call[0][0]
+        assert params.name == 'MyClone'
+        assert params.nm_ids == [10, 20]
+
+    @patch(FACTORY_PATH)
+    def test_campaign_clone_dry_run(self, mock_factory: MagicMock) -> None:
+        """Clone command respects --dry-run flag."""
+        from wb.domain.models import MutationResult
+
+        svc = MagicMock()
+        svc.get_campaign.return_value = _make_campaign()
+        svc.create_campaign.return_value = MutationResult(
+            success=True,
+            action='create',
+            target_id='200',
+            message='Campaign 200 created',
+            dry_run=True,
+        )
+        mock_factory.return_value = svc
+
+        result = runner.invoke(
+            app,
+            ['campaign', 'clone', '100', '--nms', '10', '--dry-run'],
+        )
+        assert result.exit_code == 0
+        assert 'DRY-RUN' in result.output
+
+
 class TestCampaignEligible:
     """Tests for eligible-subjects and eligible-items commands."""
 

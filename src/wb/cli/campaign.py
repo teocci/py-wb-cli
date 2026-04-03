@@ -265,6 +265,50 @@ def campaign_create(
     renderer.success(f'{prefix}{result.message}')
 
 
+@campaign_app.command('clone')
+def campaign_clone(
+        ctx: typer.Context,
+        campaign_id: int = typer.Argument(..., help='Campaign ID to clone'),
+        name: str | None = typer.Option(None, '--name', '-n', help='New campaign name (default: original + " (copy)")'),
+        nms: str | None = typer.Option(None, '--nms', help='Comma-separated product NM IDs (required)'),
+        dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
+        yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
+) -> None:
+    """Clone an existing campaign."""
+    from wb.services._factory import create_campaign_service
+
+    renderer = _get_renderer(ctx)
+
+    if not nms:
+        raise typer.BadParameter('--nms is required for clone (WB API does not return current items)')
+
+    try:
+        nm_list = [int(x.strip()) for x in nms.split(',') if x.strip()]
+    except ValueError:
+        raise typer.BadParameter('--nms must be comma-separated integers')
+
+    svc = create_campaign_service(_get_profile(ctx))
+    source = svc.get_campaign(campaign_id)
+
+    new_name = name or f'{source.name} (copy)'
+    action = f'clone campaign {campaign_id} to "{new_name}" with {len(nm_list)} item(s)'
+    _confirm_or_abort(renderer, action, yes or dry_run)
+
+    params = CampaignCreate(
+        name=new_name,
+        nm_ids=nm_list,
+        bid_type=source.bid_type,
+        placement_types=['search'],
+    )
+    result = svc.create_campaign(params, dry_run=dry_run)
+
+    if not dry_run:
+        _log_mutation(_get_profile(ctx), 'campaign clone', result)
+
+    prefix = '[DRY-RUN] ' if result.dry_run else ''
+    renderer.success(f'{prefix}{result.message}')
+
+
 @campaign_app.command('start')
 def campaign_start(
         ctx: typer.Context,

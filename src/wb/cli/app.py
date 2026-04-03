@@ -10,6 +10,7 @@ import typer
 from wb import __version__
 from wb.cli.analytics import analytics_app
 from wb.cli.auth import auth_app
+from wb.cli.optimize import optimize_app
 from wb.cli.bid import bid_app
 from wb.cli.budget import budget_app
 from wb.cli.campaign import campaign_app
@@ -33,6 +34,7 @@ app.add_typer(stats_app, name='stats', help='Campaign and cluster statistics')
 app.add_typer(cluster_app, name='cluster', help='Search cluster management')
 app.add_typer(portal_app, name='portal', help='Seller portal operations')
 app.add_typer(analytics_app, name='analytics', help='Analytics operations')
+app.add_typer(optimize_app, name='optimize', help='Optimization workflows')
 
 
 def _configure_logging(verbose: bool = False) -> None:

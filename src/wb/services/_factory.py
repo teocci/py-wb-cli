@@ -20,6 +20,7 @@ __all__ = [
     'create_bid_service',
     'create_analytics_client',
     'create_analytics_service',
+    'create_optimizer_service',
 ]
 
 
@@ -243,3 +244,45 @@ def create_analytics_service(profile_name: str | None = None):
     """
     from wb.services.analytics import AnalyticsService
     return AnalyticsService(create_analytics_client(profile_name))
+
+
+def create_optimizer_service(profile_name: str | None = None):
+    """Create an OptimizerService with all required sub-services.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+    """
+    from wb.services.optimizer import OptimizerService
+    client = create_promotion_client(profile_name)
+    return OptimizerService(
+        campaign_svc=_lazy_campaign(client),
+        bid_svc=_lazy_bid(client),
+        cluster_svc=_lazy_cluster(client),
+        stats_svc=_lazy_stats(client),
+        budget_svc=_lazy_budget(client),
+    )
+
+
+def _lazy_campaign(client):
+    from wb.services.campaigns import CampaignService
+    return CampaignService(client)
+
+
+def _lazy_bid(client):
+    from wb.services.bids import BidService
+    return BidService(client)
+
+
+def _lazy_cluster(client):
+    from wb.services.clusters import ClusterService
+    return ClusterService(client)
+
+
+def _lazy_stats(client):
+    from wb.services.stats import StatsService
+    return StatsService(client)
+
+
+def _lazy_budget(client):
+    from wb.services.budgets import BudgetService
+    return BudgetService(client)

@@ -7,7 +7,9 @@ from dataclasses import dataclass, field
 from wb.domain.enums import (
     CampaignStatus,
     CampaignType,
+    OptimizationAction,
     PaymentType,
+    TargetType,
 )
 
 __all__ = [
@@ -398,16 +400,18 @@ class OptimizationDecision:
     Attributes:
         action: Type of action (raise_bid, lower_bid, add_minus, etc.).
         target_type: What the action targets (campaign, item, cluster).
-        target_id: Identifier of the target.
-        current_value: Current state value.
-        proposed_value: Proposed new value.
-        reason: Explanation for the recommendation.
-        confidence: Confidence score 0.0-1.0.
+        target_id: Identifier of the target (norm_query, nm_id, etc.).
+        nm_id: Product nomenclature ID (for item/cluster scoped decisions).
+        current_value: Current state value (as string for display).
+        proposed_value: Proposed new value (as string for display).
+        reason: Explainable rationale for the recommendation.
+        confidence: Confidence score 0.0-1.0 based on data sufficiency.
     """
 
-    action: str
-    target_type: str
+    action: OptimizationAction
+    target_type: TargetType
     target_id: str
+    nm_id: int = 0
     current_value: str | None = None
     proposed_value: str | None = None
     reason: str = ''
