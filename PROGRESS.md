@@ -12,8 +12,9 @@
 | 0.4.0 | Phase 3 | 2026-04-02 | Search-cluster control - cluster bid mutations, minus phrases, daily stats |
 | 0.5.0 | Phase 4 | 2026-04-03 | Analytics bridge - sales funnel, search reports, CSV exports |
 | 0.6.0 | Phase 5 | 2026-04-03 | Optimization workflows - recommendation engine, guarded apply |
+| 0.8.0 | Phase 7 | 2026-04-03 | Local SQLite cache - historical snapshots, wb budget history |
 
-## Current Version: 0.7.0
+## Current Version: 0.8.0
 
 ## Phase Status
 
@@ -26,6 +27,7 @@
 | 4 | Analytics bridge | COMPLETED | 0.5.0 |
 | 5 | Optimization workflows | COMPLETED | 0.6.0 |
 | 6 | Agent platform support | COMPLETED | 0.7.0 |
+| 7 | Local SQLite cache + historical snapshots | COMPLETED | 0.8.0 |
 
 ---
 
@@ -496,6 +498,69 @@ tests/unit/
 
 - **539 tests passed** (0 failures)
 - 44 new tests: SDK wrapper testing (39 tests across campaign/budget/cluster/optimizer operations), clone command (4 tests), NOISY_EXCLUSION fix (1 test)
+
+---
+
+---
+
+## Phase 7 - Local SQLite Cache + Historical Snapshots (v0.8.0) - COMPLETED
+
+### What was built
+
+- **`CACHE_DB_FILE` constant**: `cache.db` in config dir (alongside `audit.jsonl`)
+- **`domain/cache_models.py`**: 4 `@dataclass(slots=True)` models — `CampaignSnapshot`, `StatsRecord`, `ClusterRecord`, `BudgetEvent`
+- **`storage/cache.py`**: `CacheStore` — SQLite-backed store with 4 tables, schema versioning via `PRAGMA user_version`, WAL journal mode, and row mappers for all model types
+  - `save_campaign` / `list_campaigns` — filter by profile, campaign_id; ordered by time desc
+  - `save_stats` / `list_stats` — upsert by (campaign_id, profile, date); date range filter; ordered asc
+  - `save_cluster` / `list_clusters` — filter by nm_id; ordered by time desc
+  - `save_budget_event` / `list_budget_events` — filter by campaign; ordered by time desc
+  - `clear(profile, campaign_id?)` — delete rows with optional campaign scope
+  - `summary(profile)` — row counts per table
+- **`services/cache.py`**: `CacheService` — orchestrates snapshot collection and history queries
+  - `snapshot_campaign(id, profile, *, nm_id, with_stats, with_clusters)` — captures config + stats + clusters
+  - `snapshot_all(profile)` — captures configs for all `RUNNING` campaigns
+  - `history_campaigns / history_stats / history_clusters / history_budget` — delegate to store
+  - Stats/cluster errors swallowed with warning (partial snapshot is still useful)
+- **`cli/cache.py`**: 8 commands under `wb cache`:
+  - `wb cache list [--campaign]` — summary or campaign snapshot list
+  - `wb cache snapshot --campaign [--nm] [--no-stats] [--no-clusters]` — capture snapshot
+  - `wb cache snapshot-all` — capture all active campaign configs
+  - `wb cache history campaigns [--campaign]` — campaign config history
+  - `wb cache history stats --campaign [--from] [--to]` — stats history
+  - `wb cache history clusters --campaign [--nm]` — cluster history
+  - `wb cache clear [--campaign] [--yes]` — delete cached rows
+- **`cli/budget.py`**: New `wb budget history` command — queries stored budget events from cache
+- **Budget event auto-capture**: `wb budget topup` now persists a `BudgetEvent` to cache after every successful deposit
+- **Design question Q1 closed**: Local SQLite cache implemented as explicit-only (never hidden state)
+
+### File structure additions
+
+```
+src/wb/
+  domain/
+    cache_models.py     # NEW: CampaignSnapshot, StatsRecord, ClusterRecord, BudgetEvent
+  storage/
+    cache.py            # NEW: CacheStore (SQLite, 4 tables, WAL mode)
+  services/
+    cache.py            # NEW: CacheService (snapshot + query)
+    _factory.py         # +create_cache_store, create_cache_service
+  cli/
+    cache.py            # NEW: 8 commands, history sub-app
+    budget.py           # +history command, +_record_topup_event
+    app.py              # +cache_app registration
+  core/
+    constants.py        # +CACHE_DB_FILE
+tests/unit/
+  test_cache_store.py   # 29 tests — schema, round-trips, upsert, filters, limits, maintenance
+  test_cache_service.py # 17 tests — snapshot logic, error handling, history queries, clear/summary
+  test_cli_cache.py     # 16 tests — CLI commands, confirmation, json output
+  test_cli_budget.py    # +6 tests for history and topup event recording
+```
+
+### Test results
+
+- **604 tests passed** (0 failures)
+- 65 new tests covering: SQLite schema, round-trip persistence, upsert, filters, CacheService orchestration, error swallowing, CLI commands
 
 ---
 

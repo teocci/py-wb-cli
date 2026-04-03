@@ -56,7 +56,8 @@
       "Bash(.venv/Scripts/python -m wb optimize --help)",
       "Bash(.venv/Scripts/python -m wb --help)",
       "Bash(wc:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

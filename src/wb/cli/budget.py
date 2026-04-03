@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 
 import typer
 
@@ -106,5 +107,61 @@ def budget_topup(
             result=result.message,
         )
 
+    if not dry_run:
+        _record_topup_event(
+            profile=_get_profile(ctx) or 'default',
+            campaign_id=campaign_id,
+            amount=amount,
+        )
+
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
+
+
+def _record_topup_event(
+        profile: str,
+        campaign_id: int,
+        amount: int,
+) -> None:
+    """Persist a budget topup event to the local cache."""
+    import json
+    from wb.domain.cache_models import BudgetEvent
+    from wb.services._factory import create_cache_store
+    try:
+        store = create_cache_store(profile)
+        evt = BudgetEvent(
+            profile=profile,
+            campaign_id=campaign_id,
+            event_type='topup',
+            amount=amount,
+            balance_after=0,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            payload_json=json.dumps({'campaign_id': campaign_id, 'amount': amount}),
+        )
+        store.save_budget_event(evt)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning('Could not record budget event: %s', exc)
+
+
+@budget_app.command('history')
+def budget_history(
+        ctx: typer.Context,
+        campaign_id: int | None = typer.Option(
+            None, '--campaign', '-c', help='Filter by campaign ID',
+        ),
+        limit: int = typer.Option(100, '--limit', '-l', help='Max events to show'),
+) -> None:
+    """Show recorded budget topup events from local cache."""
+    from wb.services._factory import create_cache_store
+
+    renderer = _get_renderer(ctx)
+    profile = _get_profile(ctx) or 'default'
+    store = create_cache_store(profile)
+    events = store.list_budget_events(profile, campaign_id, limit)
+    data = [asdict(e) for e in events]
+    renderer.display(
+        data,
+        headers=['Time', 'Campaign', 'Type', 'Amount', 'Balance After'],
+        title='Budget Event History',
+    )

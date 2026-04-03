@@ -21,6 +21,8 @@ __all__ = [
     'create_analytics_client',
     'create_analytics_service',
     'create_optimizer_service',
+    'create_cache_store',
+    'create_cache_service',
 ]
 
 
@@ -286,3 +288,43 @@ def _lazy_stats(client):
 def _lazy_budget(client):
     from wb.services.budgets import BudgetService
     return BudgetService(client)
+
+
+# ── Cache factories ───────────────────────────────────────────────────
+
+
+def create_cache_store(profile_name: str | None = None):
+    """Create a CacheStore pointed at the profile config directory.
+
+    Args:
+        profile_name: Profile name (unused for path resolution; config_dir
+            is global per settings).
+
+    Returns:
+        Configured CacheStore instance.
+    """
+    from wb.core.constants import CACHE_DB_FILE
+    from wb.storage.cache import CacheStore
+    settings = Settings()
+    settings.ensure_config_dir()
+    return CacheStore(settings.config_dir / CACHE_DB_FILE)
+
+
+def create_cache_service(profile_name: str | None = None):
+    """Create a CacheService with all required sub-services.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured CacheService instance.
+    """
+    from wb.services.cache import CacheService
+    store = create_cache_store(profile_name)
+    client = create_promotion_client(profile_name)
+    return CacheService(
+        store=store,
+        campaign_svc=_lazy_campaign(client),
+        stats_svc=_lazy_stats(client),
+        cluster_svc=_lazy_cluster(client),
+    )

@@ -13,6 +13,7 @@ __all__ = [
     'DEFAULT_PROFILE_NAME',
     'CONFIG_DIR_NAME',
     'AUDIT_LOG_FILE',
+    'CACHE_DB_FILE',
     'PROFILES_FILE',
     'DEFAULT_TIMEOUT',
     'DEFAULT_MAX_RETRIES',
@@ -82,6 +83,7 @@ SELLER_CONTENT_BASE_URL = 'https://seller-content.wildberries.ru'
 DEFAULT_PROFILE_NAME = 'default'
 CONFIG_DIR_NAME = '.wb-cli'
 AUDIT_LOG_FILE = 'audit.jsonl'
+CACHE_DB_FILE = 'cache.db'
 PROFILES_FILE = 'profiles.json'
 
 # ── HTTP / retry defaults ─────────────────────────────────────────────

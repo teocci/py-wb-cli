@@ -86,3 +86,59 @@ class TestBudgetGet:
         assert parsed['total'] == 50000
         assert parsed['cash'] == 30000
         assert parsed['netting'] == 20000
+
+
+STORE_PATH = 'wb.services._factory.create_cache_store'
+
+
+class TestBudgetHistory:
+    """Tests for the 'budget history' command."""
+
+    def test_budget_history_help(self) -> None:
+        result = runner.invoke(app, ['budget', 'history', '--help'])
+        assert result.exit_code == 0
+
+    @patch(STORE_PATH)
+    def test_budget_history_empty(self, mock_store_factory: MagicMock) -> None:
+        """Shows empty result when no events are stored."""
+        store = MagicMock()
+        store.list_budget_events.return_value = []
+        mock_store_factory.return_value = store
+        result = runner.invoke(app, ['budget', 'history'])
+        assert result.exit_code == 0
+        store.list_budget_events.assert_called_once()
+
+    @patch(STORE_PATH)
+    def test_budget_history_campaign_filter(self, mock_store_factory: MagicMock) -> None:
+        """--campaign passes campaign_id to store."""
+        store = MagicMock()
+        store.list_budget_events.return_value = []
+        mock_store_factory.return_value = store
+        runner.invoke(app, ['budget', 'history', '--campaign', '123'])
+        call_args = store.list_budget_events.call_args
+        assert call_args.args[1] == 123
+
+    @patch(STORE_PATH)
+    def test_budget_topup_records_event(self, mock_store_factory: MagicMock) -> None:
+        """Successful topup saves a budget event to the cache."""
+        store = MagicMock()
+        mock_store_factory.return_value = store
+        with patch(FACTORY_PATH) as mock_svc_factory:
+            from wb.domain.models import MutationResult
+            svc = MagicMock()
+            svc.topup.return_value = MutationResult(
+                success=True,
+                action='deposit 500',
+                target_id='42',
+                message='Deposited 500 kopecks',
+            )
+            mock_svc_factory.return_value = svc
+            result = runner.invoke(
+                app, ['budget', 'topup', '--campaign', '42', '--sum', '500', '--yes'],
+            )
+        assert result.exit_code == 0
+        store.save_budget_event.assert_called_once()
+        saved_evt = store.save_budget_event.call_args.args[0]
+        assert saved_evt.event_type == 'topup'
+        assert saved_evt.amount == 500
+        assert saved_evt.campaign_id == 42
