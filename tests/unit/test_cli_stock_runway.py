@@ -57,7 +57,7 @@ class TestStockRunwayJsonOutput:
     def test_json_output_structure(self, mock_factory):
         svc = MagicMock()
         report = _make_report(items=[_make_item(999)])
-        svc.get_stock_runway.return_value = report
+        svc.get_stock_runway.return_value = (report, False)
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['--json', 'report', 'warehouse', 'stock-runway'])
@@ -71,19 +71,20 @@ class TestStockRunwayJsonOutput:
     @patch(RUNWAY_FACTORY)
     def test_json_passes_days_option(self, mock_factory):
         svc = MagicMock()
-        svc.get_stock_runway.return_value = _make_report()
+        svc.get_stock_runway.return_value = (_make_report(), False)
         mock_factory.return_value = svc
 
         runner.invoke(app, ['--json', 'report', 'warehouse', 'stock-runway', '--days', '14'])
         svc.get_stock_runway.assert_called_once_with(
             sales_period_days=14,
             poll_timeout=120.0,
+            use_cache=True,
         )
 
     @patch(RUNWAY_FACTORY)
     def test_empty_items_json(self, mock_factory):
         svc = MagicMock()
-        svc.get_stock_runway.return_value = _make_report()
+        svc.get_stock_runway.return_value = (_make_report(), False)
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['--json', 'report', 'warehouse', 'stock-runway'])
@@ -96,7 +97,7 @@ class TestStockRunwayTableOutput:
     @patch(RUNWAY_FACTORY)
     def test_table_output_contains_nm_id(self, mock_factory):
         svc = MagicMock()
-        svc.get_stock_runway.return_value = _make_report(items=[_make_item(42424)])
+        svc.get_stock_runway.return_value = (_make_report(items=[_make_item(42424)]), False)
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['report', 'warehouse', 'stock-runway'])
@@ -106,7 +107,7 @@ class TestStockRunwayTableOutput:
     @patch(RUNWAY_FACTORY)
     def test_empty_items_human_output(self, mock_factory):
         svc = MagicMock()
-        svc.get_stock_runway.return_value = _make_report()
+        svc.get_stock_runway.return_value = (_make_report(), False)
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['report', 'warehouse', 'stock-runway'])

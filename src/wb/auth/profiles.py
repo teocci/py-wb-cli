@@ -34,6 +34,7 @@ class Profile:
     portal_session: dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_used: str | None = None
+    seller_id: str | None = None
 
     def has_token(self, category: str) -> bool:
         """Check if profile has a token for the given category."""
@@ -115,6 +116,8 @@ class Profile:
         }
         if self.portal_session:
             data['portal_session'] = self.portal_session
+        if self.seller_id:
+            data['seller_id'] = self.seller_id
         return data
 
     @classmethod
@@ -126,6 +129,7 @@ class Profile:
             portal_session=data.get('portal_session', {}),
             created_at=data.get('created_at', datetime.now(timezone.utc).isoformat()),
             last_used=data.get('last_used'),
+            seller_id=data.get('seller_id'),
         )
 
 

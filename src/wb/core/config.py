@@ -94,3 +94,17 @@ class Settings(BaseSettings):
         """
         self.config_dir.mkdir(parents=True, exist_ok=True)
         return self.config_dir
+
+    def reports_dir(self, profile_name: str) -> Path:
+        """Return the reports directory for a profile, creating it if needed.
+
+        Args:
+            profile_name: Name of the profile owning the reports.
+
+        Returns:
+            Path to ``~/.wb-cli/<profile_name>/reports/``, created if absent.
+        """
+        from wb.core.constants import REPORTS_DIR_NAME
+        path = self.config_dir / profile_name / REPORTS_DIR_NAME
+        path.mkdir(parents=True, exist_ok=True)
+        return path

@@ -79,6 +79,8 @@ __all__ = [
     'RUNWAY_CONFIDENCE_HIGH_DAYS',
     'RUNWAY_CONFIDENCE_MEDIUM_DAYS',
     'EXCLUDED_WAREHOUSE_PREFIXES',
+    'REPORT_CACHE_TTL_HOURS',
+    'REPORTS_DIR_NAME',
 ]
 
 from enum import IntEnum
@@ -215,6 +217,10 @@ RUNWAY_ALERT_LOW_DAYS = 14
 RUNWAY_CONFIDENCE_HIGH_DAYS = 20
 RUNWAY_CONFIDENCE_MEDIUM_DAYS = 10
 EXCLUDED_WAREHOUSE_PREFIXES = ('В пути', 'Всего')
+
+# ── Report cache settings ─────────────────────────────────────────────
+REPORT_CACHE_TTL_HOURS = 6
+REPORTS_DIR_NAME = 'reports'
 
 # ── Seller portal endpoint paths ─────────────────────────────────────
 EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'

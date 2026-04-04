@@ -156,12 +156,13 @@ class TestGetWarehouseTop:
             },
         ]
 
-        result = svc.get_warehouse_top(limit=2)
+        result, from_cache = svc.get_warehouse_top(limit=2)
         assert len(result) == 2
         assert result[0].nm_id == 200
         assert result[0].total_quantity == 200
         assert result[1].nm_id == 100
         assert result[1].total_quantity == 80
+        assert from_cache is False
 
     @patch('wb.services.reports.time.sleep')
     def test_raises_on_non_done(self, mock_sleep, svc, mock_client):

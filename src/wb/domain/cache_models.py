@@ -11,6 +11,7 @@ __all__ = [
     'StatsRecord',
     'ClusterRecord',
     'BudgetEvent',
+    'ReportCacheEntry',
 ]
 
 from dataclasses import dataclass, field
@@ -125,4 +126,27 @@ class BudgetEvent:
     campaign_id: int | None = None
     amount: int = 0
     balance_after: int = 0
+    id: int = 0
+
+
+@dataclass(slots=True)
+class ReportCacheEntry:
+    """Metadata for a cached report file stored on disk.
+
+    Attributes:
+        profile_name: Profile that owns this cache entry.
+        seller_id: Optional seller ID (display metadata, not routing).
+        report_type: Report type key (e.g. 'warehouse_remains', 'sales_30d').
+        date: Date of the report in YYYY-MM-DD format.
+        payload_path: Absolute path to the cached JSON file.
+        computed_at: ISO UTC datetime when the entry was created.
+        id: Auto-increment row ID (0 = not yet persisted).
+    """
+
+    profile_name: str
+    seller_id: str | None
+    report_type: str
+    date: str
+    payload_path: str
+    computed_at: str
     id: int = 0

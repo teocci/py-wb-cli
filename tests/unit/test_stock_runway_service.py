@@ -74,9 +74,9 @@ def _setup_warehouse_report(reports_client, items: list[WarehouseRemainItem]):
 
 class TestGetStockRunwayValidation:
     def test_raises_without_statistics_client(self, reports_client):
-        svc = ReportsService(reports_client)  # no stats_client
+        svc_no_stats = ReportsService(reports_client)  # no stats_client
         with pytest.raises(ValidationError, match='statistics_client'):
-            svc.get_stock_runway()
+            svc_no_stats.get_stock_runway()
 
     def test_raises_for_invalid_period(self, svc):
         with pytest.raises(ValidationError, match='sales_period_days'):
@@ -97,7 +97,7 @@ class TestGetStockRunwayComputation:
         sales = [_make_sale_raw(100, f'2026-03-{d:02d}', 3) for d in range(1, 31)]
         stats_client.get_sales.return_value = sales
 
-        report = svc.get_stock_runway(sales_period_days=30)
+        report, _ = svc.get_stock_runway(sales_period_days=30)
         assert len(report.items) == 1
         item = report.items[0]
         assert item.nm_id == 100
@@ -115,7 +115,7 @@ class TestGetStockRunwayComputation:
         _setup_warehouse_report(reports_client, items)
         stats_client.get_sales.return_value = []
 
-        report = svc.get_stock_runway(sales_period_days=30)
+        report, _ = svc.get_stock_runway(sales_period_days=30)
         item = report.items[0]
         assert item.avg_daily_sales == 0.0
         assert item.confidence == 'none'
@@ -134,7 +134,7 @@ class TestGetStockRunwayComputation:
         sales = [_make_sale_raw(300, f'2026-03-{d:02d}', 3) for d in range(1, 21)]
         stats_client.get_sales.return_value = sales
 
-        report = svc.get_stock_runway(sales_period_days=30)
+        report, _ = svc.get_stock_runway(sales_period_days=30)
         item = report.items[0]
         assert item.total_days_of_stock == 5
         assert item.alert == 'critical'
@@ -152,7 +152,7 @@ class TestGetStockRunwayComputation:
         sales = [_make_sale_raw(400, f'2026-03-{d:02d}', 3) for d in range(1, 21)]
         stats_client.get_sales.return_value = sales
 
-        report = svc.get_stock_runway(sales_period_days=30)
+        report, _ = svc.get_stock_runway(sales_period_days=30)
         item = report.items[0]
         assert item.warehouses[0].days_of_stock == 10
         assert item.warehouses[0].alert == 'low'
@@ -173,7 +173,7 @@ class TestGetStockRunwayComputation:
         sales = [_make_sale_raw(500, '2026-03-01', 10)]
         stats_client.get_sales.return_value = sales
 
-        report = svc.get_stock_runway(sales_period_days=30)
+        report, _ = svc.get_stock_runway(sales_period_days=30)
         item = report.items[0]
         # Only 'Москва' should survive
         assert len(item.warehouses) == 1
@@ -191,7 +191,7 @@ class TestGetStockRunwayComputation:
         sales = [_make_sale_raw(600, f'2026-03-{d:02d}', 1) for d in range(1, 16)]
         stats_client.get_sales.return_value = sales
 
-        report = svc.get_stock_runway(sales_period_days=30)
+        report, _ = svc.get_stock_runway(sales_period_days=30)
         assert report.items[0].confidence == 'medium'
 
     @patch('wb.services.reports.time.sleep')
@@ -205,7 +205,7 @@ class TestGetStockRunwayComputation:
         sales = [_make_sale_raw(700, f'2026-03-{d:02d}', 1) for d in range(1, 6)]
         stats_client.get_sales.return_value = sales
 
-        report = svc.get_stock_runway(sales_period_days=30)
+        report, _ = svc.get_stock_runway(sales_period_days=30)
         assert report.items[0].confidence == 'low'
 
     @patch('wb.services.reports.time.sleep')
@@ -214,6 +214,6 @@ class TestGetStockRunwayComputation:
         _setup_warehouse_report(reports_client, [])
         stats_client.get_sales.return_value = []
 
-        report = svc.get_stock_runway(sales_period_days=14)
+        report, _ = svc.get_stock_runway(sales_period_days=14)
         assert report.computed_at == '2026-04-04T00:00:00'
         assert report.sales_period_days == 14

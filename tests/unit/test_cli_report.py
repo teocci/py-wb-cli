@@ -131,21 +131,24 @@ class TestWarehouseTop:
     @patch(REPORTS_FACTORY)
     def test_json_output(self, mock_factory):
         svc = MagicMock()
-        svc.get_warehouse_top.return_value = [
-            ProductStockSummary(
-                nm_id=200, brand='B2', subject_name='S2',
-                vendor_code='V2', total_quantity=200,
-                warehouses=[WarehouseStock('WH-A', 200)],
-            ),
-            ProductStockSummary(
-                nm_id=100, brand='B1', subject_name='S1',
-                vendor_code='V1', total_quantity=80,
-                warehouses=[
-                    WarehouseStock('WH-A', 50),
-                    WarehouseStock('WH-B', 30),
-                ],
-            ),
-        ]
+        svc.get_warehouse_top.return_value = (
+            [
+                ProductStockSummary(
+                    nm_id=200, brand='B2', subject_name='S2',
+                    vendor_code='V2', total_quantity=200,
+                    warehouses=[WarehouseStock('WH-A', 200)],
+                ),
+                ProductStockSummary(
+                    nm_id=100, brand='B1', subject_name='S1',
+                    vendor_code='V1', total_quantity=80,
+                    warehouses=[
+                        WarehouseStock('WH-A', 50),
+                        WarehouseStock('WH-B', 30),
+                    ],
+                ),
+            ],
+            False,
+        )
         mock_factory.return_value = svc
 
         result = runner.invoke(app, [
@@ -160,7 +163,7 @@ class TestWarehouseTop:
     @patch(REPORTS_FACTORY)
     def test_empty_result(self, mock_factory):
         svc = MagicMock()
-        svc.get_warehouse_top.return_value = []
+        svc.get_warehouse_top.return_value = ([], False)
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['report', 'warehouse', 'top'])
@@ -170,13 +173,16 @@ class TestWarehouseTop:
     @patch(REPORTS_FACTORY)
     def test_table_output(self, mock_factory):
         svc = MagicMock()
-        svc.get_warehouse_top.return_value = [
-            ProductStockSummary(
-                nm_id=100, brand='TestBrand', subject_name='Shoes',
-                vendor_code='V1', total_quantity=150,
-                warehouses=[WarehouseStock('Коледино', 150)],
-            ),
-        ]
+        svc.get_warehouse_top.return_value = (
+            [
+                ProductStockSummary(
+                    nm_id=100, brand='TestBrand', subject_name='Shoes',
+                    vendor_code='V1', total_quantity=150,
+                    warehouses=[WarehouseStock('Коледино', 150)],
+                ),
+            ],
+            False,
+        )
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['report', 'warehouse', 'top'])

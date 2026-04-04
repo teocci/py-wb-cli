@@ -16,8 +16,9 @@
 | 0.9.0 | Agent Fixes | 2026-04-03 | Agent-critical fixes - JSON errors, per-NM stats, Campaign nm_ids |
 | 0.10.0 | Phase 8A | 2026-04-04 | Warehouse inventory reports — async report lifecycle + top products |
 | 0.11.0 | Phase 8B | 2026-04-04 | Stock runway — days-until-stockout via Statistics API sales velocity |
+| 0.12.0 | Phase 8C | 2026-04-04 | Report caching & multi-seller storage — 6h TTL file cache + SQLite metadata |
 
-## Current Version: 0.11.0
+## Current Version: 0.12.0
 
 ## Phase Status
 
@@ -34,6 +35,7 @@
 | A1 | Agent-critical fixes | COMPLETED | 0.9.0 |
 | 8A | Warehouse inventory reports | COMPLETED | 0.10.0 |
 | 8B | Stock runway (days-until-stockout) | COMPLETED | 0.11.0 |
+| 8C | Report caching & multi-seller storage | COMPLETED | 0.12.0 |
 
 ---
 
@@ -719,6 +721,72 @@ wb report warehouse stock-runway --days 14
 
 ---
 
+## Phase 8C - Report Caching & Multi-Seller Storage (v0.12.0) - COMPLETED
+
+### What was built
+
+- **`REPORT_CACHE_TTL_HOURS = 6`** and **`REPORTS_DIR_NAME = 'reports'`** added to `constants.py`
+- **`Profile.seller_id`**: Optional metadata field on Profile (no routing logic — pure display)
+- **`Settings.reports_dir(profile_name)`**: Returns `~/.wb-cli/<profile_name>/reports/`, created on first call
+- **`ReportCacheEntry`** dataclass in `domain/cache_models.py`: profile_name, seller_id, report_type, date, payload_path, computed_at
+- **`CacheStore` schema v2**: New `report_cache` table with `UNIQUE (profile_name, report_type, date)` constraint + 3 new methods:
+  - `save_report_cache(entry)` — INSERT OR REPLACE
+  - `get_report_cache(profile_name, report_type, date)` — single lookup
+  - `list_report_cache(profile_name, limit=50)` — ordered by computed_at desc
+- **`ReportsService` constructor extended**: New `reports_dir`, `cache_store`, `profile_name` parameters
+- **Cache-aware `get_warehouse_top(use_cache=True)`**: Returns `(summaries, from_cache)` tuple. Cache type: `'warehouse_remains'`
+- **Cache-aware `get_stock_runway(use_cache=True)`**: Returns `(report, from_cache)` tuple. Cache types: `'warehouse_remains'` + `'sales_<N>d'`
+- **`_cache_hit()`**: Validates file exists + TTL ≤ 6h; returns `(path, True)` on hit
+- **`_write_cache()`**: Writes JSON to `<reports_dir>/<type>_<date>.json` + upserts metadata row
+- **Cache deserialisation helpers**: `_stock_item_from_dict()`, `_sale_record_from_dict()`, `_load_stock_items()`, `_load_sale_records()` — safe round-trip from `asdict()` format
+- **CLI `--cache/--no-cache` flag** on `warehouse top` and `stock-runway` commands (default `--cache`)
+- **`[cached]` label** in table titles when data served from cache
+- **Factory updates**: `create_reports_service()` and `create_stock_runway_service()` now wire in `reports_dir`, `cache_store`, `profile_name`; added `_resolve_profile_name()` helper
+
+### File structure additions
+
+```
+src/wb/
+  core/
+    constants.py        # +REPORT_CACHE_TTL_HOURS, REPORTS_DIR_NAME
+    config.py           # +reports_dir() method
+  auth/
+    profiles.py         # +seller_id field
+  domain/
+    cache_models.py     # +ReportCacheEntry
+  storage/
+    cache.py            # schema v2, +report_cache table, 3 new methods, _row_to_report_cache
+  services/
+    reports.py          # Refactored with cache: _cache_hit, _write_cache, deserialisation helpers,
+                        # _api_fetch_all_stock, _get_stock_items, _get_sales, updated return types
+    _factory.py         # Updated create_reports_service/create_stock_runway_service + _resolve_profile_name
+  cli/
+    report.py           # +use_cache flag on top/stock-runway, _render_top_table/runway accept from_cache
+tests/unit/
+  test_report_cache.py  # NEW: 20 tests
+  test_cache_store.py   # Updated schema version assertion (v1→v2)
+  test_reports_service.py # Updated: get_warehouse_top returns tuple
+  test_stock_runway_service.py # Updated: get_stock_runway returns tuple
+  test_cli_report.py    # Updated: mock returns tuple
+  test_cli_stock_runway.py # Updated: mock returns tuple
+```
+
+### Test results
+
+- **736 tests passed** (0 failures)
+- 20 new tests covering: ReportCacheEntry round-trip, upsert, multi-profile isolation, seller_id storage, list ordering, TTL hit/miss, deleted file miss, expired TTL miss, deserialisation round-trips, load helpers, `get_warehouse_top` cache hit/miss/skip, `Settings.reports_dir` path scoping
+
+### Usage
+
+```bash
+wb report warehouse top --limit 10          # first call: hits API, caches result
+wb report warehouse top --limit 10          # second call: [cached] label, instant
+wb report warehouse top --no-cache          # force fresh API call
+wb report warehouse stock-runway --days 30  # cached after first run
+```
+
+---
+
 ## How to Continue
 
 1. Activate the virtual environment: `source .venv/Scripts/activate` (Windows) or `source .venv/bin/activate` (Linux/Mac)
@@ -726,4 +794,4 @@ wb report warehouse stock-runway --days 14
 3. Run tests: `pytest tests/unit/ -v`
 4. Run CLI: `python -m wb --help`
 5. Use Python SDK: `from wb.sdk import list_campaigns, clone_campaign; campaigns = list_campaigns(profile='my_profile')`
-6. All phases through 8B complete — the CLI is production-ready for human and agent operations
+6. All phases through 8C complete — the CLI is production-ready for human and agent operations

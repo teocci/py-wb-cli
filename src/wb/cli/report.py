@@ -142,21 +142,24 @@ def warehouse_top(
         limit: int = typer.Option(10, '--limit', '-n', help='Number of top products'),
         locale: str = typer.Option('ru', '--locale', help='Language (ru, en, zh)'),
         timeout: float = typer.Option(120.0, '--timeout', help='Max seconds to wait for report'),
+        use_cache: bool = typer.Option(True, '--cache/--no-cache', help='Use file cache (default: enabled)'),
 ) -> None:
     """Show top products by stock with warehouse breakdown.
 
     Creates a report grouped by NM, waits for completion, then
     displays the top N products sorted by total stock quantity.
+    Same-day results are cached for 6 hours to avoid repeated API calls.
     """
     renderer = get_renderer(ctx)
     profile = get_profile(ctx)
 
     try:
         svc = _get_reports_service(profile)
-        summaries = svc.get_warehouse_top(
+        summaries, from_cache = svc.get_warehouse_top(
             limit=limit,
             locale=locale,
             poll_timeout=timeout,
+            use_cache=use_cache,
         )
     except WbCliError as exc:
         renderer.error(str(exc))
@@ -176,7 +179,7 @@ def warehouse_top(
         typer.echo('No products found.')
         return
 
-    _render_top_table(summaries)
+    _render_top_table(summaries, from_cache=from_cache)
 
 
 @warehouse_app.command('stock-runway')
@@ -184,12 +187,14 @@ def warehouse_stock_runway(
         ctx: typer.Context,
         sales_days: int = typer.Option(30, '--days', help='Sales lookback window in days'),
         timeout: float = typer.Option(120.0, '--timeout', help='Max seconds to wait for warehouse report'),
+        use_cache: bool = typer.Option(True, '--cache/--no-cache', help='Use file cache (default: enabled)'),
 ) -> None:
     """Days of stock remaining per warehouse (stock / avg daily sales).
 
     Fetches the current warehouse stock and cross-references it with
     your sales velocity to compute how many days until each product
     runs out of stock at each warehouse.
+    Same-day results are cached for 6 hours to avoid repeated API calls.
 
     Alert levels: critical (<=7 days), low (<=14 days).
     Confidence: high (>=20 sale-days), medium (>=10), low (<10), none (no sales).
@@ -199,9 +204,10 @@ def warehouse_stock_runway(
 
     try:
         svc = _get_stock_runway_service(profile)
-        report = svc.get_stock_runway(
+        report, from_cache = svc.get_stock_runway(
             sales_period_days=sales_days,
             poll_timeout=timeout,
+            use_cache=use_cache,
         )
     except WbCliError as exc:
         renderer.error(str(exc))
@@ -217,7 +223,7 @@ def warehouse_stock_runway(
         typer.echo('No products found.')
         return
 
-    _render_runway_table(report)
+    _render_runway_table(report, from_cache=from_cache)
 
 
 def _render_warehouse_table(items: list) -> None:
@@ -250,12 +256,13 @@ def _render_warehouse_table(items: list) -> None:
     Console().print(table)
 
 
-def _render_top_table(summaries: list) -> None:
+def _render_top_table(summaries: list, *, from_cache: bool = False) -> None:
     """Render top product stock summaries as a Rich table."""
     from rich.console import Console
     from rich.table import Table
 
-    table = Table(title=f'Top {len(summaries)} Products by Stock')
+    cache_label = ' \[cached]' if from_cache else ''
+    table = Table(title=f'Top {len(summaries)} Products by Stock{cache_label}')
     table.add_column('#', style='dim', justify='right')
     table.add_column('nmID', style='cyan', justify='right')
     table.add_column('Vendor', style='dim')
@@ -282,14 +289,15 @@ def _render_top_table(summaries: list) -> None:
     Console().print(table)
 
 
-def _render_runway_table(report) -> None:
+def _render_runway_table(report, *, from_cache: bool = False) -> None:
     """Render stock runway report as a Rich table."""
     from rich.console import Console
     from rich.table import Table
 
+    cache_label = ' \[cached]' if from_cache else ''
     table = Table(
         title=f'Stock Runway — {report.sales_period_days}d sales window '
-              f'(computed {report.computed_at})',
+              f'(computed {report.computed_at}){cache_label}',
     )
     table.add_column('nmID', style='cyan', justify='right')
     table.add_column('Avg/day', justify='right')

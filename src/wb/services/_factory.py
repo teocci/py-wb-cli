@@ -6,7 +6,12 @@ from wb.auth.profiles import ProfileStore
 from wb.client.http import WbHttpClient
 from wb.client.promotion import PromotionClient
 from wb.core.config import Settings
-from wb.core.constants import ANALYTICS_BASE_URL, PROMOTION_BASE_URL, STATISTICS_BASE_URL
+from wb.core.constants import (
+    ANALYTICS_BASE_URL,
+    CACHE_DB_FILE,
+    PROMOTION_BASE_URL,
+    STATISTICS_BASE_URL,
+)
 from wb.storage.audit import AuditLogger
 
 __all__ = [
@@ -314,17 +319,48 @@ def create_reports_client(profile_name: str | None = None):
     return ReportsClient(http)
 
 
+def _resolve_profile_name(
+        profile_name: str | None,
+        settings: Settings,
+) -> str:
+    """Resolve a profile name, falling back to the active profile.
+
+    Args:
+        profile_name: Explicit profile name, or None.
+        settings: Settings instance for active_profile fallback.
+
+    Returns:
+        Resolved profile name string.
+    """
+    return profile_name or settings.active_profile
+
+
 def create_reports_service(profile_name: str | None = None):
     """Create a ReportsService from profile credentials.
+
+    Wires in the per-profile reports directory and shared CacheStore
+    so that warehouse report results are cached on disk.
 
     Args:
         profile_name: Profile name, or None for active profile.
 
     Returns:
-        Configured ReportsService instance.
+        Configured ReportsService instance with cache support.
     """
+    from wb.storage.cache import CacheStore
     from wb.services.reports import ReportsService
-    return ReportsService(create_reports_client(profile_name))
+
+    settings = Settings()
+    settings.ensure_config_dir()
+    resolved = _resolve_profile_name(profile_name, settings)
+    rdir = settings.reports_dir(resolved)
+    store = CacheStore(settings.config_dir / CACHE_DB_FILE)
+    return ReportsService(
+        create_reports_client(profile_name),
+        reports_dir=rdir,
+        cache_store=store,
+        profile_name=resolved,
+    )
 
 
 def create_statistics_client(profile_name: str | None = None):
@@ -343,18 +379,30 @@ def create_statistics_client(profile_name: str | None = None):
 
 
 def create_stock_runway_service(profile_name: str | None = None):
-    """Create a ReportsService with a StatisticsClient for runway computation.
+    """Create a ReportsService with StatisticsClient and cache for runway computation.
 
     Args:
         profile_name: Profile name, or None for active profile.
 
     Returns:
-        Configured ReportsService with statistics_client injected.
+        Configured ReportsService with statistics_client, reports_dir,
+        and cache_store injected.
     """
+    from wb.storage.cache import CacheStore
     from wb.services.reports import ReportsService
-    reports_client = create_reports_client(profile_name)
-    stats_client = create_statistics_client(profile_name)
-    return ReportsService(reports_client, stats_client)
+
+    settings = Settings()
+    settings.ensure_config_dir()
+    resolved = _resolve_profile_name(profile_name, settings)
+    rdir = settings.reports_dir(resolved)
+    store = CacheStore(settings.config_dir / CACHE_DB_FILE)
+    return ReportsService(
+        create_reports_client(profile_name),
+        statistics_client=create_statistics_client(profile_name),
+        reports_dir=rdir,
+        cache_store=store,
+        profile_name=resolved,
+    )
 
 
 # ── Cache factories ───────────────────────────────────────────────────

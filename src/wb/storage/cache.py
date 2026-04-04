@@ -18,6 +18,7 @@ from wb.domain.cache_models import (
     BudgetEvent,
     CampaignSnapshot,
     ClusterRecord,
+    ReportCacheEntry,
     StatsRecord,
 )
 
@@ -25,7 +26,7 @@ __all__ = ['CacheStore']
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 class CacheStore:
@@ -51,7 +52,7 @@ class CacheStore:
                 conn.execute(f'PRAGMA user_version = {_SCHEMA_VERSION}')
 
     def _create_schema(self, conn: sqlite3.Connection) -> None:
-        """Create all tables for schema version 1."""
+        """Create all tables for schema version 2."""
         conn.executescript('''
             CREATE TABLE IF NOT EXISTS campaigns (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +111,19 @@ class CacheStore:
             );
             CREATE INDEX IF NOT EXISTS idx_budget_profile
                 ON budget_events (profile, created_at);
+
+            CREATE TABLE IF NOT EXISTS report_cache (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                profile_name  TEXT NOT NULL,
+                seller_id     TEXT,
+                report_type   TEXT NOT NULL,
+                date          TEXT NOT NULL,
+                payload_path  TEXT NOT NULL,
+                computed_at   TEXT NOT NULL,
+                UNIQUE (profile_name, report_type, date) ON CONFLICT REPLACE
+            );
+            CREATE INDEX IF NOT EXISTS idx_report_cache_key
+                ON report_cache (profile_name, report_type, date);
         ''')
 
     def _connect(self) -> sqlite3.Connection:
@@ -348,6 +362,75 @@ class CacheStore:
             rows = conn.execute(sql, params).fetchall()
         return [_row_to_budget_event(r) for r in rows]
 
+    # ── Report cache ─────────────────────────────────────────────────
+
+    def save_report_cache(self, entry: ReportCacheEntry) -> None:
+        """Insert or replace a report cache metadata row.
+
+        Args:
+            entry: ReportCacheEntry to persist.
+        """
+        sql = '''
+            INSERT OR REPLACE INTO report_cache
+              (profile_name, seller_id, report_type, date,
+               payload_path, computed_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        '''
+        with self._connect() as conn:
+            conn.execute(sql, (
+                entry.profile_name, entry.seller_id, entry.report_type,
+                entry.date, entry.payload_path, entry.computed_at,
+            ))
+
+    def get_report_cache(
+            self,
+            profile_name: str,
+            report_type: str,
+            date: str,
+    ) -> ReportCacheEntry | None:
+        """Retrieve a single report cache entry by key.
+
+        Args:
+            profile_name: Profile that owns the entry.
+            report_type: Type key (e.g. 'warehouse_remains').
+            date: Date string (YYYY-MM-DD).
+
+        Returns:
+            ReportCacheEntry if found, otherwise None.
+        """
+        sql = '''
+            SELECT * FROM report_cache
+            WHERE profile_name = ? AND report_type = ? AND date = ?
+        '''
+        with self._connect() as conn:
+            row = conn.execute(sql, (profile_name, report_type, date)).fetchone()
+        if row is None:
+            return None
+        return _row_to_report_cache(row)
+
+    def list_report_cache(
+            self,
+            profile_name: str,
+            limit: int = 50,
+    ) -> list[ReportCacheEntry]:
+        """List report cache entries for a profile.
+
+        Args:
+            profile_name: Profile to filter by.
+            limit: Maximum rows to return.
+
+        Returns:
+            List of ReportCacheEntry ordered by computed_at desc.
+        """
+        sql = '''
+            SELECT * FROM report_cache
+            WHERE profile_name = ?
+            ORDER BY computed_at DESC LIMIT ?
+        '''
+        with self._connect() as conn:
+            rows = conn.execute(sql, (profile_name, limit)).fetchall()
+        return [_row_to_report_cache(r) for r in rows]
+
     # ── Maintenance ───────────────────────────────────────────────────
 
     def clear(
@@ -473,4 +556,16 @@ def _row_to_budget_event(row: sqlite3.Row) -> BudgetEvent:
         balance_after=row['balance_after'],
         created_at=row['created_at'],
         payload_json=row['payload_json'],
+    )
+
+
+def _row_to_report_cache(row: sqlite3.Row) -> ReportCacheEntry:
+    return ReportCacheEntry(
+        id=row['id'],
+        profile_name=row['profile_name'],
+        seller_id=row['seller_id'],
+        report_type=row['report_type'],
+        date=row['date'],
+        payload_path=row['payload_path'],
+        computed_at=row['computed_at'],
     )

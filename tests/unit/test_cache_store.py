@@ -102,14 +102,14 @@ class TestSchema:
         assert db.exists()
 
     def test_schema_version_set(self, tmp_path: Path) -> None:
-        """PRAGMA user_version is set to 1 after init."""
+        """PRAGMA user_version is set to 2 after init."""
         import sqlite3
         db = tmp_path / 'cache.db'
         CacheStore(db)
         conn = sqlite3.connect(db)
         version = conn.execute('PRAGMA user_version').fetchone()[0]
         conn.close()
-        assert version == 1
+        assert version == 2
 
     def test_reinit_idempotent(self, tmp_path: Path) -> None:
         """Creating two CacheStore instances on the same file is safe."""
