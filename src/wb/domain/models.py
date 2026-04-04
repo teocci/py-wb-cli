@@ -71,7 +71,7 @@ class Campaign:
         """Create from WB /api/advert/v2/adverts response payload."""
         settings = data.get('settings', {})
         timestamps = data.get('timestamps', {})
-        nm_settings = data.get('nm_settings', [])
+        nm_settings = data.get('nm_settings') or []
         nm_ids = [item['nm_id'] for item in nm_settings if 'nm_id' in item]
         return cls(
             campaign_id=data['id'],
