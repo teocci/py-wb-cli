@@ -18,6 +18,7 @@ from wb.cli.budget import budget_app
 from wb.cli.campaign import campaign_app
 from wb.cli.cluster import cluster_app
 from wb.cli.portal import portal_app
+from wb.cli.report import report_app
 from wb.cli.stats import stats_app
 from wb.core.exceptions import WbCliError
 
@@ -37,6 +38,7 @@ app.add_typer(cluster_app, name='cluster', help='Search cluster management')
 app.add_typer(portal_app, name='portal', help='Seller portal operations')
 app.add_typer(analytics_app, name='analytics', help='Analytics operations')
 app.add_typer(optimize_app, name='optimize', help='Optimization workflows')
+app.add_typer(report_app, name='report', help='Reports (warehouse, orders, sales)')
 app.add_typer(cache_app, name='cache', help='Local snapshot cache')
 
 

@@ -46,6 +46,7 @@ python -m wb auth --help
 | 0.7.0 | Phase 6 - Agent platform support (SDK) |
 | 0.8.0 | Phase 7 - Local SQLite cache |
 | 0.9.0 | Agent Fixes - JSON errors, per-NM stats, shared helpers |
+| 0.10.0 | Phase 8A - Warehouse inventory reports |
 
 ## Project Layout
 

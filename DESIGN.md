@@ -76,6 +76,9 @@ wb analytics search-report main / groups
 wb analytics sales-funnel products
 wb analytics csv create / list / download
 
+# Reports (Phase 8A+)
+wb report warehouse create / status / download / top
+
 # Optimization (Phase 5)
 wb optimize plan / run / clusters / budget / negatives / portfolio
 ```

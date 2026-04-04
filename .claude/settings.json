@@ -13,7 +13,8 @@
       "Bash(grep -r \"for.*self\\\\._client\\\\.\" /d/teocci/code/python/py-wb-cli/src/wb/services/*.py)",
       "Bash(xargs ls:*)",
       "Bash(grep *)",
-      "Bash(grep -n \"DisplayFormat\\\\|output.*format\\\\|--json\" /d/teocci/code/python/py-wb-cli/src/wb/cli/*.py)"
+      "Bash(grep -n \"DisplayFormat\\\\|output.*format\\\\|--json\" /d/teocci/code/python/py-wb-cli/src/wb/cli/*.py)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_statistics_client.py tests/unit/test_stock_runway_models.py tests/unit/test_stock_runway_service.py tests/unit/test_cli_stock_runway.py -v)"
     ]
   }
 }

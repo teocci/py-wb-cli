@@ -66,6 +66,19 @@ __all__ = [
     'EP_CSV_LIST',
     'EP_CSV_RETRY',
     'EP_CSV_DOWNLOAD',
+    'EP_STOCKS_WB_WAREHOUSES',
+    'EP_WAREHOUSE_REMAINS_CREATE',
+    'EP_WAREHOUSE_REMAINS_STATUS',
+    'EP_WAREHOUSE_REMAINS_DOWNLOAD',
+    'REPORT_POLL_INTERVAL',
+    'REPORT_POLL_TIMEOUT',
+    'STATISTICS_BASE_URL',
+    'EP_STATISTICS_SALES',
+    'RUNWAY_ALERT_CRITICAL_DAYS',
+    'RUNWAY_ALERT_LOW_DAYS',
+    'RUNWAY_CONFIDENCE_HIGH_DAYS',
+    'RUNWAY_CONFIDENCE_MEDIUM_DAYS',
+    'EXCLUDED_WAREHOUSE_PREFIXES',
 ]
 
 from enum import IntEnum
@@ -73,6 +86,7 @@ from enum import IntEnum
 # ── API base URLs ──────────────────────────────────────────────────────
 PROMOTION_BASE_URL = 'https://advert-api.wildberries.ru'
 ANALYTICS_BASE_URL = 'https://seller-analytics-api.wildberries.ru'
+STATISTICS_BASE_URL = 'https://statistics-api.wildberries.ru'
 COMMON_API_BASE_URL = 'https://common-api.wildberries.ru'
 
 # ── Seller portal base URLs ──────────────────────────────────────────
@@ -176,6 +190,31 @@ EP_CSV_CREATE = '/api/v2/nm-report/downloads'
 EP_CSV_LIST = '/api/v2/nm-report/downloads'
 EP_CSV_RETRY = '/api/v2/nm-report/downloads/retry'
 EP_CSV_DOWNLOAD = '/api/v2/nm-report/downloads/file'
+
+# ── Stocks Report API endpoint paths ────────────────────────────────
+# Source: docs/swagger/11-analytics.yaml
+EP_STOCKS_WB_WAREHOUSES = '/api/analytics/v1/stocks-report/wb-warehouses'
+
+# ── Warehouse Remains Report endpoint paths ─────────────────────────
+# Source: docs/swagger/12-reports.yaml (async 3-step: create → poll → download)
+EP_WAREHOUSE_REMAINS_CREATE = '/api/v1/warehouse_remains'
+EP_WAREHOUSE_REMAINS_STATUS = '/api/v1/warehouse_remains/tasks'
+EP_WAREHOUSE_REMAINS_DOWNLOAD = '/api/v1/warehouse_remains/tasks'
+
+# ── Report polling defaults ─────────────────────────────────────────
+REPORT_POLL_INTERVAL = 5.0
+REPORT_POLL_TIMEOUT = 120.0
+
+# ── Statistics API endpoint paths ────────────────────────────────────
+# Source: statistics-api.wildberries.ru
+EP_STATISTICS_SALES = '/api/v1/supplier/sales'
+
+# ── Stock runway thresholds ──────────────────────────────────────────
+RUNWAY_ALERT_CRITICAL_DAYS = 7
+RUNWAY_ALERT_LOW_DAYS = 14
+RUNWAY_CONFIDENCE_HIGH_DAYS = 20
+RUNWAY_CONFIDENCE_MEDIUM_DAYS = 10
+EXCLUDED_WAREHOUSE_PREFIXES = ('В пути', 'Всего')
 
 # ── Seller portal endpoint paths ─────────────────────────────────────
 EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'

@@ -6,7 +6,7 @@ from wb.auth.profiles import ProfileStore
 from wb.client.http import WbHttpClient
 from wb.client.promotion import PromotionClient
 from wb.core.config import Settings
-from wb.core.constants import ANALYTICS_BASE_URL, PROMOTION_BASE_URL
+from wb.core.constants import ANALYTICS_BASE_URL, PROMOTION_BASE_URL, STATISTICS_BASE_URL
 from wb.storage.audit import AuditLogger
 
 __all__ = [
@@ -23,6 +23,10 @@ __all__ = [
     'create_optimizer_service',
     'create_cache_store',
     'create_cache_service',
+    'create_reports_client',
+    'create_reports_service',
+    'create_statistics_client',
+    'create_stock_runway_service',
 ]
 
 
@@ -290,6 +294,67 @@ def _lazy_stats(client):
 def _lazy_budget(client):
     from wb.services.budgets import BudgetService
     return BudgetService(client)
+
+
+# ── Reports factories ────────────────────────────────────────────────
+
+
+def create_reports_client(profile_name: str | None = None):
+    """Create a ReportsClient from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured ReportsClient instance.
+    """
+    from wb.client.reports import ReportsClient
+    token = _get_analytics_token(profile_name)
+    http = WbHttpClient(base_url=ANALYTICS_BASE_URL, token=token)
+    return ReportsClient(http)
+
+
+def create_reports_service(profile_name: str | None = None):
+    """Create a ReportsService from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured ReportsService instance.
+    """
+    from wb.services.reports import ReportsService
+    return ReportsService(create_reports_client(profile_name))
+
+
+def create_statistics_client(profile_name: str | None = None):
+    """Create a StatisticsClient using the analytics token.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured StatisticsClient instance.
+    """
+    from wb.client.statistics import StatisticsClient
+    token = _get_analytics_token(profile_name)
+    http = WbHttpClient(base_url=STATISTICS_BASE_URL, token=token)
+    return StatisticsClient(http)
+
+
+def create_stock_runway_service(profile_name: str | None = None):
+    """Create a ReportsService with a StatisticsClient for runway computation.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured ReportsService with statistics_client injected.
+    """
+    from wb.services.reports import ReportsService
+    reports_client = create_reports_client(profile_name)
+    stats_client = create_statistics_client(profile_name)
+    return ReportsService(reports_client, stats_client)
 
 
 # ── Cache factories ───────────────────────────────────────────────────

@@ -172,13 +172,60 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ---
 
+### Phase 8C — Report Caching & Multi-Seller Storage (v0.12.0)
+
+**Theme:** Eliminate repeated 30–120 s API round-trips for report commands and
+give each seller account its own isolated storage namespace.
+
+#### Key design invariant
+
+`WB_API_TOKEN` is unique per seller — only the owner can generate it.
+Therefore **Profile → Seller is a 1:1 mapping** and the profile name is the
+correct isolation key. No extra `seller_id` routing is required.
+`seller_id` appears only as optional metadata (display, audit).
+
+#### Storage layout (Option D — Hybrid)
+
+```
+~/.wb-cli/
+  profiles.json
+  cache.db                                    ← shared SQLite; report_cache table
+  <profile_name>/
+    reports/
+      warehouse_remains_YYYY-MM-DD.json       # raw API download, TTL-guarded
+      sales_<N>d_YYYY-MM-DD.json              # raw sales window, TTL-guarded
+```
+
+Raw report files are human-inspectable, easy to backup, and scoped per seller.
+The SQLite `report_cache` table stores metadata (`profile_name`, `seller_id`,
+`report_type`, `date`, `payload_path`, `computed_at`) so agents can query
+"show all sellers with critical runway today" without re-reading every file.
+
+#### Tasks
+
+| Task | Files | Description |
+|------|-------|-------------|
+| `seller_id` in profile (optional) | `auth/profiles.py` | Add optional `seller_id: str \| None` field — metadata only, never a routing key |
+| `reports_dir(profile_name)` | `core/config.py` | New `Settings` method returning `config_dir / profile_name / "reports"`, creates dir on first call |
+| Cache constants | `core/constants.py` | `REPORT_CACHE_TTL_HOURS = 6`, `REPORTS_DIR_NAME = 'reports'` |
+| `report_cache` table | `storage/cache.py` | New table: `(profile_name, seller_id, report_type, date, payload_path, computed_at)` |
+| File-cache read/write | `services/reports.py` | Before API call: check for same-day file ≤ TTL; after download: write JSON to `reports_dir` |
+| `--cache/--no-cache` flag | `cli/report.py` | Default `--cache`; `--no-cache` forces fresh API call; show `[cached]` label in non-JSON output |
+| Factory wiring | `services/_factory.py` | Pass `reports_dir` from `Settings` into `ReportsService` and `StatisticsClient` wrappers |
+| Tests | `tests/unit/` | `test_report_cache.py` — TTL logic, miss/hit, multi-profile isolation |
+
+---
+
 ## Version Scheme
 
 | Version | Milestone |
 |---------|-----------|
 | 0.9.0 | Phase 1 — Agent-critical fixes |
-| 0.10.0 | Phase 2 — Batch operations |
-| 0.11.0 | Phase 3 — Per-product cost tracking |
+| 0.10.0 | Phase 8A — Warehouse inventory reports |
+| 0.11.0 | Phase 8B — Stock runway (days-until-stockout) |
+| 0.12.0 | Phase 8C — Report caching & multi-seller storage |
+| 0.13.0 | Phase 2 — Batch operations |
+| 0.14.0 | Phase 3 — Per-product cost tracking |
 | 1.0.0 | Phase 4 — Composite commands (stable release) |
 | 1.1.0 | Phase 5 — Rate limiting & resilience |
 | 1.2.0 | Phase 6 — Polish & agent ergonomics |

@@ -14,8 +14,10 @@
 | 0.6.0 | Phase 5 | 2026-04-03 | Optimization workflows - recommendation engine, guarded apply |
 | 0.8.0 | Phase 7 | 2026-04-03 | Local SQLite cache - historical snapshots, wb budget history |
 | 0.9.0 | Agent Fixes | 2026-04-03 | Agent-critical fixes - JSON errors, per-NM stats, Campaign nm_ids |
+| 0.10.0 | Phase 8A | 2026-04-04 | Warehouse inventory reports — async report lifecycle + top products |
+| 0.11.0 | Phase 8B | 2026-04-04 | Stock runway — days-until-stockout via Statistics API sales velocity |
 
-## Current Version: 0.9.0
+## Current Version: 0.11.0
 
 ## Phase Status
 
@@ -30,6 +32,8 @@
 | 6 | Agent platform support | COMPLETED | 0.7.0 |
 | 7 | Local SQLite cache + historical snapshots | COMPLETED | 0.8.0 |
 | A1 | Agent-critical fixes | COMPLETED | 0.9.0 |
+| 8A | Warehouse inventory reports | COMPLETED | 0.10.0 |
+| 8B | Stock runway (days-until-stockout) | COMPLETED | 0.11.0 |
 
 ---
 
@@ -620,6 +624,101 @@ tests/unit/
 
 ---
 
+## Phase 8A - Warehouse Inventory Reports (v0.10.0) - COMPLETED
+
+### What was built
+
+- **New endpoint constants**: `EP_WAREHOUSE_REMAINS_CREATE`, `EP_WAREHOUSE_REMAINS_STATUS`, `EP_WAREHOUSE_REMAINS_DOWNLOAD`, `EP_STOCKS_WB_WAREHOUSES`, `REPORT_POLL_INTERVAL`, `REPORT_POLL_TIMEOUT`
+- **New domain models** (`domain/report_models.py`): 4 dataclasses — `WarehouseStock`, `WarehouseRemainItem`, `ReportTask`, `ProductStockSummary`
+- **New `ReportsClient`** (`client/reports.py`): Typed wrapper for async report lifecycle (create → status → download) on `seller-analytics-api.wildberries.ru`
+- **New `ReportsService`** (`services/reports.py`): Orchestrates 3-step report lifecycle with configurable poll loop (5s interval, 120s timeout), plus `get_warehouse_top()` convenience method for top-N product stock aggregation
+- **Factory functions**: `create_reports_client`, `create_reports_service` using analytics token chain
+- **4 CLI commands** under `wb report warehouse`:
+  - `wb report warehouse create` — create report task with groupBy/filter options
+  - `wb report warehouse status <task-id>` — check task status
+  - `wb report warehouse download <task-id>` — download completed report
+  - `wb report warehouse top [--limit 10]` — composite: create + poll + download + aggregate top products by stock
+
+### API endpoints integrated
+
+| Endpoint | Method | Server | Purpose | Rate Limit |
+|----------|--------|--------|---------|------------|
+| `/api/v1/warehouse_remains` | GET | seller-analytics-api | Create report task | 1/min |
+| `/api/v1/warehouse_remains/tasks/{id}/status` | GET | seller-analytics-api | Check task status | 1/5s |
+| `/api/v1/warehouse_remains/tasks/{id}/download` | GET | seller-analytics-api | Download report | 1/min |
+
+### Live test results (2026-04-04)
+
+- `wb report warehouse create --group-by-nm --json` — created task `7d9e82e7-4df0-4030-936d-0be38f269023`
+- Status polled from `new` → `done` in ~8 seconds
+- Downloaded 20 products with per-warehouse breakdown (Коледино, Казань, Электросталь, Краснодар, etc.)
+- `wb report warehouse top --limit 10` — successfully returned top 10 products sorted by total stock (651, 537, 435, 346, 346, 290, 278, 231, 224, 171 pieces)
+- Note: `groupByNm` alone returns empty brand/subject/vendor fields (WB API behavior — need additional groupBy flags for those)
+
+### File structure additions
+
+```
+src/wb/
+  domain/
+    report_models.py     # NEW: WarehouseStock, WarehouseRemainItem, ReportTask, ProductStockSummary
+  client/
+    reports.py           # NEW: ReportsClient (3 methods)
+  services/
+    reports.py           # NEW: ReportsService (5 methods + poll loop)
+    _factory.py          # +create_reports_client, create_reports_service
+  cli/
+    report.py            # NEW: 4 commands, warehouse sub-app
+    app.py               # +report_app registration
+  core/
+    constants.py         # +6 constants (endpoints + poll defaults)
+tests/unit/
+  test_report_models.py  # 14 tests
+  test_reports_client.py # 11 tests
+  test_reports_service.py # 15 tests
+  test_cli_report.py     # 10 tests
+```
+
+### Test results
+
+- **685 tests passed** (0 failures)
+- 50 new tests covering: domain models, client methods, service poll loop, top-N aggregation, CLI commands
+
+---
+
+## Phase 8B - Stock Runway (v0.11.0) - COMPLETED
+
+### What was built
+
+- `src/wb/client/statistics.py` — `StatisticsClient` wrapping `statistics-api.wildberries.ru/api/v1/supplier/sales`
+- `src/wb/domain/report_models.py` — Added `SaleRecord`, `WarehouseRunway`, `StockRunwayItem`, `StockRunwayReport`
+- `src/wb/services/reports.py` — Added `get_stock_runway()` method + helper functions:
+  - `_build_velocity_map()` — computes avg daily sales and sale-day counts per nm_id
+  - `_compute_runway_item()` — per-warehouse days-of-stock calculation
+  - `_runway_alert()` — critical (≤7d) / low (≤14d) alert classification
+  - `_runway_confidence()` — high/medium/low/none based on observed sale-days
+  - Transit warehouse exclusion (`'В пути'`, `'Всего'` prefixes filtered out)
+- `src/wb/services/_factory.py` — Added `create_statistics_client()`, `create_stock_runway_service()`
+- `src/wb/core/constants.py` — Added `STATISTICS_BASE_URL`, `EP_STATISTICS_SALES`, 5 runway threshold constants
+- `src/wb/cli/report.py` — Added `warehouse stock-runway` command with `--days` and `--json` options
+
+### Tests
+
+- `tests/unit/test_statistics_client.py` — 5 tests
+- `tests/unit/test_stock_runway_models.py` — 10 tests
+- `tests/unit/test_stock_runway_service.py` — 10 tests
+- `tests/unit/test_cli_stock_runway.py` — 8 tests
+
+**All 716 unit tests pass.**
+
+### Usage
+
+```bash
+wb report warehouse stock-runway --days 30 --json
+wb report warehouse stock-runway --days 14
+```
+
+---
+
 ## How to Continue
 
 1. Activate the virtual environment: `source .venv/Scripts/activate` (Windows) or `source .venv/bin/activate` (Linux/Mac)
@@ -627,4 +726,4 @@ tests/unit/
 3. Run tests: `pytest tests/unit/ -v`
 4. Run CLI: `python -m wb --help`
 5. Use Python SDK: `from wb.sdk import list_campaigns, clone_campaign; campaigns = list_campaigns(profile='my_profile')`
-6. All phases complete — the CLI is production-ready for human and agent operations
+6. All phases through 8B complete — the CLI is production-ready for human and agent operations
