@@ -34,6 +34,7 @@ __all__ = [
     'create_statistics_client',
     'create_stock_runway_service',
     'create_prices_service',
+    'create_product_service',
 ]
 
 
@@ -478,3 +479,42 @@ def create_prices_service(profile_name: str | None = None):
     token = _get_promotion_token(profile_name)
     http = WbHttpClient(base_url=PRICES_BASE_URL, token=token)
     return PricesService(PricesClient(http))
+
+
+def create_product_service(profile_name: str | None = None):
+    """Create a ProductService with all required and optional sub-services.
+
+    Mandatory sub-services use the promotion token.
+    Analytics and prices sub-services are best-effort: if no token is
+    available for them, those fields of the composite result stay zero.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured ProductService instance.
+    """
+    from wb.services.product import ProductService
+
+    client = create_promotion_client(profile_name)
+    analytics_svc = None
+    prices_svc = None
+
+    try:
+        analytics_svc = create_analytics_service(profile_name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        prices_svc = create_prices_service(profile_name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    return ProductService(
+        campaign_service=_lazy_campaign(client),
+        budget_service=_lazy_budget(client),
+        stats_service=_lazy_stats(client),
+        cluster_service=_lazy_cluster(client),
+        analytics_service=analytics_svc,
+        prices_service=prices_svc,
+    )

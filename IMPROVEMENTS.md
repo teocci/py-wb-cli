@@ -27,11 +27,11 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 | 0.13.0 | 8D | ✅ DONE | Prices & Discounts command | wb prices list | 2026-04-06 |
 | 0.14.0 | I-1 | ✅ DONE | Batch operations | multi-ID support, auto-chunking | 2026-04-06 |
 | 0.15.0 | I-2 | ✅ DONE | Per-product cost tracking | product-spend command | 2026-04-06 |
-| 1.0.0 | I-3 | ⏳ PENDING | Composite commands | product summary | TBD |
-| 1.1.0 | I-4 | ⏳ PENDING | Rate limiting & resilience | RateLimiter, backoff | TBD |
-| 1.2.0 | I-5 | ⏳ PENDING | Polish & ergonomics | --compact, cache-first | TBD |
+| 0.16.0 | I-3 | ✅ DONE | Composite commands | product summary, campaign overview | 2026-04-06 |
+| 0.17.0 | I-4 | ⏳ PENDING | Rate limiting & resilience | RateLimiter, backoff | TBD |
+| 0.18.0 | I-5 | ⏳ PENDING | Polish & ergonomics | --compact, cache-first | TBD |
 
-**Current:** v0.15.0 — **15 phases complete**, 3 planned. **840 tests passing**.
+**Current:** v0.16.0 — **16 phases complete**, 2 planned. **876 tests passing**.
 
 ---
 

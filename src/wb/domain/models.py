@@ -33,6 +33,8 @@ __all__ = [
     'PlacementConfig',
     'ProductPriceSize',
     'ProductPrice',
+    'ProductSummary',
+    'CampaignOverview',
 ]
 
 
@@ -627,6 +629,8 @@ class MutationResult:
         target_id: ID of the affected object.
         dry_run: True when the mutation was simulated only.
         message: Additional detail or confirmation message.
+        already_applied: True when the desired state was already active
+            and no API call was made (idempotent check).
     """
 
     success: bool
@@ -634,6 +638,7 @@ class MutationResult:
     target_id: str
     dry_run: bool = False
     message: str = ''
+    already_applied: bool = False
 
 
 @dataclass(slots=True)
@@ -911,3 +916,100 @@ class ProductPrice:
     def club_price(self) -> float:
         """WB Club member price from the first size."""
         return self.sizes[0].club_discounted_price if self.sizes else 0.0
+
+
+@dataclass(slots=True)
+class ProductSummary:
+    """Composite per-product snapshot combining ad spend, funnel, price, and placement data.
+
+    All optional data sources (prices, analytics) are best-effort: if the
+    underlying service is unavailable, the affected fields remain at their
+    default values rather than raising an error.
+
+    Attributes:
+        nm_id: WB nomenclature ID.
+        vendor_code: Seller's vendor/article code.
+        base_price: Pre-discount base price in rubles.
+        final_price: Buyer-facing price after seller discount.
+        discount: Seller discount percentage.
+        ad_spend: Total ad spend across all campaigns (rubles).
+        ad_views: Total ad impressions.
+        ad_clicks: Total ad clicks.
+        ad_orders: Total ad-attributed orders.
+        ad_avg_position: Average search position from booster stats.
+        open_count: Product page opens (analytics funnel).
+        cart_count: Add-to-cart events.
+        order_count: Orders from funnel analytics.
+        order_sum: Order value sum (rubles).
+        campaign_ids: IDs of campaigns containing this product.
+        cluster_count: Total search clusters across all campaigns.
+        active_cluster_count: Active search clusters across all campaigns.
+        currency: Currency code.
+    """
+
+    nm_id: int
+    vendor_code: str = ''
+    base_price: float = 0.0
+    final_price: float = 0.0
+    discount: int = 0
+    ad_spend: float = 0.0
+    ad_views: int = 0
+    ad_clicks: int = 0
+    ad_orders: int = 0
+    ad_avg_position: float = 0.0
+    open_count: int = 0
+    cart_count: int = 0
+    order_count: int = 0
+    order_sum: int = 0
+    campaign_ids: list[int] = field(default_factory=list)
+    cluster_count: int = 0
+    active_cluster_count: int = 0
+    currency: str = 'RUB'
+
+
+@dataclass(slots=True)
+class CampaignOverview:
+    """Composite campaign snapshot combining details, budget, stats, and cluster data.
+
+    Budget and stats fields are best-effort: if the underlying service call
+    fails, the affected fields remain at their default values.
+
+    Attributes:
+        campaign_id: Campaign identifier.
+        name: Campaign display name.
+        status: Current lifecycle status.
+        campaign_type: Type of campaign.
+        nm_ids: Product NM IDs included in this campaign.
+        total_budget: Total allocated budget in kopecks.
+        cash: Cash portion of the budget in kopecks.
+        netting: Netting portion of the budget in kopecks.
+        views: Total impressions for the date range.
+        clicks: Total clicks for the date range.
+        ctr: Click-through rate.
+        orders: Total orders attributed.
+        spend: Total spend in rubles.
+        cpc: Cost per click.
+        nm_stats: Per-product breakdown.
+        cluster_count: Total search clusters.
+        active_cluster_count: Active search clusters.
+        currency: Currency code.
+    """
+
+    campaign_id: int
+    name: str
+    status: CampaignStatus
+    campaign_type: CampaignType
+    nm_ids: list[int] = field(default_factory=list)
+    total_budget: int = 0
+    cash: int = 0
+    netting: int = 0
+    views: int = 0
+    clicks: int = 0
+    ctr: float = 0.0
+    orders: int = 0
+    spend: float = 0.0
+    cpc: float = 0.0
+    nm_stats: list[NmStats] = field(default_factory=list)
+    cluster_count: int = 0
+    active_cluster_count: int = 0
+    currency: str = 'RUB'

@@ -9,9 +9,12 @@ from __future__ import annotations
 
 from wb.domain.models import (
     CampaignCreate,
+    CampaignOverview,
     ClusterBidMutation,
     MutationResult,
+    NmStats,
     OptimizationDecision,
+    ProductSummary,
 )
 from wb.services._factory import (
     create_campaign_service,
@@ -19,6 +22,9 @@ from wb.services._factory import (
     create_cluster_service,
     create_optimizer_service,
     create_bid_service,
+    create_stats_service,
+    create_prices_service,
+    create_product_service,
 )
 
 __all__ = [
@@ -29,6 +35,8 @@ __all__ = [
     'start_campaign',
     'pause_campaign',
     'stop_campaign',
+    'rename_campaign',
+    'delete_campaign',
     'get_balance',
     'get_budget',
     'topup_budget',
@@ -43,6 +51,11 @@ __all__ = [
     'plan_all',
     'apply_clusters',
     'apply_all',
+    'get_campaign_stats',
+    'get_product_spend',
+    'get_prices',
+    'product_summary',
+    'campaign_overview',
 ]
 
 
@@ -499,3 +512,156 @@ def apply_all(
     """
     svc = create_optimizer_service(profile)
     return svc.apply_all(campaign_id, nm_id, date_from, date_to, dry_run=dry_run)
+
+
+def rename_campaign(
+        campaign_id: int,
+        name: str,
+        dry_run: bool = False,
+        profile: str | None = None,
+) -> MutationResult:
+    """Rename a campaign.
+
+    Args:
+        campaign_id: Campaign identifier.
+        name: New campaign name.
+        dry_run: If True, simulate without executing.
+        profile: Profile name, or None for active profile.
+
+    Returns:
+        MutationResult with success status and message.
+    """
+    svc = create_campaign_service(profile)
+    return svc.rename_campaign(campaign_id, name, dry_run=dry_run)
+
+
+def delete_campaign(
+        campaign_id: int,
+        dry_run: bool = False,
+        profile: str | None = None,
+) -> MutationResult:
+    """Delete a campaign.
+
+    Args:
+        campaign_id: Campaign identifier.
+        dry_run: If True, simulate without executing.
+        profile: Profile name, or None for active profile.
+
+    Returns:
+        MutationResult with success status and message.
+    """
+    svc = create_campaign_service(profile)
+    return svc.delete_campaign(campaign_id, dry_run=dry_run)
+
+
+# ── Stats operations ─────────────────────────────────────────────────────
+
+
+def get_campaign_stats(
+        campaign_id: int,
+        date_from: str,
+        date_to: str,
+        profile: str | None = None,
+):
+    """Retrieve aggregated stats for a single campaign.
+
+    Args:
+        campaign_id: Campaign identifier.
+        date_from: Start date (YYYY-MM-DD).
+        date_to: End date (YYYY-MM-DD).
+        profile: Profile name, or None for active profile.
+
+    Returns:
+        CampaignStats domain object.
+    """
+    svc = create_stats_service(profile)
+    return svc.get_campaign_stats(campaign_id, date_from, date_to)
+
+
+def get_product_spend(
+        nm_ids: list[int],
+        date_from: str,
+        date_to: str,
+        profile: str | None = None,
+) -> list[NmStats]:
+    """Aggregate ad spend per NM ID across all campaigns.
+
+    Args:
+        nm_ids: List of product NM IDs.
+        date_from: Start date (YYYY-MM-DD).
+        date_to: End date (YYYY-MM-DD).
+        profile: Profile name, or None for active profile.
+
+    Returns:
+        List of NmStats sorted by spend descending.
+    """
+    svc = create_stats_service(profile)
+    return svc.get_product_spend(nm_ids, date_from, date_to)
+
+
+def get_prices(
+        nm_ids: list[int] | None = None,
+        profile: str | None = None,
+):
+    """Retrieve product prices and discounts.
+
+    Args:
+        nm_ids: Optional list of NM IDs to filter.
+        profile: Profile name, or None for active profile.
+
+    Returns:
+        List of ProductPrice domain objects.
+    """
+    svc = create_prices_service(profile)
+    return svc.get_prices(nm_ids=nm_ids)
+
+
+# ── Composite operations ─────────────────────────────────────────────────
+
+
+def product_summary(
+        nm_ids: list[int],
+        date_from: str,
+        date_to: str,
+        profile: str | None = None,
+) -> list[ProductSummary]:
+    """Composite per-product snapshot in one aggregated call.
+
+    Combines ad spend, prices, sales funnel, and cluster placement data.
+    Analytics and price data are best-effort (zero when token unavailable).
+
+    Args:
+        nm_ids: Product NM IDs to summarise.
+        date_from: Start date (YYYY-MM-DD).
+        date_to: End date (YYYY-MM-DD).
+        profile: Profile name, or None for active profile.
+
+    Returns:
+        List of ProductSummary, one per requested NM ID.
+    """
+    svc = create_product_service(profile)
+    return svc.get_product_summary(nm_ids, date_from, date_to)
+
+
+def campaign_overview(
+        campaign_id: int,
+        date_from: str,
+        date_to: str,
+        profile: str | None = None,
+) -> CampaignOverview:
+    """Composite campaign snapshot in one aggregated call.
+
+    Combines campaign details, budget, stats, per-NM breakdown,
+    and cluster counts. Budget and stats are best-effort (zero on error).
+
+    Args:
+        campaign_id: Campaign identifier.
+        date_from: Start date (YYYY-MM-DD).
+        date_to: End date (YYYY-MM-DD).
+        profile: Profile name, or None for active profile.
+
+    Returns:
+        CampaignOverview domain object.
+    """
+    svc = create_product_service(profile)
+    return svc.get_campaign_overview(campaign_id, date_from, date_to)

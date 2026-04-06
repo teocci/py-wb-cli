@@ -542,3 +542,108 @@ def campaign_set_placements(
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
+
+
+@campaign_app.command('overview')
+def campaign_overview(
+        ctx: typer.Context,
+        campaign_id: int = typer.Argument(..., help='Campaign ID'),
+        days: int = typer.Option(
+            7, '--days', help='Number of days to look back for stats',
+        ),
+) -> None:
+    """Composite campaign snapshot in one call.
+
+    Returns campaign details, budget, stats for the given date range,
+    per-NM breakdown, and active/total cluster counts.
+    Budget and stats are best-effort: if unavailable those fields show zero.
+    """
+    import json
+    from dataclasses import asdict as _asdict
+    from datetime import date as _date, timedelta
+    from wb.services._factory import create_product_service
+
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx)
+    date_to = _date.today().strftime('%Y-%m-%d')
+    date_from = (_date.today() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    try:
+        svc = create_product_service(profile)
+    except Exception as exc:
+        renderer.error(str(exc))
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    try:
+        overview = svc.get_campaign_overview(campaign_id, date_from, date_to)
+    except Exception as exc:
+        renderer.error(str(exc))
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
+
+    if renderer.is_json:
+        typer.echo(json.dumps(_asdict(overview), indent=2, ensure_ascii=False))
+        return
+
+    _render_campaign_overview(overview, date_from, date_to)
+
+
+def _render_campaign_overview(overview, date_from: str, date_to: str) -> None:
+    """Render CampaignOverview as Rich tables."""
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+
+    header = Table(
+        title=f'Campaign {overview.campaign_id} Overview ({date_from} \u2192 {date_to})',
+        show_header=False, show_lines=False, box=None,
+    )
+    header.add_column('Field', style='dim', min_width=16)
+    header.add_column('Value', style='cyan')
+    header.add_row('Name', overview.name)
+    header.add_row('Status', overview.status.name)
+    header.add_row('Type', overview.campaign_type.name)
+    header.add_row('NM IDs', ', '.join(str(n) for n in overview.nm_ids) or 'none')
+    header.add_row('Budget (total)', f'{overview.total_budget:,} kopecks')
+    header.add_row('Budget (cash)', f'{overview.cash:,} kopecks')
+    console.print(header)
+
+    stats = Table(title='Ad Stats', show_lines=False)
+    stats.add_column('Views', justify='right')
+    stats.add_column('Clicks', justify='right')
+    stats.add_column('CTR', justify='right')
+    stats.add_column('Orders', justify='right')
+    stats.add_column('Spend (\u20bd)', justify='right', style='magenta')
+    stats.add_column('CPC', justify='right')
+    stats.add_column('Clusters', justify='right')
+    stats.add_row(
+        str(overview.views),
+        str(overview.clicks),
+        f'{overview.ctr:.2f}%',
+        str(overview.orders),
+        f'{overview.spend:,.2f}',
+        f'{overview.cpc:,.2f}',
+        f'{overview.active_cluster_count}/{overview.cluster_count}',
+    )
+    console.print(stats)
+
+    if not overview.nm_stats:
+        return
+
+    nm_table = Table(title='Per-Product Breakdown', show_lines=False)
+    nm_table.add_column('NM ID', style='cyan', justify='right')
+    nm_table.add_column('Views', justify='right')
+    nm_table.add_column('Clicks', justify='right')
+    nm_table.add_column('Orders', justify='right')
+    nm_table.add_column('Spend (\u20bd)', justify='right', style='magenta')
+    nm_table.add_column('Avg Pos', justify='right')
+    for nm in overview.nm_stats:
+        nm_table.add_row(
+            str(nm.nm_id),
+            str(nm.views),
+            str(nm.clicks),
+            str(nm.orders),
+            f'{nm.spend:,.2f}',
+            f'{nm.avg_position:.1f}' if nm.avg_position else '\u2014',
+        )
+    console.print(nm_table)

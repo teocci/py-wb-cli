@@ -20,9 +20,23 @@ def mock_client():
     return MagicMock()
 
 
+_PAUSED_RAW = {
+    'id': 1, 'status': 11, 'type': 9, 'bid_type': 'manual', 'currency': 'RUB',
+    'settings': {'name': 'Test', 'payment_type': 'cpm'},
+    'timestamps': {}, 'nm_settings': [],
+}
+_RUNNING_RAW = {**_PAUSED_RAW, 'status': 9}
+_READY_RAW = {**_PAUSED_RAW, 'status': 4}
+
+
 @pytest.fixture()
 def campaign_svc(mock_client):
-    """Create a CampaignService with mock client."""
+    """Create a CampaignService with mock client.
+
+    get_campaign returns a PAUSED campaign by default so idempotency
+    checks proceed to call the API (not short-circuit with already_applied).
+    """
+    mock_client.get_campaign.return_value = _PAUSED_RAW
     return CampaignService(mock_client)
 
 
@@ -61,6 +75,8 @@ class TestCampaignServicePause:
     """Tests for CampaignService.pause_campaign()."""
 
     def test_calls_client(self, campaign_svc, mock_client):
+        # Return a RUNNING campaign so the idempotency check proceeds to call the API
+        mock_client.get_campaign.return_value = _RUNNING_RAW
         campaign_svc.pause_campaign(2)
         mock_client.pause_campaign.assert_called_once_with(2)
 
@@ -74,6 +90,8 @@ class TestCampaignServiceStop:
     """Tests for CampaignService.stop_campaign()."""
 
     def test_calls_client(self, campaign_svc, mock_client):
+        # Return a RUNNING campaign so the idempotency check proceeds to call the API
+        mock_client.get_campaign.return_value = _RUNNING_RAW
         campaign_svc.stop_campaign(3)
         mock_client.stop_campaign.assert_called_once_with(3)
 

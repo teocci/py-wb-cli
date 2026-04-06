@@ -27,7 +27,10 @@
       "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\([d['nm_id'] for d in data[:3]]\\)\")",
       "Bash(.venv/Scripts/python -c ':*)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_stats_product_spend.py -v)",
-      "Bash(.venv/Scripts/python -m pytest tests/unit/test_cli_stats.py tests/unit/test_stats_product_spend.py -v --tb=short)"
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_cli_stats.py tests/unit/test_stats_product_spend.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_product_service.py -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=short -q)",
+      "Bash(.venv/Scripts/python -m pytest tests/integration/test_composite_read.py -v)"
     ]
   }
 }

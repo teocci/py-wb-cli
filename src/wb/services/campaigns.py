@@ -116,6 +116,9 @@ class CampaignService:
     ) -> MutationResult:
         """Start a campaign.
 
+        Idempotent: if the campaign is already RUNNING the API is not called
+        and MutationResult.already_applied is set to True.
+
         Args:
             campaign_id: Target campaign identifier.
             dry_run: If True, plan without executing.
@@ -129,6 +132,12 @@ class CampaignService:
                 success=True, action=action, target_id=str(campaign_id),
                 dry_run=True, message='Would start campaign',
             )
+        campaign = self.get_campaign(campaign_id)
+        if campaign.status == CampaignStatus.RUNNING:
+            return MutationResult(
+                success=True, action=action, target_id=str(campaign_id),
+                already_applied=True, message='Campaign already running',
+            )
         self._client.start_campaign(campaign_id)
         return MutationResult(
             success=True, action=action, target_id=str(campaign_id),
@@ -139,6 +148,9 @@ class CampaignService:
             self, campaign_id: int, dry_run: bool = False,
     ) -> MutationResult:
         """Pause a running campaign.
+
+        Idempotent: if the campaign is already PAUSED the API is not called
+        and MutationResult.already_applied is set to True.
 
         Args:
             campaign_id: Target campaign identifier.
@@ -153,6 +165,12 @@ class CampaignService:
                 success=True, action=action, target_id=str(campaign_id),
                 dry_run=True, message='Would pause campaign',
             )
+        campaign = self.get_campaign(campaign_id)
+        if campaign.status == CampaignStatus.PAUSED:
+            return MutationResult(
+                success=True, action=action, target_id=str(campaign_id),
+                already_applied=True, message='Campaign already paused',
+            )
         self._client.pause_campaign(campaign_id)
         return MutationResult(
             success=True, action=action, target_id=str(campaign_id),
@@ -163,6 +181,9 @@ class CampaignService:
             self, campaign_id: int, dry_run: bool = False,
     ) -> MutationResult:
         """Stop (archive) a campaign.
+
+        Idempotent: if the campaign is already in READY (stopped) state the
+        API is not called and MutationResult.already_applied is set to True.
 
         Args:
             campaign_id: Target campaign identifier.
@@ -176,6 +197,12 @@ class CampaignService:
             return MutationResult(
                 success=True, action=action, target_id=str(campaign_id),
                 dry_run=True, message='Would stop campaign',
+            )
+        campaign = self.get_campaign(campaign_id)
+        if campaign.status == CampaignStatus.READY:
+            return MutationResult(
+                success=True, action=action, target_id=str(campaign_id),
+                already_applied=True, message='Campaign already stopped',
             )
         self._client.stop_campaign(campaign_id)
         return MutationResult(
@@ -242,8 +269,8 @@ class CampaignService:
     ) -> list[MutationResult]:
         """Start multiple campaigns, collecting per-campaign results.
 
-        Calls start_campaign for each ID. Failures for individual campaigns
-        are captured in the result list without aborting the rest.
+        Fetches all campaign states in one list call, short-circuits any
+        that are already RUNNING (already_applied=True), then starts the rest.
 
         Args:
             campaign_ids: Target campaign identifiers.
@@ -252,13 +279,27 @@ class CampaignService:
         Returns:
             List of MutationResult, one per campaign_id.
         """
+        if dry_run:
+            return [self.start_campaign(cid, dry_run=True) for cid in campaign_ids]
+        status_map = self._fetch_status_map(campaign_ids)
         results: list[MutationResult] = []
         for cid in campaign_ids:
+            action = f'start campaign {cid}'
+            if status_map.get(cid) == CampaignStatus.RUNNING:
+                results.append(MutationResult(
+                    success=True, action=action, target_id=str(cid),
+                    already_applied=True, message='Campaign already running',
+                ))
+                continue
             try:
-                results.append(self.start_campaign(cid, dry_run=dry_run))
+                self._client.start_campaign(cid)
+                results.append(MutationResult(
+                    success=True, action=action, target_id=str(cid),
+                    message='Campaign started',
+                ))
             except WbCliError as exc:
                 results.append(MutationResult(
-                    success=False, action=f'start campaign {cid}',
+                    success=False, action=action,
                     target_id=str(cid), message=str(exc),
                 ))
         return results
@@ -270,6 +311,9 @@ class CampaignService:
     ) -> list[MutationResult]:
         """Pause multiple campaigns, collecting per-campaign results.
 
+        Fetches all campaign states in one list call, short-circuits any
+        that are already PAUSED (already_applied=True), then pauses the rest.
+
         Args:
             campaign_ids: Target campaign identifiers.
             dry_run: If True, plan without executing.
@@ -277,13 +321,27 @@ class CampaignService:
         Returns:
             List of MutationResult, one per campaign_id.
         """
+        if dry_run:
+            return [self.pause_campaign(cid, dry_run=True) for cid in campaign_ids]
+        status_map = self._fetch_status_map(campaign_ids)
         results: list[MutationResult] = []
         for cid in campaign_ids:
+            action = f'pause campaign {cid}'
+            if status_map.get(cid) == CampaignStatus.PAUSED:
+                results.append(MutationResult(
+                    success=True, action=action, target_id=str(cid),
+                    already_applied=True, message='Campaign already paused',
+                ))
+                continue
             try:
-                results.append(self.pause_campaign(cid, dry_run=dry_run))
+                self._client.pause_campaign(cid)
+                results.append(MutationResult(
+                    success=True, action=action, target_id=str(cid),
+                    message='Campaign paused',
+                ))
             except WbCliError as exc:
                 results.append(MutationResult(
-                    success=False, action=f'pause campaign {cid}',
+                    success=False, action=action,
                     target_id=str(cid), message=str(exc),
                 ))
         return results
@@ -295,6 +353,9 @@ class CampaignService:
     ) -> list[MutationResult]:
         """Stop multiple campaigns, collecting per-campaign results.
 
+        Fetches all campaign states in one list call, short-circuits any
+        that are already READY/stopped (already_applied=True), then stops rest.
+
         Args:
             campaign_ids: Target campaign identifiers.
             dry_run: If True, plan without executing.
@@ -302,13 +363,27 @@ class CampaignService:
         Returns:
             List of MutationResult, one per campaign_id.
         """
+        if dry_run:
+            return [self.stop_campaign(cid, dry_run=True) for cid in campaign_ids]
+        status_map = self._fetch_status_map(campaign_ids)
         results: list[MutationResult] = []
         for cid in campaign_ids:
+            action = f'stop campaign {cid}'
+            if status_map.get(cid) == CampaignStatus.READY:
+                results.append(MutationResult(
+                    success=True, action=action, target_id=str(cid),
+                    already_applied=True, message='Campaign already stopped',
+                ))
+                continue
             try:
-                results.append(self.stop_campaign(cid, dry_run=dry_run))
+                self._client.stop_campaign(cid)
+                results.append(MutationResult(
+                    success=True, action=action, target_id=str(cid),
+                    message='Campaign stopped',
+                ))
             except WbCliError as exc:
                 results.append(MutationResult(
-                    success=False, action=f'stop campaign {cid}',
+                    success=False, action=action,
                     target_id=str(cid), message=str(exc),
                 ))
         return results
@@ -425,3 +500,24 @@ class CampaignService:
             success=True, action=action, target_id=str(campaign_id),
             message='Placements updated',
         )
+
+    # ── Private helpers ────────────────────────────────────────────────
+
+    def _fetch_status_map(
+            self, campaign_ids: list[int],
+    ) -> dict[int, CampaignStatus]:
+        """Fetch current status for a set of campaign IDs in one list call.
+
+        Args:
+            campaign_ids: Campaign IDs to look up.
+
+        Returns:
+            Dict mapping campaign_id → CampaignStatus for found campaigns.
+        """
+        id_set = set(campaign_ids)
+        all_raw = self._client.list_campaigns(ids=campaign_ids)
+        return {
+            c['id']: CampaignStatus(c['status'])
+            for c in all_raw
+            if c['id'] in id_set
+        }

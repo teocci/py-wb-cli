@@ -54,9 +54,9 @@ Phase naming: `N` = core implementation · `NA` = sub-phase of N · `F-N` = fix 
 | 0.13.0 | 8D | Prices & Discounts command |
 | 0.14.0 | I-1 | Batch operations — multi-ID, auto-chunking, --fields |
 | 0.15.0 | I-2 | Per-product cost tracking — product-spend, booster stats |
-| 1.0.0 | I-3 | Composite commands (stable release) |
-| 1.1.0 | I-4 | Rate limiting & resilience |
-| 1.2.0 | I-5 | Polish & agent ergonomics |
+| 0.16.0 | I-3 | Composite commands (stable release) |
+| 0.17.0 | I-4 | Rate limiting & resilience |
+| 0.18.0 | I-5 | Polish & agent ergonomics |
 
 ## Project Layout
 

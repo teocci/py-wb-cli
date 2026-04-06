@@ -4,14 +4,14 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.15.0 | ✅ Latest |
-| **Phases Complete** | 15/18 | 83% |
-| **Tests Passing** | 840/840 | ✅ 100% |
+| **Current Version** | 0.16.0 | ✅ Latest |
+| **Phases Complete** | 16/18 | 89% |
+| **Tests Passing** | 876/876 | ✅ 100% |
 | **API Fixes** | 10/10 | ✅ Complete |
-| **Commands** | 20+ | ✅ Ready |
-| **Core Files** | 46+ | ✅ Stable |
-| **Latest Feature** | Per-Product Cost Tracking | ✅ 2026-04-06 |
-| **Agent-Ready** | YES | ✅ JSON mode, auto-pagination, multi-ID support, --fields filtering |
+| **Commands** | 22+ | ✅ Ready |
+| **Core Files** | 49+ | ✅ Stable |
+| **Latest Feature** | Composite Commands (product summary, campaign overview) | ✅ 2026-04-06 |
+| **Agent-Ready** | YES | ✅ JSON mode, composite reads, idempotent mutations, --fields filtering |
 
 ### Command Groups Available
 
@@ -28,6 +28,7 @@
 | `analytics` | sales-funnel, search-report, csv | ✅ Ready | `wb analytics sales-funnel products --from 2026-04-01` |
 | `optimize` | recommend, apply | ✅ Ready | `wb optimize recommend --dry-run` |
 | `report` | warehouse, cache | ✅ Ready | `wb report warehouse stock-runway` |
+| `product` | summary | ✅ Ready | `wb product summary --nms 100525085,227403075 --json` |
 
 ---
 
@@ -51,8 +52,9 @@
 | 0.13.0 | 8D | 2026-04-06 | Prices & Discounts command — base price, discount %, final buyer price via discounts-prices-api |
 | 0.14.0 | I-1 | 2026-04-06 | Batch operations — N+1 elimination, --ids multi-campaign, --bids inline JSON, auto-chunk analytics, --fields output filtering |
 | 0.15.0 | I-2 | 2026-04-06 | Per-product cost tracking — wb stats product-spend, booster avg_position, fullstats auto-chunking, stats cache write-through |
+| 0.16.0 | I-3 | 2026-04-06 | Composite commands — wb product summary, wb campaign overview, idempotent mutations, SDK parity (rename, delete, stats, prices) |
 
-## Current Version: 0.15.0
+## Current Version: 0.16.0
 
 ## Phase Status
 
@@ -75,9 +77,9 @@
 | 8D | Prices & Discounts command | COMPLETED | 0.13.0 |
 | I-1 | Batch operations — multi-ID, auto-chunking, --fields | COMPLETED | 0.14.0 |
 | I-2 | Per-product cost tracking — product-spend, booster stats | COMPLETED | 0.15.0 |
-| I-3 | Composite commands — product summary (1 call = all data) | PENDING | 1.0.0 |
-| I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | PENDING | 1.1.0 |
-| I-5 | Polish & ergonomics — --compact, cache-first, AGENT.md | PENDING | 1.2.0 |
+| I-3 | Composite commands — product summary (1 call = all data) | PENDING | 0.16.0 |
+| I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | PENDING | 0.17.0 |
+| I-5 | Polish & ergonomics — --compact, cache-first, AGENT.md | PENDING | 0.18.0 |
 
 ---
 

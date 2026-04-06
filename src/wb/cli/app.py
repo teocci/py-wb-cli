@@ -19,6 +19,7 @@ from wb.cli.campaign import campaign_app
 from wb.cli.cluster import cluster_app
 from wb.cli.portal import portal_app
 from wb.cli.prices import prices_app
+from wb.cli.product import product_app
 from wb.cli.report import report_app
 from wb.cli.stats import stats_app
 from wb.core.exceptions import WbCliError
@@ -42,6 +43,7 @@ app.add_typer(analytics_app, name='analytics', help='Analytics operations')
 app.add_typer(optimize_app, name='optimize', help='Optimization workflows')
 app.add_typer(report_app, name='report', help='Reports (warehouse, orders, sales)')
 app.add_typer(cache_app, name='cache', help='Local snapshot cache')
+app.add_typer(product_app, name='product', help='Product summary and analysis')
 
 
 def _configure_logging(verbose: bool = False) -> None:
