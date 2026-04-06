@@ -6,7 +6,7 @@ from dataclasses import asdict
 
 import typer
 
-from wb.cli._helpers import get_profile, get_renderer
+from wb.cli._helpers import get_fields, get_profile, get_renderer
 
 optimize_app = typer.Typer(
     help='Optimization workflows (recommendation-first)',
@@ -31,10 +31,16 @@ def _confirm_apply(renderer: OutputRenderer, count: int, yes: bool) -> None:
         raise typer.Abort()
 
 
-def _render_decisions(renderer: OutputRenderer, decisions, title: str) -> None:
+def _render_decisions(
+        ctx: typer.Context,
+        renderer: OutputRenderer,
+        decisions,
+        title: str,
+) -> None:
     """Render a list of optimization decisions.
 
     Args:
+        ctx: Typer context carrying global options.
         renderer: Output renderer.
         decisions: List of OptimizationDecision objects.
         title: Table title.
@@ -48,13 +54,18 @@ def _render_decisions(renderer: OutputRenderer, decisions, title: str) -> None:
         'Action', 'Target', 'ID', 'Current', 'Proposed',
         'Confidence', 'Reason',
     ]
-    renderer.display(data, headers=headers, title=title)
+    renderer.display(data, headers=headers, title=title, fields=get_fields(ctx))
 
 
-def _render_results(renderer: OutputRenderer, results) -> None:
+def _render_results(
+        ctx: typer.Context,
+        renderer: OutputRenderer,
+        results,
+) -> None:
     """Render apply results.
 
     Args:
+        ctx: Typer context carrying global options.
         renderer: Output renderer.
         results: List of MutationResult objects.
     """
@@ -64,7 +75,7 @@ def _render_results(renderer: OutputRenderer, results) -> None:
 
     success_count = sum(1 for r in results if r.success)
     data = [asdict(r) for r in results]
-    renderer.display(data, headers=[], title='Applied Results')
+    renderer.display(data, headers=[], title='Applied Results', fields=get_fields(ctx))
     renderer.success(f'Applied {success_count}/{len(results)} decision(s)')
 
 
@@ -91,7 +102,7 @@ def optimize_plan(
     renderer = get_renderer(ctx)
     svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_all(campaign_id, nm_id, date_from, date_to)
-    _render_decisions(renderer, decisions, 'Optimization Plan')
+    _render_decisions(ctx, renderer, decisions, 'Optimization Plan')
 
 
 @optimize_app.command('run')
@@ -111,7 +122,7 @@ def optimize_run(
     renderer = get_renderer(ctx)
     svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_all(campaign_id, nm_id, date_from, date_to)
-    _render_decisions(renderer, decisions, 'Optimization Plan')
+    _render_decisions(ctx, renderer, decisions, 'Optimization Plan')
 
     if not apply or not decisions:
         return
@@ -121,7 +132,7 @@ def optimize_run(
         campaign_id, nm_id, date_from, date_to, dry_run=dry_run,
     )
     prefix = '[DRY-RUN] ' if dry_run else ''
-    _render_results(renderer, results)
+    _render_results(ctx, renderer, results)
     if dry_run:
         renderer.success(f'{prefix}No mutations executed')
 
@@ -143,7 +154,7 @@ def optimize_clusters(
     renderer = get_renderer(ctx)
     svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_clusters(campaign_id, nm_id, date_from, date_to)
-    _render_decisions(renderer, decisions, 'Cluster Optimization')
+    _render_decisions(ctx, renderer, decisions, 'Cluster Optimization')
 
     if not apply or not decisions:
         return
@@ -152,7 +163,7 @@ def optimize_clusters(
     results = svc.apply_clusters(
         campaign_id, nm_id, date_from, date_to, dry_run=dry_run,
     )
-    _render_results(renderer, results)
+    _render_results(ctx, renderer, results)
 
 
 @optimize_app.command('budget')
@@ -169,14 +180,14 @@ def optimize_budget(
     renderer = get_renderer(ctx)
     svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_budget(campaign_id)
-    _render_decisions(renderer, decisions, 'Budget Optimization')
+    _render_decisions(ctx, renderer, decisions, 'Budget Optimization')
 
     if not apply or not decisions:
         return
 
     _confirm_apply(renderer, len(decisions), yes or dry_run)
     results = svc.apply_budget(campaign_id, dry_run=dry_run)
-    _render_results(renderer, results)
+    _render_results(ctx, renderer, results)
 
 
 @optimize_app.command('negatives')
@@ -196,7 +207,7 @@ def optimize_negatives(
     renderer = get_renderer(ctx)
     svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_negatives(campaign_id, nm_id, date_from, date_to)
-    _render_decisions(renderer, decisions, 'Negative Phrase Recommendations')
+    _render_decisions(ctx, renderer, decisions, 'Negative Phrase Recommendations')
 
     if not apply or not decisions:
         return
@@ -205,7 +216,7 @@ def optimize_negatives(
     results = svc.apply_negatives(
         campaign_id, nm_id, date_from, date_to, dry_run=dry_run,
     )
-    _render_results(renderer, results)
+    _render_results(ctx, renderer, results)
 
 
 @optimize_app.command('portfolio')
@@ -224,7 +235,7 @@ def optimize_portfolio(
     renderer = get_renderer(ctx)
     svc = create_optimizer_service(get_profile(ctx))
     decisions = svc.plan_portfolio(campaign_id, date_from, date_to)
-    _render_decisions(renderer, decisions, 'Portfolio Optimization')
+    _render_decisions(ctx, renderer, decisions, 'Portfolio Optimization')
 
     if not apply or not decisions:
         return
@@ -234,4 +245,4 @@ def optimize_portfolio(
         svc._apply_decision(d, campaign_id, dry_run)
         for d in decisions
     ]
-    _render_results(renderer, results)
+    _render_results(ctx, renderer, results)

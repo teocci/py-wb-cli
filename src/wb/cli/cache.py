@@ -6,7 +6,7 @@ from dataclasses import asdict
 
 import typer
 
-from wb.cli._helpers import get_profile, get_renderer
+from wb.cli._helpers import get_fields, get_profile, get_renderer
 
 cache_app = typer.Typer(
     help='Local snapshot cache',
@@ -41,7 +41,7 @@ def cache_list(
     if campaign_id is None:
         counts = svc.summary(profile)
         rows = [[k, str(v)] for k, v in counts.items()]
-        renderer.display(counts, headers=['Table', 'Rows'], title='Cache Summary')
+        renderer.display(counts, headers=['Table', 'Rows'], title='Cache Summary', fields=get_fields(ctx))
     else:
         snaps = svc.history_campaigns(profile, campaign_id, limit)
         data = [asdict(s) for s in snaps]
@@ -53,6 +53,7 @@ def cache_list(
             data,
             headers=['Snapshot Time', 'Campaign ID', 'Name', 'Status'],
             title=f'Snapshots — Campaign {campaign_id}',
+            fields=get_fields(ctx),
         )
 
 
@@ -86,6 +87,7 @@ def cache_snapshot(
         counts,
         headers=['Type', 'Rows Saved'],
         title=f'Snapshot — Campaign {campaign_id}',
+        fields=get_fields(ctx),
     )
     renderer.success(
         f'Snapshot complete: {counts["campaigns"]} campaign, '
@@ -160,6 +162,7 @@ def history_campaigns(
         data,
         headers=['Time', 'Campaign ID', 'Name', 'Status', 'Budget'],
         title='Campaign Snapshot History',
+        fields=get_fields(ctx),
     )
 
 
@@ -190,6 +193,7 @@ def history_stats(
         data,
         headers=['Date', 'Views', 'Clicks', 'CTR', 'Spend', 'Orders'],
         title=f'Stats History — Campaign {campaign_id}',
+        fields=get_fields(ctx),
     )
 
 
@@ -217,4 +221,5 @@ def history_clusters(
         data,
         headers=['Time', 'NM ID', 'Query', 'Bid', 'Views', 'Clicks'],
         title=f'Cluster History — Campaign {campaign_id}',
+        fields=get_fields(ctx),
     )

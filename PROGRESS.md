@@ -4,14 +4,14 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.13.0 | ✅ Latest |
-| **Phases Complete** | 13/18 | 72% |
-| **Tests Passing** | 764/764 | ✅ 100% |
+| **Current Version** | 0.15.0 | ✅ Latest |
+| **Phases Complete** | 15/18 | 83% |
+| **Tests Passing** | 840/840 | ✅ 100% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 20+ | ✅ Ready |
-| **Core Files** | 45+ | ✅ Stable |
-| **Latest Feature** | Prices & Discounts API | ✅ 2026-04-06 |
-| **Agent-Ready** | YES | ✅ JSON mode, auto-pagination, multi-ID support |
+| **Core Files** | 46+ | ✅ Stable |
+| **Latest Feature** | Per-Product Cost Tracking | ✅ 2026-04-06 |
+| **Agent-Ready** | YES | ✅ JSON mode, auto-pagination, multi-ID support, --fields filtering |
 
 ### Command Groups Available
 
@@ -21,7 +21,7 @@
 | `campaign` | list, get, create, clone, start, pause, stop, rename, delete | ✅ Ready | `wb campaign list --json` |
 | `bid` | set, get, min | ✅ Ready | `wb bid set --nm 12345 --cpm 450` |
 | `budget` | get, deposit | ✅ Ready | `wb budget get` |
-| `stats` | campaign, cluster | ✅ Ready | `wb stats campaign --ids 1,2,3` |
+| `stats` | campaign, campaigns, product-spend | ✅ Ready | `wb stats product-spend --nms 100525085 --from 2026-04-01 --to 2026-04-06` |
 | `cluster` | list, get-bids, set-bids, get-minus, set-minus, stats | ✅ Ready | `wb cluster list --nm 12345` |
 | `portal` | products | ✅ Ready | `wb portal products --limit 100` |
 | `prices` | list | ✅ Ready | `wb prices list --nm-ids 227403075,100510938` |
@@ -35,22 +35,24 @@
 
 | Version | Phase | Date | Description |
 |---------|-------|------|-------------|
-| 0.1.0 | Phase 0 | 2026-03-18 | Foundation - CLI scaffold, config, auth, HTTP client, audit |
-| 0.2.0 | Phase 1 | 2026-03-18 | Read-only visibility - campaigns, budgets, bids, stats, clusters |
-| 0.3.0 | Phase 2 | 2026-03-18 | Core write controls - lifecycle, items, bids, budget, placements |
-| 0.3.1 | Auth | 2026-03-19 | Dual auth - portal session support, env var fallback, /ping fix |
-| 0.3.2 | API Fix | 2026-04-02 | Full API migration - all dead endpoints replaced with current WB API |
-| 0.4.0 | Phase 3 | 2026-04-02 | Search-cluster control - cluster bid mutations, minus phrases, daily stats |
-| 0.5.0 | Phase 4 | 2026-04-03 | Analytics bridge - sales funnel, search reports, CSV exports |
-| 0.6.0 | Phase 5 | 2026-04-03 | Optimization workflows - recommendation engine, guarded apply |
-| 0.8.0 | Phase 7 | 2026-04-03 | Local SQLite cache - historical snapshots, wb budget history |
-| 0.9.0 | Agent Fixes | 2026-04-03 | Agent-critical fixes - JSON errors, per-NM stats, Campaign nm_ids |
-| 0.10.0 | Phase 8A | 2026-04-04 | Warehouse inventory reports — async report lifecycle + top products |
-| 0.11.0 | Phase 8B | 2026-04-04 | Stock runway — days-until-stockout via Statistics API sales velocity |
-| 0.12.0 | Phase 8C | 2026-04-04 | Report caching & multi-seller storage — 6h TTL file cache + SQLite metadata |
-| 0.13.0 | Phase 8D | 2026-04-06 | Prices & Discounts command — base price, discount %, final buyer price via discounts-prices-api |
+| 0.1.0 | 0 | 2026-03-18 | Foundation - CLI scaffold, config, auth, HTTP client, audit |
+| 0.2.0 | 1 | 2026-03-18 | Read-only visibility - campaigns, budgets, bids, stats, clusters |
+| 0.3.0 | 2 | 2026-03-18 | Core write controls - lifecycle, items, bids, budget, placements |
+| 0.3.1 | F-1 | 2026-03-19 | Dual auth - portal session support, env var fallback, /ping fix |
+| 0.3.2 | F-2 | 2026-04-02 | Full API migration - all dead endpoints replaced with current WB API |
+| 0.4.0 | 3 | 2026-04-02 | Search-cluster control - cluster bid mutations, minus phrases, daily stats |
+| 0.5.0 | 4 | 2026-04-03 | Analytics bridge - sales funnel, search reports, CSV exports |
+| 0.6.0 | 5 | 2026-04-03 | Optimization workflows - recommendation engine, guarded apply |
+| 0.8.0 | 7 | 2026-04-03 | Local SQLite cache - historical snapshots, wb budget history |
+| 0.9.0 | F-3 | 2026-04-03 | Agent-critical fixes - JSON errors, per-NM stats, Campaign nm_ids |
+| 0.10.0 | 8A | 2026-04-04 | Warehouse inventory reports — async report lifecycle + top products |
+| 0.11.0 | 8B | 2026-04-04 | Stock runway — days-until-stockout via Statistics API sales velocity |
+| 0.12.0 | 8C | 2026-04-04 | Report caching & multi-seller storage — 6h TTL file cache + SQLite metadata |
+| 0.13.0 | 8D | 2026-04-06 | Prices & Discounts command — base price, discount %, final buyer price via discounts-prices-api |
+| 0.14.0 | I-1 | 2026-04-06 | Batch operations — N+1 elimination, --ids multi-campaign, --bids inline JSON, auto-chunk analytics, --fields output filtering |
+| 0.15.0 | I-2 | 2026-04-06 | Per-product cost tracking — wb stats product-spend, booster avg_position, fullstats auto-chunking, stats cache write-through |
 
-## Current Version: 0.13.0
+## Current Version: 0.15.0
 
 ## Phase Status
 
@@ -59,16 +61,23 @@
 | 0 | Foundation | COMPLETED | 0.1.0 |
 | 1 | Read-only operational visibility | COMPLETED | 0.2.0 |
 | 2 | Core write controls | COMPLETED | 0.3.0 |
+| F-1 | Auth fix — dual auth, portal session, env var fallback | COMPLETED | 0.3.1 |
+| F-2 | API fix — full endpoint migration to current WB API | COMPLETED | 0.3.2 |
 | 3 | Search-cluster control | COMPLETED | 0.4.0 |
 | 4 | Analytics bridge | COMPLETED | 0.5.0 |
 | 5 | Optimization workflows | COMPLETED | 0.6.0 |
 | 6 | Agent platform support | COMPLETED | 0.7.0 |
 | 7 | Local SQLite cache + historical snapshots | COMPLETED | 0.8.0 |
-| A1 | Agent-critical fixes | COMPLETED | 0.9.0 |
+| F-3 | Agent-critical fixes — JSON errors, per-NM stats, nm_ids | COMPLETED | 0.9.0 |
 | 8A | Warehouse inventory reports | COMPLETED | 0.10.0 |
 | 8B | Stock runway (days-until-stockout) | COMPLETED | 0.11.0 |
 | 8C | Report caching & multi-seller storage | COMPLETED | 0.12.0 |
 | 8D | Prices & Discounts command | COMPLETED | 0.13.0 |
+| I-1 | Batch operations — multi-ID, auto-chunking, --fields | COMPLETED | 0.14.0 |
+| I-2 | Per-product cost tracking — product-spend, booster stats | COMPLETED | 0.15.0 |
+| I-3 | Composite commands — product summary (1 call = all data) | PENDING | 1.0.0 |
+| I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | PENDING | 1.1.0 |
+| I-5 | Polish & ergonomics — --compact, cache-first, AGENT.md | PENDING | 1.2.0 |
 
 ---
 
@@ -828,3 +837,27 @@ wb report warehouse stock-runway --days 30  # cached after first run
 4. Run CLI: `python -m wb --help`
 5. Use Python SDK: `from wb.sdk import list_campaigns, clone_campaign; campaigns = list_campaigns(profile='my_profile')`
 6. All phases through 8C complete — the CLI is production-ready for human and agent operations
+
+---
+
+## Phase 9 - Batch Operations (v0.14.0) - COMPLETED
+
+### What was built
+
+- **`src/wb/core/batching.py`** (new): `chunk()` generator utility for splitting lists into sized batches; raises `ValueError` for invalid size
+- **`src/wb/core/constants.py`**: Added `BID_BATCH_SIZE=1000`, `HISTORY_CHUNK_SIZE=20`, `PRODUCTS_CHUNK_SIZE=1000`
+- **`src/wb/client/promotion.py`**: Added `set_item_bids_batch(payloads)` — single PATCH call for multiple bids
+- **`src/wb/services/bids.py`**: Rewrote `set_item_bids` to use batch PATCH (one call per chunk of 1000); invalid bids get `success=False` result, valid ones still sent (collect-errors pattern)
+- **`src/wb/services/campaigns.py`**: Added `start_campaigns`, `pause_campaigns`, `stop_campaigns`, `delete_campaigns` plural methods; per-campaign error collection without fail-fast
+- **`src/wb/services/analytics.py`**: `get_product_history` now auto-chunks >20 nm_ids instead of raising `ValidationError`
+- **`src/wb/cli/bid.py`**: `bid set-items` now accepts `--bids '[{"nm_id":123,"bid_kopecks":450}]'` inline JSON; `--file` optional; mutual-exclusion validation
+- **`src/wb/cli/campaign.py`**: `campaign start/pause/stop/delete` accept `--ids 1,2,3` for multi-campaign; positional single-ID still works
+- **`src/wb/core/output.py`**: `_filter_fields(data, fields)` helper + `fields` param on `OutputRenderer.display()`
+- **`src/wb/cli/app.py`**: `--fields nm_id,orders` global option stored in `ctx.obj['fields']`
+- **`src/wb/cli/_helpers.py`**: `get_fields(ctx)` helper; propagated to all 35 `renderer.display()` call sites across all CLI modules
+- **`tests/integration/conftest.py`** + **`tests/integration/test_batch_read.py`**: Live read-only integration tests (auto-skip when `WB_API_TOKEN` absent)
+
+### Test results
+
+- **817 unit tests passed** (0 failures) — +23 new tests
+- **7 integration tests passed** (0 failures) — live API coverage

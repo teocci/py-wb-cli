@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 
 import typer
 
-from wb.cli._helpers import get_profile, get_renderer
+from wb.cli._helpers import get_fields, get_profile, get_renderer
 
 stats_app = typer.Typer(
     help='Campaign and cluster statistics',
@@ -48,8 +49,11 @@ def stats_campaign(
     svc = create_stats_service(get_profile(ctx))
     stats = svc.get_campaign_stats(campaign_id, date_from, date_to)
 
-    data = asdict(stats)
-    headers = ['Field', 'Value']
+    if renderer.is_json:
+        typer.echo(json.dumps(asdict(stats), indent=2, ensure_ascii=False))
+        return
+
+    from wb.core.output import render_table
     rows = [
         ['Campaign ID', str(stats.campaign_id)],
         ['Views', str(stats.views)],
@@ -60,7 +64,51 @@ def stats_campaign(
         ['CPC', f'{stats.cpc:.2f}'],
         ['CR', f'{stats.cr:.2f}'],
     ]
-    renderer.display(data, headers=headers, title=f'Stats — Campaign {campaign_id}')
+    render_table(['Field', 'Value'], rows, title=f'Stats — Campaign {campaign_id}')
+
+
+@stats_app.command('product-spend')
+def stats_product_spend(
+        ctx: typer.Context,
+        nms: str = typer.Option(..., '--nms', help='Comma-separated NM IDs'),
+        date_from: str = typer.Option(..., '--from', help='Start date YYYY-MM-DD'),
+        date_to: str = typer.Option(..., '--to', help='End date YYYY-MM-DD'),
+) -> None:
+    """Show per-product ad spend aggregated across all campaigns."""
+    from wb.services._factory import create_stats_service
+
+    renderer = get_renderer(ctx)
+    nm_ids = _parse_ids(nms)
+    svc = create_stats_service(get_profile(ctx))
+    nm_stats = svc.get_product_spend(nm_ids, date_from, date_to)
+
+    if not nm_stats:
+        renderer.success('No spend data found.')
+        return
+
+    if renderer.is_json:
+        typer.echo(json.dumps(
+            [asdict(s) for s in nm_stats],
+            indent=2,
+            ensure_ascii=False,
+        ))
+        return
+
+    from wb.core.output import render_table
+    headers = ['NM ID', 'Name', 'Spend', 'Views', 'Clicks', 'Orders', 'Avg Pos']
+    rows = [
+        [
+            str(s.nm_id),
+            s.name or '—',
+            f'{s.spend:.0f}',
+            str(s.views),
+            str(s.clicks),
+            str(s.orders),
+            f'{s.avg_position:.1f}' if s.avg_position else '—',
+        ]
+        for s in nm_stats
+    ]
+    render_table(headers, rows, title='Per-Product Ad Spend')
 
 
 @stats_app.command('campaigns')
@@ -82,7 +130,15 @@ def stats_campaigns(
         renderer.success('No statistics data available.')
         return
 
-    data = [asdict(s) for s in stats_list]
+    if renderer.is_json:
+        typer.echo(json.dumps(
+            [asdict(s) for s in stats_list],
+            indent=2,
+            ensure_ascii=False,
+        ))
+        return
+
+    from wb.core.output import render_table
     headers = ['ID', 'Views', 'Clicks', 'CTR', 'Orders', 'Spend']
     rows = [
         [
@@ -95,4 +151,4 @@ def stats_campaigns(
         ]
         for s in stats_list
     ]
-    renderer.display(data, headers=headers, title='Campaign Statistics')
+    render_table(headers, rows, title='Campaign Statistics')

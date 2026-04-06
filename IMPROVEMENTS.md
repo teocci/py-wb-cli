@@ -6,28 +6,32 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ## 🚀 Quick Status (for AI Agents)
 
+Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = improvement
+
 | Version | Phase | Status | Theme | Files | Date |
 |---------|-------|--------|-------|-------|------|
 | 0.1.0 | 0 | ✅ DONE | Foundation | core setup | 2026-01-15 |
 | 0.2.0 | 1 | ✅ DONE | Read-only visibility | campaign/stats | 2026-01-20 |
 | 0.3.0 | 2 | ✅ DONE | Core write controls | campaign mutations | 2026-02-01 |
+| 0.3.1 | F-1 | ✅ DONE | Auth fix — dual auth, portal session | auth, profiles | 2026-03-19 |
+| 0.3.2 | F-2 | ✅ DONE | API fix — endpoint migration | constants, clients | 2026-04-02 |
 | 0.4.0 | 3 | ✅ DONE | Search-cluster control | cluster commands | 2026-02-10 |
 | 0.5.0 | 4 | ✅ DONE | Analytics bridge | analytics commands | 2026-02-20 |
 | 0.6.0 | 5 | ✅ DONE | Optimization workflows | optimize commands | 2026-03-01 |
 | 0.7.0 | 6 | ✅ DONE | Agent platform support | SDK | 2026-03-10 |
 | 0.8.0 | 7 | ✅ DONE | Local SQLite cache | storage/cache | 2026-03-20 |
-| 0.9.0 | A1 | ✅ DONE | Agent-critical fixes | JSON errors, per-NM stats | 2026-03-28 |
+| 0.9.0 | F-3 | ✅ DONE | Agent-critical fixes | JSON errors, per-NM stats | 2026-03-28 |
 | 0.10.0 | 8A | ✅ DONE | Warehouse inventory reports | report commands | 2026-04-04 |
 | 0.11.0 | 8B | ✅ DONE | Stock runway analysis | days-until-stockout | 2026-04-04 |
 | 0.12.0 | 8C | ✅ DONE | Report caching & multi-seller | file cache + SQLite | 2026-04-04 |
 | 0.13.0 | 8D | ✅ DONE | Prices & Discounts command | wb prices list | 2026-04-06 |
-| 0.14.0 | 2 | ⏳ PENDING | Batch operations | multi-ID support, auto-chunking | TBD |
-| 0.15.0 | 3 | ⏳ PENDING | Per-product cost tracking | product-spend command | TBD |
-| 1.0.0 | 4 | ⏳ PENDING | Composite commands | product summary | TBD |
-| 1.1.0 | 5 | ⏳ PENDING | Rate limiting & resilience | RateLimiter, backoff | TBD |
-| 1.2.0 | 6 | ⏳ PENDING | Polish & ergonomics | --compact, cache-first | TBD |
+| 0.14.0 | I-1 | ✅ DONE | Batch operations | multi-ID support, auto-chunking | 2026-04-06 |
+| 0.15.0 | I-2 | ✅ DONE | Per-product cost tracking | product-spend command | 2026-04-06 |
+| 1.0.0 | I-3 | ⏳ PENDING | Composite commands | product summary | TBD |
+| 1.1.0 | I-4 | ⏳ PENDING | Rate limiting & resilience | RateLimiter, backoff | TBD |
+| 1.2.0 | I-5 | ⏳ PENDING | Polish & ergonomics | --compact, cache-first | TBD |
 
-**Current:** v0.13.0 — **13 phases complete**, 5 planned. **764 tests passing**.
+**Current:** v0.15.0 — **15 phases complete**, 3 planned. **840 tests passing**.
 
 ---
 
@@ -118,7 +122,7 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ## Phased Improvement Roadmap
 
-### Phase 1 — Agent-Critical Fixes (v0.9.0)
+### F-3 — Agent-Critical Fixes (v0.9.0)
 
 **Theme:** Make the CLI reliably usable by AI agents without workarounds.
 
@@ -133,7 +137,7 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ---
 
-### Phase 2 — Batch Operations (v0.10.0)
+### I-1 — Batch Operations (v0.14.0)
 
 **Theme:** Make every operation batch-aware; eliminate N+1 patterns.
 
@@ -148,7 +152,7 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ---
 
-### Phase 3 — Per-Product Cost Tracking (v0.11.0)
+### I-2 — Per-Product Cost Tracking (v0.15.0)
 
 **Theme:** Answer the #1 agent question: "how much did we spend on ads for product X?"
 
@@ -160,7 +164,7 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ---
 
-### Phase 4 — Composite Commands (v1.0.0)
+### I-3 — Composite Commands (v1.0.0)
 
 **Theme:** High-level commands that reduce agent round-trips. The 1.0 release.
 
@@ -173,7 +177,7 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ---
 
-### Phase 5 — Rate Limiting & Resilience (v1.1.0)
+### I-4 — Rate Limiting & Resilience (v1.1.0)
 
 **Theme:** Production-grade reliability for long-running agent sessions.
 
@@ -185,7 +189,7 @@ the agent to bypass it and call raw HTTP endpoints.
 
 ---
 
-### Phase 6 — Polish & Ergonomics (v1.2.0)
+### I-5 — Polish & Ergonomics (v1.2.0)
 
 **Theme:** Quality-of-life improvements that compound agent efficiency.
 
@@ -280,15 +284,17 @@ portal credentials; omitted in v0.13.0 to keep the command API-token-only).
 
 ## Version Scheme
 
-| Version | Milestone |
-|---------|-----------|
-| 0.9.0 | Phase 1 — Agent-critical fixes |
-| 0.10.0 | Phase 8A — Warehouse inventory reports |
-| 0.11.0 | Phase 8B — Stock runway (days-until-stockout) |
-| 0.12.0 | Phase 8C — Report caching & multi-seller storage |
-| 0.13.0 | Phase 8D — Prices & Discounts command |
-| 0.14.0 | Phase 2 — Batch operations |
-| 0.15.0 | Phase 3 — Per-product cost tracking |
-| 1.0.0 | Phase 4 — Composite commands (stable release) |
-| 1.1.0 | Phase 5 — Rate limiting & resilience |
-| 1.2.0 | Phase 6 — Polish & agent ergonomics |
+Phase naming: `N` = core phase · `NA` = sub-phase of N · `F-N` = fix · `I-N` = improvement
+
+| Version | Phase | Milestone |
+|---------|-------|-----------|
+| 0.9.0 | F-3 | Agent-critical fixes — JSON errors, per-NM stats |
+| 0.10.0 | 8A | Warehouse inventory reports |
+| 0.11.0 | 8B | Stock runway (days-until-stockout) |
+| 0.12.0 | 8C | Report caching & multi-seller storage |
+| 0.13.0 | 8D | Prices & Discounts command |
+| 0.14.0 | I-1 | Batch operations — multi-ID, auto-chunking, --fields |
+| 0.15.0 | I-2 | Per-product cost tracking — product-spend, booster stats |
+| 1.0.0 | I-3 | Composite commands (stable release) |
+| 1.1.0 | I-4 | Rate limiting & resilience |
+| 1.2.0 | I-5 | Polish & agent ergonomics |

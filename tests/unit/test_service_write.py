@@ -4,7 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from wb.core.exceptions import ValidationError
+from wb.core.constants import BID_BATCH_SIZE
+from wb.core.exceptions import ValidationError, WbCliError
 from wb.domain.models import BidMutation, CampaignCreate, MutationResult, PlacementConfig
 from wb.services.bids import BidService
 from wb.services.budgets import BudgetService
@@ -232,12 +233,12 @@ class TestBidServiceSetItemBids:
         mutations = [BidMutation(nm_id=1, bid_kopecks=100), BidMutation(nm_id=2, bid_kopecks=200)]
         results = bid_svc.set_item_bids(10, mutations)
         assert len(results) == 2
-        assert mock_client.set_item_bid.call_count == 2
+        mock_client.set_item_bids_batch.assert_called_once()
 
     def test_dry_run_calls_nothing(self, bid_svc, mock_client):
         mutations = [BidMutation(nm_id=1, bid_kopecks=100)]
         results = bid_svc.set_item_bids(5, mutations, dry_run=True)
-        mock_client.set_item_bid.assert_not_called()
+        mock_client.set_item_bids_batch.assert_not_called()
         assert all(r.dry_run for r in results)
 
     def test_empty_list_returns_empty(self, bid_svc, mock_client):
@@ -317,3 +318,128 @@ class TestPlacementConfig:
         placements = payload['placements']
         assert placements['search'] is True
         assert placements['recommendations'] is False
+
+
+# ── BidService batch tests ────────────────────────────────────────────
+
+class TestBidServiceSetItemsBatch:
+    """Tests for BidService.set_item_bids() — true batch, N+1 eliminated."""
+
+    def test_empty_mutations_returns_empty(self, bid_svc, mock_client):
+        results = bid_svc.set_item_bids(10, [])
+        assert results == []
+        mock_client.set_item_bids_batch.assert_not_called()
+
+    def test_single_valid_mutation_calls_batch_not_single(
+            self, bid_svc, mock_client,
+    ):
+        m = BidMutation(nm_id=123, bid_kopecks=500)
+        results = bid_svc.set_item_bids(10, [m])
+        mock_client.set_item_bids_batch.assert_called_once()
+        mock_client.set_item_bid.assert_not_called()
+        assert len(results) == 1
+        assert results[0].success is True
+
+    def test_two_valid_mutations_one_batch_call(self, bid_svc, mock_client):
+        mutations = [
+            BidMutation(nm_id=1, bid_kopecks=100),
+            BidMutation(nm_id=2, bid_kopecks=200),
+        ]
+        bid_svc.set_item_bids(10, mutations)
+        assert mock_client.set_item_bids_batch.call_count == 1
+        payload = mock_client.set_item_bids_batch.call_args[0][0]
+        assert len(payload) == 2
+
+    def test_invalid_bid_gets_failure_result_not_exception(
+            self, bid_svc, mock_client,
+    ):
+        m = BidMutation(nm_id=123, bid_kopecks=0)
+        results = bid_svc.set_item_bids(10, [m])
+        assert results[0].success is False
+        assert 'positive' in results[0].message
+        mock_client.set_item_bids_batch.assert_not_called()
+
+    def test_mixed_valid_and_invalid(self, bid_svc, mock_client):
+        mutations = [
+            BidMutation(nm_id=1, bid_kopecks=100),   # valid
+            BidMutation(nm_id=2, bid_kopecks=-1),    # invalid
+            BidMutation(nm_id=3, bid_kopecks=300),   # valid
+        ]
+        results = bid_svc.set_item_bids(10, mutations)
+        assert results[0].success is True
+        assert results[1].success is False
+        assert results[2].success is True
+        payload = mock_client.set_item_bids_batch.call_args[0][0]
+        assert len(payload) == 2   # only valid ones sent
+
+    def test_dry_run_skips_batch_call(self, bid_svc, mock_client):
+        mutations = [BidMutation(nm_id=1, bid_kopecks=100)]
+        results = bid_svc.set_item_bids(10, mutations, dry_run=True)
+        mock_client.set_item_bids_batch.assert_not_called()
+        assert results[0].dry_run is True
+
+    def test_over_batch_size_makes_multiple_calls(self, bid_svc, mock_client):
+        mutations = [
+            BidMutation(nm_id=i, bid_kopecks=100) for i in range(BID_BATCH_SIZE + 1)
+        ]
+        bid_svc.set_item_bids(10, mutations)
+        assert mock_client.set_item_bids_batch.call_count == 2
+
+    def test_all_invalid_no_batch_call(self, bid_svc, mock_client):
+        mutations = [BidMutation(nm_id=i, bid_kopecks=0) for i in range(3)]
+        results = bid_svc.set_item_bids(10, mutations)
+        mock_client.set_item_bids_batch.assert_not_called()
+        assert all(not r.success for r in results)
+
+
+# ── CampaignService batch action tests ───────────────────────────────
+
+class TestCampaignServiceBatch:
+    """Tests for CampaignService.start/pause/stop/delete_campaigns()."""
+
+    def test_start_campaigns_calls_start_for_each(
+            self, campaign_svc, mock_client,
+    ):
+        mock_client.start_campaign.return_value = None
+        results = campaign_svc.start_campaigns([1, 2, 3])
+        assert mock_client.start_campaign.call_count == 3
+        assert len(results) == 3
+        assert all(r.success for r in results)
+
+    def test_start_campaigns_empty_returns_empty(
+            self, campaign_svc, mock_client,
+    ):
+        results = campaign_svc.start_campaigns([])
+        assert results == []
+        mock_client.start_campaign.assert_not_called()
+
+    def test_start_campaigns_partial_failure(self, campaign_svc, mock_client):
+        def _raise_on_second(cid):
+            if cid == 2:
+                raise WbCliError('API error')
+        mock_client.start_campaign.side_effect = _raise_on_second
+        results = campaign_svc.start_campaigns([1, 2, 3])
+        assert results[0].success is True
+        assert results[1].success is False
+        assert 'API error' in results[1].message
+        assert results[2].success is True
+
+    def test_pause_campaigns(self, campaign_svc, mock_client):
+        results = campaign_svc.pause_campaigns([10, 20])
+        assert mock_client.pause_campaign.call_count == 2
+        assert all(r.success for r in results)
+
+    def test_stop_campaigns(self, campaign_svc, mock_client):
+        results = campaign_svc.stop_campaigns([5])
+        mock_client.stop_campaign.assert_called_once_with(5)
+        assert results[0].success is True
+
+    def test_delete_campaigns(self, campaign_svc, mock_client):
+        results = campaign_svc.delete_campaigns([7, 8])
+        assert mock_client.delete_campaign.call_count == 2
+        assert all(r.success for r in results)
+
+    def test_dry_run_propagates(self, campaign_svc, mock_client):
+        results = campaign_svc.start_campaigns([1, 2], dry_run=True)
+        mock_client.start_campaign.assert_not_called()
+        assert all(r.dry_run for r in results)

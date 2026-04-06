@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
+from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
 
 budget_app = typer.Typer(
     help='Budget and balance management',
@@ -31,7 +31,7 @@ def budget_balance(ctx: typer.Context) -> None:
         ['Net', str(balance.net)],
         ['Bonus', str(balance.bonus)],
     ]
-    renderer.display(data, headers=headers, title='Account Balance')
+    renderer.display(data, headers=headers, title='Account Balance', fields=get_fields(ctx))
 
 
 @budget_app.command('get')
@@ -56,7 +56,7 @@ def budget_get(
         ['Cash', str(budget.cash)],
         ['Netting', str(budget.netting)],
     ]
-    renderer.display(data, headers=headers, title=f'Budget — Campaign {campaign_id}')
+    renderer.display(data, headers=headers, title=f'Budget — Campaign {campaign_id}', fields=get_fields(ctx))
 
 
 @budget_app.command('topup')
@@ -144,4 +144,5 @@ def budget_history(
         data,
         headers=['Time', 'Campaign', 'Type', 'Amount', 'Balance After'],
         title='Budget Event History',
+        fields=get_fields(ctx),
     )

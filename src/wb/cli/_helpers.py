@@ -12,7 +12,7 @@ import typer
 from wb.core.output import OutputRenderer
 from wb.domain.enums import OutputFormat, VerbosityLevel
 
-__all__ = ['get_renderer', 'get_profile', 'confirm_or_abort']
+__all__ = ['get_renderer', 'get_profile', 'get_fields', 'confirm_or_abort']
 
 
 def get_renderer(ctx: typer.Context) -> OutputRenderer:
@@ -42,6 +42,18 @@ def get_profile(ctx: typer.Context) -> str | None:
         Profile name or None.
     """
     return (ctx.obj or {}).get('profile')
+
+
+def get_fields(ctx: typer.Context) -> list[str] | None:
+    """Extract field filter list from CLI context.
+
+    Args:
+        ctx: Typer context carrying global options.
+
+    Returns:
+        List of field names to include, or None (include all).
+    """
+    return (ctx.obj or {}).get('fields')
 
 
 def confirm_or_abort(

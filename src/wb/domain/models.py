@@ -283,6 +283,7 @@ class NmStats:
         cr: Conversion rate.
         atbs: Add-to-basket count.
         shks: Units shipped.
+        avg_position: Average search position from booster stats (0 = unknown).
     """
 
     nm_id: int
@@ -296,6 +297,7 @@ class NmStats:
     cr: float = 0.0
     atbs: int = 0
     shks: int = 0
+    avg_position: float = 0.0
 
     @classmethod
     def from_api(cls, data: dict) -> NmStats:
@@ -362,6 +364,56 @@ class DayStats:
         )
 
 
+def _aggregate_nm_totals(days: list) -> dict:
+    """Aggregate per-NM stats across all days in a fullstats response.
+
+    Args:
+        days: List of DayStats objects already parsed from API response.
+
+    Returns:
+        Dict mapping nm_id → NmStats with totals summed across all days.
+    """
+    nm_totals: dict[int, NmStats] = {}
+    for day in days:
+        for nm in day.nm_stats:
+            if nm.nm_id in nm_totals:
+                t = nm_totals[nm.nm_id]
+                t.views += nm.views
+                t.clicks += nm.clicks
+                t.orders += nm.orders
+                t.spend += nm.spend
+                t.atbs += nm.atbs
+                t.shks += nm.shks
+            else:
+                nm_totals[nm.nm_id] = NmStats(
+                    nm_id=nm.nm_id, name=nm.name,
+                    views=nm.views, clicks=nm.clicks,
+                    orders=nm.orders, spend=nm.spend,
+                    atbs=nm.atbs, shks=nm.shks,
+                )
+    return nm_totals
+
+
+def _apply_booster_stats(
+        nm_totals: dict,
+        booster_raw: list[dict],
+) -> None:
+    """Inject avg_position from boosterStats[] into the NmStats map.
+
+    WB API uses 'nm' as the NM key in boosterStats entries.
+
+    Args:
+        nm_totals: Dict mapping nm_id → NmStats (mutated in-place).
+        booster_raw: Raw boosterStats list from fullstats API response.
+    """
+    for entry in booster_raw:
+        nm_id = entry.get('nm', entry.get('nm_id', 0))
+        if nm_id and nm_id in nm_totals:
+            nm_totals[nm_id].avg_position = float(
+                entry.get('avg_position', 0.0)
+            )
+
+
 @dataclass(slots=True)
 class CampaignStats:
     """Aggregated campaign statistics for a date range.
@@ -400,32 +452,12 @@ class CampaignStats:
     def from_api(cls, data: dict) -> CampaignStats:
         """Create from WB API /adv/v3/fullstats response payload.
 
-        Parses the nested days[].apps[].nms[] structure and
-        aggregates per-NM totals across all days.
+        Parses the nested days[].apps[].nms[] structure, aggregates
+        per-NM totals across all days, and applies boosterStats positions.
         """
         days = [DayStats.from_api(d) for d in data.get('days', [])]
-        nm_totals: dict[int, NmStats] = {}
-        for day in days:
-            for nm in day.nm_stats:
-                if nm.nm_id in nm_totals:
-                    t = nm_totals[nm.nm_id]
-                    t.views += nm.views
-                    t.clicks += nm.clicks
-                    t.orders += nm.orders
-                    t.spend += nm.spend
-                    t.atbs += nm.atbs
-                    t.shks += nm.shks
-                else:
-                    nm_totals[nm.nm_id] = NmStats(
-                        nm_id=nm.nm_id,
-                        name=nm.name,
-                        views=nm.views,
-                        clicks=nm.clicks,
-                        orders=nm.orders,
-                        spend=nm.spend,
-                        atbs=nm.atbs,
-                        shks=nm.shks,
-                    )
+        nm_totals = _aggregate_nm_totals(days)
+        _apply_booster_stats(nm_totals, data.get('boosterStats', []))
         return cls(
             campaign_id=data.get('advertId', 0),
             views=data.get('views', 0),

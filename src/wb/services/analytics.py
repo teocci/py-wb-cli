@@ -6,6 +6,8 @@ import uuid
 from pathlib import Path
 
 from wb.client.analytics import AnalyticsClient
+from wb.core.batching import chunk
+from wb.core.constants import HISTORY_CHUNK_SIZE, PRODUCTS_CHUNK_SIZE
 from wb.core.exceptions import ValidationError
 from wb.domain.analytics_models import (
     CsvReportStatus,
@@ -19,8 +21,6 @@ from wb.domain.analytics_models import (
 
 __all__ = ['AnalyticsService']
 
-_MAX_NM_IDS_HISTORY = 20
-_MAX_NM_IDS_PRODUCTS = 1000
 _MAX_LIMIT = 1000
 _MAX_SEARCH_TEXT_LIMIT = 100
 
@@ -70,7 +70,7 @@ class AnalyticsService:
             'offset': offset,
         }
         if nm_ids:
-            body['nmIds'] = nm_ids[:_MAX_NM_IDS_PRODUCTS]
+            body['nmIds'] = nm_ids[:PRODUCTS_CHUNK_SIZE]
         if brand_names:
             body['brandNames'] = brand_names
         if subject_ids:
@@ -97,33 +97,33 @@ class AnalyticsService:
     ) -> list[ProductFunnelHistory]:
         """Retrieve product cards statistics per days.
 
+        Automatically splits nm_ids into HISTORY_CHUNK_SIZE chunks so
+        callers can pass any number of IDs without hitting API limits.
+
         Args:
             begin: Period start date (YYYY-MM-DD).
             end: Period end date (YYYY-MM-DD).
-            nm_ids: WB article numbers (1-20 required).
+            nm_ids: WB article numbers (at least 1 required).
             aggregation: Aggregation level ('day' or 'week').
 
         Returns:
             List of ProductFunnelHistory domain objects.
 
         Raises:
-            ValidationError: If nm_ids is empty or exceeds 20.
+            ValidationError: If nm_ids is empty.
         """
         if not nm_ids:
             raise ValidationError('At least one nm_id is required')
-        if len(nm_ids) > _MAX_NM_IDS_HISTORY:
-            raise ValidationError(
-                f'Maximum {_MAX_NM_IDS_HISTORY} nm_ids for history, '
-                f'got {len(nm_ids)}'
-            )
-
-        body = {
-            'selectedPeriod': {'start': begin, 'end': end},
-            'nmIds': nm_ids,
-            'aggregationLevel': aggregation,
-        }
-        raw = self._client.get_funnel_history(body)
-        return [ProductFunnelHistory.from_api(item) for item in raw]
+        results: list[ProductFunnelHistory] = []
+        for batch in chunk(nm_ids, HISTORY_CHUNK_SIZE):
+            body = {
+                'selectedPeriod': {'start': begin, 'end': end},
+                'nmIds': batch,
+                'aggregationLevel': aggregation,
+            }
+            raw = self._client.get_funnel_history(body)
+            results.extend(ProductFunnelHistory.from_api(item) for item in raw)
+        return results
 
     def get_grouped_history(
             self,

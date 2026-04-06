@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from wb.client.promotion import PromotionClient
+from wb.core.batching import chunk
+from wb.core.constants import BID_BATCH_SIZE
 from wb.core.exceptions import ValidationError
 from wb.domain.models import BidMutation, MutationResult, RecommendedBid
 
@@ -112,7 +114,11 @@ class BidService:
             mutations: list[BidMutation],
             dry_run: bool = False,
     ) -> list[MutationResult]:
-        """Set CPM bids for multiple items in a campaign.
+        """Set CPM bids for multiple items using batch PATCH calls.
+
+        Pre-validates all mutations; invalid ones get success=False in the
+        result without aborting the remaining valid mutations. Valid mutations
+        are sent in chunks of BID_BATCH_SIZE (one PATCH call per chunk).
 
         Args:
             campaign_id: Target campaign identifier.
@@ -120,9 +126,32 @@ class BidService:
             dry_run: If True, plan without executing.
 
         Returns:
-            List of MutationResult objects, one per bid.
+            List of MutationResult, one per input mutation.
         """
-        return [
-            self.set_item_bid(campaign_id, m, dry_run=dry_run)
-            for m in mutations
-        ]
+        if not mutations:
+            return []
+        results: list[MutationResult] = []
+        valid: list[BidMutation] = []
+        for m in mutations:
+            action = (
+                f'set bid={m.bid_kopecks} for nm={m.nm_id} '
+                f'in campaign {campaign_id}'
+            )
+            if m.bid_kopecks <= 0:
+                results.append(MutationResult(
+                    success=False, action=action, target_id=str(campaign_id),
+                    message=f'Skipped: bid must be positive, got {m.bid_kopecks}',
+                ))
+            else:
+                results.append(MutationResult(
+                    success=True, action=action, target_id=str(campaign_id),
+                    dry_run=dry_run,
+                ))
+                valid.append(m)
+        if dry_run or not valid:
+            return results
+        for batch in chunk(valid, BID_BATCH_SIZE):
+            self._client.set_item_bids_batch(
+                [m.to_api(campaign_id) for m in batch]
+            )
+        return results

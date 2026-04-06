@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
+from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
 from wb.domain.models import BidMutation
 
@@ -42,7 +42,7 @@ def bid_recommend(
         [str(b.nm_id), str(b.recommended), str(b.minimum)]
         for b in bids
     ]
-    renderer.display(data, headers=headers, title='Recommended Bids')
+    renderer.display(data, headers=headers, title='Recommended Bids', fields=get_fields(ctx))
 
 
 @bid_app.command('minimum')
@@ -69,7 +69,7 @@ def bid_minimum(
         [str(b.nm_id), str(b.minimum), str(b.recommended)]
         for b in bids
     ]
-    renderer.display(data, headers=headers, title='Minimum Bids')
+    renderer.display(data, headers=headers, title='Minimum Bids', fields=get_fields(ctx))
 
 
 @bid_app.command('get-items')
@@ -96,7 +96,7 @@ def bid_get_items(
         [str(b.nm_id), str(b.recommended), str(b.minimum)]
         for b in bids
     ]
-    renderer.display(data, headers=headers, title='Item Bids')
+    renderer.display(data, headers=headers, title='Item Bids', fields=get_fields(ctx))
 
 
 def _log_bid_mutation(profile: str | None, command: str, result) -> None:
@@ -150,14 +150,17 @@ def bid_set_item(
 def bid_set_items(
         ctx: typer.Context,
         campaign_id: int = typer.Option(..., '--campaign', '-c', help='Campaign ID'),
-        file: Path = typer.Option(
-            ..., '--file', '-f', help='JSON file with bid mutations',
-            exists=True, readable=True,
+        file: Path | None = typer.Option(
+            None, '--file', '-f', help='JSON file with bid mutations',
+        ),
+        bids: str | None = typer.Option(
+            None, '--bids',
+            help='Inline JSON bid mutations: \'[{"nm_id":123,"bid_kopecks":450}]\'',
         ),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
-    """Set bids for multiple items from a JSON file.
+    """Set bids for multiple items from a JSON file or inline JSON.
 
     File format: [{"nm_id": 123, "bid_kopecks": 450, "placement": "search"}, ...]
     """
@@ -165,14 +168,32 @@ def bid_set_items(
 
     renderer = get_renderer(ctx)
 
-    try:
-        raw = json.loads(file.read_text(encoding='utf-8'))
-    except (OSError, json.JSONDecodeError) as exc:
-        renderer.error(f'Failed to read bid file: {exc}')
+    if file is None and bids is None:
+        renderer.error('Provide either --file or --bids')
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
+    if file is not None and bids is not None:
+        renderer.error('Use --file or --bids, not both')
         raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
+    raw: list
+    if file is not None:
+        if not file.exists():
+            renderer.error(f'File not found: {file}')
+            raise typer.Exit(ExitCode.VALIDATION_ERROR)
+        try:
+            raw = json.loads(file.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError) as exc:
+            renderer.error(f'Failed to read bid file: {exc}')
+            raise typer.Exit(ExitCode.VALIDATION_ERROR)
+    else:
+        try:
+            raw = json.loads(bids)  # type: ignore[arg-type]
+        except json.JSONDecodeError as exc:
+            renderer.error(f'Invalid --bids JSON: {exc}')
+            raise typer.Exit(ExitCode.VALIDATION_ERROR)
+
     if not isinstance(raw, list):
-        renderer.error('Bid file must contain a JSON array')
+        renderer.error('Bid input must be a JSON array')
         raise typer.Exit(ExitCode.VALIDATION_ERROR)
 
     try:
@@ -194,9 +215,15 @@ def bid_set_items(
     svc = create_bid_service(get_profile(ctx))
     results = svc.set_item_bids(campaign_id, mutations, dry_run=dry_run)
 
-    for result in results:
-        if not dry_run:
-            _log_bid_mutation(get_profile(ctx), 'bid set-items', result)
+    if not dry_run:
+        for result in results:
+            if result.success:
+                _log_bid_mutation(get_profile(ctx), 'bid set-items', result)
+
+    if renderer.is_json:
+        from dataclasses import asdict as _asdict
+        renderer.display([_asdict(r) for r in results], fields=get_fields(ctx))
+        return
 
     prefix = '[DRY-RUN] ' if dry_run else ''
     success_count = sum(1 for r in results if r.success)

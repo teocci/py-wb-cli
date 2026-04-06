@@ -6,14 +6,77 @@ from dataclasses import asdict
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
+from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
+from wb.core.constants import ExitCode
+from wb.core.output import OutputRenderer
 from wb.domain.enums import CampaignStatus, CampaignType
-from wb.domain.models import CampaignCreate, PlacementConfig
+from wb.domain.models import CampaignCreate, MutationResult, PlacementConfig
 
 campaign_app = typer.Typer(
     help='Campaign management',
     no_args_is_help=True,
 )
+
+
+def _parse_ids_arg(
+        renderer: OutputRenderer,
+        single: int | None,
+        multi: str | None,
+) -> list[int]:
+    """Parse a single positional ID or --ids comma-separated string into a list.
+
+    Args:
+        renderer: For emitting validation errors.
+        single: Optional single positional campaign_id argument.
+        multi: Optional comma-separated --ids string.
+
+    Returns:
+        Non-empty list of campaign IDs.
+    """
+    if single is None and multi is None:
+        renderer.error('Provide a campaign ID or --ids')
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
+    if single is not None and multi is not None:
+        renderer.error('Use a positional campaign ID or --ids, not both')
+        raise typer.Exit(ExitCode.VALIDATION_ERROR)
+    if single is not None:
+        return [single]
+    try:
+        return [int(x.strip()) for x in multi.split(',') if x.strip()]  # type: ignore[union-attr]
+    except ValueError:
+        raise typer.BadParameter('--ids must be comma-separated integers')
+
+
+def _render_batch_results(
+        ctx: typer.Context,
+        renderer: OutputRenderer,
+        results: list[MutationResult],
+        command: str,
+        dry_run: bool,
+) -> None:
+    """Render a list of MutationResults and log successful ones.
+
+    Args:
+        ctx: Typer context.
+        renderer: Output renderer.
+        results: List of results to render.
+        command: CLI command name for audit logging.
+        dry_run: Whether this was a dry run.
+    """
+    if not dry_run:
+        for r in results:
+            if r.success:
+                _log_mutation(get_profile(ctx), command, r)
+    if renderer.is_json:
+        from dataclasses import asdict as _asdict
+        renderer.display([_asdict(r) for r in results], fields=get_fields(ctx))
+        return
+    headers = ['Target ID', 'Success', 'Message']
+    rows = [[r.target_id, str(r.success), r.message] for r in results]
+    prefix = '[DRY-RUN] ' if dry_run else ''
+    ok = sum(1 for r in results if r.success)
+    renderer.display(rows, headers=headers, title=f'{prefix}{command}', fields=get_fields(ctx))
+    renderer.success(f'{prefix}{ok}/{len(results)} succeeded')
 
 
 def _parse_status(value: str | None) -> CampaignStatus | None:
@@ -79,7 +142,7 @@ def campaign_list(
         ]
         for c in campaigns
     ]
-    renderer.display(data, headers=headers, title='Campaigns')
+    renderer.display(data, headers=headers, title='Campaigns', fields=get_fields(ctx))
 
 
 @campaign_app.command('get')
@@ -109,7 +172,7 @@ def campaign_get(
         ['Started', campaign.start_time or ''],
         ['Updated', campaign.updated_time or ''],
     ]
-    renderer.display(data, headers=headers, title=f'Campaign {campaign_id}')
+    renderer.display(data, headers=headers, title=f'Campaign {campaign_id}', fields=get_fields(ctx))
 
 
 @campaign_app.command('eligible-subjects')
@@ -130,7 +193,7 @@ def campaign_eligible_subjects(ctx: typer.Context) -> None:
         [str(s.get('id', '')), s.get('name', '')]
         for s in subjects
     ]
-    renderer.display(subjects, headers=headers, title='Eligible Subjects')
+    renderer.display(subjects, headers=headers, title='Eligible Subjects', fields=get_fields(ctx))
 
 
 @campaign_app.command('eligible-items')
@@ -162,7 +225,7 @@ def campaign_eligible_items(
         ]
         for item in items
     ]
-    renderer.display(data, headers=headers, title='Eligible Items')
+    renderer.display(data, headers=headers, title='Eligible Items', fields=get_fields(ctx))
 
 
 
@@ -281,70 +344,64 @@ def campaign_clone(
 @campaign_app.command('start')
 def campaign_start(
         ctx: typer.Context,
-        campaign_id: int = typer.Argument(..., help='Campaign ID'),
+        campaign_id: int | None = typer.Argument(None, help='Single campaign ID'),
+        ids: str | None = typer.Option(None, '--ids', help='Comma-separated campaign IDs'),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
-    """Start a campaign."""
+    """Start one or more campaigns."""
     from wb.services._factory import create_campaign_service
 
     renderer = get_renderer(ctx)
-    confirm_or_abort(renderer, f'start campaign {campaign_id}', yes or dry_run)
+    campaign_ids = _parse_ids_arg(renderer, campaign_id, ids)
+    action = f'start {len(campaign_ids)} campaign(s): {campaign_ids}'
+    confirm_or_abort(renderer, action, yes or dry_run)
 
     svc = create_campaign_service(get_profile(ctx))
-    result = svc.start_campaign(campaign_id, dry_run=dry_run)
-
-    if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign start', result)
-
-    prefix = '[DRY-RUN] ' if result.dry_run else ''
-    renderer.success(f'{prefix}{result.message}')
+    results = svc.start_campaigns(campaign_ids, dry_run=dry_run)
+    _render_batch_results(ctx, renderer, results, 'campaign start', dry_run)
 
 
 @campaign_app.command('pause')
 def campaign_pause(
         ctx: typer.Context,
-        campaign_id: int = typer.Argument(..., help='Campaign ID'),
+        campaign_id: int | None = typer.Argument(None, help='Single campaign ID'),
+        ids: str | None = typer.Option(None, '--ids', help='Comma-separated campaign IDs'),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
-    """Pause a running campaign."""
+    """Pause one or more running campaigns."""
     from wb.services._factory import create_campaign_service
 
     renderer = get_renderer(ctx)
-    confirm_or_abort(renderer, f'pause campaign {campaign_id}', yes or dry_run)
+    campaign_ids = _parse_ids_arg(renderer, campaign_id, ids)
+    action = f'pause {len(campaign_ids)} campaign(s): {campaign_ids}'
+    confirm_or_abort(renderer, action, yes or dry_run)
 
     svc = create_campaign_service(get_profile(ctx))
-    result = svc.pause_campaign(campaign_id, dry_run=dry_run)
-
-    if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign pause', result)
-
-    prefix = '[DRY-RUN] ' if result.dry_run else ''
-    renderer.success(f'{prefix}{result.message}')
+    results = svc.pause_campaigns(campaign_ids, dry_run=dry_run)
+    _render_batch_results(ctx, renderer, results, 'campaign pause', dry_run)
 
 
 @campaign_app.command('stop')
 def campaign_stop(
         ctx: typer.Context,
-        campaign_id: int = typer.Argument(..., help='Campaign ID'),
+        campaign_id: int | None = typer.Argument(None, help='Single campaign ID'),
+        ids: str | None = typer.Option(None, '--ids', help='Comma-separated campaign IDs'),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
-    """Stop (archive) a campaign."""
+    """Stop (archive) one or more campaigns."""
     from wb.services._factory import create_campaign_service
 
     renderer = get_renderer(ctx)
-    confirm_or_abort(renderer, f'stop campaign {campaign_id}', yes or dry_run)
+    campaign_ids = _parse_ids_arg(renderer, campaign_id, ids)
+    action = f'stop {len(campaign_ids)} campaign(s): {campaign_ids}'
+    confirm_or_abort(renderer, action, yes or dry_run)
 
     svc = create_campaign_service(get_profile(ctx))
-    result = svc.stop_campaign(campaign_id, dry_run=dry_run)
-
-    if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign stop', result)
-
-    prefix = '[DRY-RUN] ' if result.dry_run else ''
-    renderer.success(f'{prefix}{result.message}')
+    results = svc.stop_campaigns(campaign_ids, dry_run=dry_run)
+    _render_batch_results(ctx, renderer, results, 'campaign stop', dry_run)
 
 
 @campaign_app.command('rename')
@@ -375,24 +432,22 @@ def campaign_rename(
 @campaign_app.command('delete')
 def campaign_delete(
         ctx: typer.Context,
-        campaign_id: int = typer.Argument(..., help='Campaign ID'),
+        campaign_id: int | None = typer.Argument(None, help='Single campaign ID'),
+        ids: str | None = typer.Option(None, '--ids', help='Comma-separated campaign IDs'),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
-    """Delete a campaign."""
+    """Delete one or more campaigns."""
     from wb.services._factory import create_campaign_service
 
     renderer = get_renderer(ctx)
-    confirm_or_abort(renderer, f'delete campaign {campaign_id}', yes or dry_run)
+    campaign_ids = _parse_ids_arg(renderer, campaign_id, ids)
+    action = f'delete {len(campaign_ids)} campaign(s): {campaign_ids}'
+    confirm_or_abort(renderer, action, yes or dry_run)
 
     svc = create_campaign_service(get_profile(ctx))
-    result = svc.delete_campaign(campaign_id, dry_run=dry_run)
-
-    if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign delete', result)
-
-    prefix = '[DRY-RUN] ' if result.dry_run else ''
-    renderer.success(f'{prefix}{result.message}')
+    results = svc.delete_campaigns(campaign_ids, dry_run=dry_run)
+    _render_batch_results(ctx, renderer, results, 'campaign delete', dry_run)
 
 
 @campaign_app.command('add-items')

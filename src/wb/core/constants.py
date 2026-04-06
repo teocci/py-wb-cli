@@ -19,6 +19,10 @@ __all__ = [
     'DEFAULT_MAX_RETRIES',
     'DEFAULT_RETRY_BASE_DELAY',
     'DEFAULT_BATCH_SIZE',
+    'BID_BATCH_SIZE',
+    'FULLSTATS_BATCH_SIZE',
+    'HISTORY_CHUNK_SIZE',
+    'PRODUCTS_CHUNK_SIZE',
     'ExitCode',
     'TOKEN_CATEGORIES',
     'PING_PATH',
@@ -112,6 +116,10 @@ DEFAULT_RETRY_BASE_DELAY = 1.0
 
 # ── Batch processing ──────────────────────────────────────────────────
 DEFAULT_BATCH_SIZE = 1000
+BID_BATCH_SIZE = 1000           # max items per PATCH /api/advert/v1/bids
+FULLSTATS_BATCH_SIZE = 50       # max campaign IDs per GET /adv/v3/fullstats
+HISTORY_CHUNK_SIZE = 20         # max nm_ids per analytics history call
+PRODUCTS_CHUNK_SIZE = 1000      # max nm_ids per analytics products call
 
 
 # ── Exit codes ─────────────────────────────────────────────────────────

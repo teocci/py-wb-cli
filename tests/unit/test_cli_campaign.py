@@ -210,3 +210,120 @@ class TestCampaignEligible:
         """Eligible-items fails when --subject is not provided."""
         result = runner.invoke(app, ['campaign', 'eligible-items'])
         assert result.exit_code != 0
+
+
+AUDIT_FACTORY = 'wb.services._factory.create_audit_logger'
+
+
+def _ok_result(action: str = 'test', target_id: str = '1'):
+    from wb.domain.models import MutationResult
+    return MutationResult(success=True, action=action, target_id=target_id, message='Done')
+
+
+def _dry_result(action: str = 'test', target_id: str = '1'):
+    from wb.domain.models import MutationResult
+    return MutationResult(
+        success=True, action=action, target_id=target_id, dry_run=True, message='Would do',
+    )
+
+
+@pytest.fixture()
+def mock_audit():
+    with patch(AUDIT_FACTORY) as m:
+        m.return_value = MagicMock()
+        yield m
+
+
+class TestCampaignBatchActions:
+    """Tests for campaign start/pause/stop/delete with --ids batch option."""
+
+    @patch(FACTORY_PATH)
+    def test_start_positional_calls_start_campaigns(self, mock_factory, mock_audit):
+        svc = MagicMock()
+        svc.start_campaigns.return_value = [_ok_result('start campaign 100', '100')]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['campaign', 'start', '100', '--yes'])
+        assert result.exit_code == 0
+        svc.start_campaigns.assert_called_once_with([100], dry_run=False)
+
+    @patch(FACTORY_PATH)
+    def test_start_ids_option_calls_start_campaigns(self, mock_factory, mock_audit):
+        svc = MagicMock()
+        svc.start_campaigns.return_value = [
+            _ok_result('start campaign 1', '1'),
+            _ok_result('start campaign 2', '2'),
+            _ok_result('start campaign 3', '3'),
+        ]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['campaign', 'start', '--ids', '1,2,3', '--yes'])
+        assert result.exit_code == 0
+        svc.start_campaigns.assert_called_once_with([1, 2, 3], dry_run=False)
+
+    def test_start_no_id_fails(self, mock_audit):
+        result = runner.invoke(app, ['campaign', 'start', '--yes'])
+        assert result.exit_code != 0
+
+    def test_start_both_positional_and_ids_fails(self, mock_audit):
+        result = runner.invoke(app, ['campaign', 'start', '100', '--ids', '200', '--yes'])
+        assert result.exit_code != 0
+
+    @patch(FACTORY_PATH)
+    def test_start_ids_dry_run(self, mock_factory, mock_audit):
+        svc = MagicMock()
+        svc.start_campaigns.return_value = [
+            _dry_result('start campaign 1', '1'),
+            _dry_result('start campaign 2', '2'),
+        ]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['campaign', 'start', '--ids', '1,2', '--dry-run', '--yes'])
+        assert result.exit_code == 0
+        assert 'DRY-RUN' in result.output
+        svc.start_campaigns.assert_called_once_with([1, 2], dry_run=True)
+
+    @patch(FACTORY_PATH)
+    def test_start_ids_json_output(self, mock_factory, mock_audit):
+        svc = MagicMock()
+        svc.start_campaigns.return_value = [
+            _ok_result('start campaign 1', '1'),
+            _ok_result('start campaign 2', '2'),
+        ]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['--json', 'campaign', 'start', '--ids', '1,2', '--yes'])
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+
+    @patch(FACTORY_PATH)
+    def test_pause_ids_option(self, mock_factory, mock_audit):
+        svc = MagicMock()
+        svc.pause_campaigns.return_value = [_ok_result('pause campaign 5', '5')]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['campaign', 'pause', '--ids', '5', '--yes'])
+        assert result.exit_code == 0
+        svc.pause_campaigns.assert_called_once_with([5], dry_run=False)
+
+    @patch(FACTORY_PATH)
+    def test_stop_ids_option(self, mock_factory, mock_audit):
+        svc = MagicMock()
+        svc.stop_campaigns.return_value = [_ok_result('stop campaign 3', '3')]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['campaign', 'stop', '--ids', '3', '--yes'])
+        assert result.exit_code == 0
+        svc.stop_campaigns.assert_called_once_with([3], dry_run=False)
+
+    @patch(FACTORY_PATH)
+    def test_delete_ids_option(self, mock_factory, mock_audit):
+        svc = MagicMock()
+        svc.delete_campaigns.return_value = [_ok_result('delete campaign 8', '8')]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(app, ['campaign', 'delete', '--ids', '8', '--yes'])
+        assert result.exit_code == 0
+        svc.delete_campaigns.assert_called_once_with([8], dry_run=False)

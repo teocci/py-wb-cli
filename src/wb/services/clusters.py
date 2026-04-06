@@ -373,7 +373,7 @@ class ClusterService:
             Combined list of active + excluded clusters.
         """
         result: list[SearchCluster] = []
-        for item in raw.get('items', []):
+        for item in (raw.get('items') or []):
             nq = item.get('normQueries', {}) or {}
             for phrase in (nq.get('active') or []):
                 result.append(

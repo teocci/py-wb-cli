@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from wb.client.promotion import PromotionClient
-from wb.core.exceptions import ValidationError
+from wb.core.exceptions import ValidationError, WbCliError
 from wb.domain.enums import CampaignStatus, CampaignType
 from wb.domain.models import (
     Campaign,
@@ -234,6 +234,109 @@ class CampaignService:
             success=True, action=action, target_id=str(campaign_id),
             message='Campaign deleted',
         )
+
+    def start_campaigns(
+            self,
+            campaign_ids: list[int],
+            dry_run: bool = False,
+    ) -> list[MutationResult]:
+        """Start multiple campaigns, collecting per-campaign results.
+
+        Calls start_campaign for each ID. Failures for individual campaigns
+        are captured in the result list without aborting the rest.
+
+        Args:
+            campaign_ids: Target campaign identifiers.
+            dry_run: If True, plan without executing.
+
+        Returns:
+            List of MutationResult, one per campaign_id.
+        """
+        results: list[MutationResult] = []
+        for cid in campaign_ids:
+            try:
+                results.append(self.start_campaign(cid, dry_run=dry_run))
+            except WbCliError as exc:
+                results.append(MutationResult(
+                    success=False, action=f'start campaign {cid}',
+                    target_id=str(cid), message=str(exc),
+                ))
+        return results
+
+    def pause_campaigns(
+            self,
+            campaign_ids: list[int],
+            dry_run: bool = False,
+    ) -> list[MutationResult]:
+        """Pause multiple campaigns, collecting per-campaign results.
+
+        Args:
+            campaign_ids: Target campaign identifiers.
+            dry_run: If True, plan without executing.
+
+        Returns:
+            List of MutationResult, one per campaign_id.
+        """
+        results: list[MutationResult] = []
+        for cid in campaign_ids:
+            try:
+                results.append(self.pause_campaign(cid, dry_run=dry_run))
+            except WbCliError as exc:
+                results.append(MutationResult(
+                    success=False, action=f'pause campaign {cid}',
+                    target_id=str(cid), message=str(exc),
+                ))
+        return results
+
+    def stop_campaigns(
+            self,
+            campaign_ids: list[int],
+            dry_run: bool = False,
+    ) -> list[MutationResult]:
+        """Stop multiple campaigns, collecting per-campaign results.
+
+        Args:
+            campaign_ids: Target campaign identifiers.
+            dry_run: If True, plan without executing.
+
+        Returns:
+            List of MutationResult, one per campaign_id.
+        """
+        results: list[MutationResult] = []
+        for cid in campaign_ids:
+            try:
+                results.append(self.stop_campaign(cid, dry_run=dry_run))
+            except WbCliError as exc:
+                results.append(MutationResult(
+                    success=False, action=f'stop campaign {cid}',
+                    target_id=str(cid), message=str(exc),
+                ))
+        return results
+
+    def delete_campaigns(
+            self,
+            campaign_ids: list[int],
+            dry_run: bool = False,
+    ) -> list[MutationResult]:
+        """Delete multiple campaigns, collecting per-campaign results.
+
+        Args:
+            campaign_ids: Target campaign identifiers.
+            dry_run: If True, plan without executing.
+
+        Returns:
+            List of MutationResult, one per campaign_id.
+        """
+        results: list[MutationResult] = []
+        for cid in campaign_ids:
+            try:
+                results.append(self.delete_campaign(cid, dry_run=dry_run))
+            except WbCliError as exc:
+                results.append(MutationResult(
+                    success=False, action=f'delete campaign {cid}',
+                    target_id=str(cid), message=str(exc),
+                ))
+        return results
 
     def add_items(
             self,

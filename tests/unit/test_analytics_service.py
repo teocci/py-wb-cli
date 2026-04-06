@@ -94,11 +94,41 @@ class TestGetProductHistory:
         with pytest.raises(ValidationError, match='At least one'):
             service.get_product_history('2025-01-01', '2025-01-07', [])
 
-    def test_too_many_nm_ids_raises(self, service):
-        with pytest.raises(ValidationError, match='Maximum 20'):
-            service.get_product_history(
-                '2025-01-01', '2025-01-07', list(range(21))
-            )
+    def test_21_nm_ids_auto_chunks_into_two_calls(self, service, mock_client):
+        mock_client.get_funnel_history.return_value = []
+        service.get_product_history('2025-01-01', '2025-01-07', list(range(21)))
+        assert mock_client.get_funnel_history.call_count == 2
+        first_call_ids = mock_client.get_funnel_history.call_args_list[0][0][0]['nmIds']
+        second_call_ids = mock_client.get_funnel_history.call_args_list[1][0][0]['nmIds']
+        assert len(first_call_ids) == 20
+        assert len(second_call_ids) == 1
+
+    def test_exactly_20_nm_ids_one_call(self, service, mock_client):
+        mock_client.get_funnel_history.return_value = []
+        service.get_product_history('2025-01-01', '2025-01-07', list(range(20)))
+        assert mock_client.get_funnel_history.call_count == 1
+
+    def test_40_nm_ids_two_calls_of_20(self, service, mock_client):
+        mock_client.get_funnel_history.return_value = []
+        service.get_product_history('2025-01-01', '2025-01-07', list(range(40)))
+        assert mock_client.get_funnel_history.call_count == 2
+
+    def test_results_from_chunks_are_merged(self, service, mock_client):
+        chunk1_item = {
+            'product': {'nmId': 1, 'title': 'A'},
+            'history': [],
+            'currency': 'RUB',
+        }
+        chunk2_item = {
+            'product': {'nmId': 21, 'title': 'B'},
+            'history': [],
+            'currency': 'RUB',
+        }
+        mock_client.get_funnel_history.side_effect = [[chunk1_item], [chunk2_item]]
+        results = service.get_product_history(
+            '2025-01-01', '2025-01-07', list(range(21))
+        )
+        assert len(results) == 2
 
 
 class TestGetGroupedHistory:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_profile, get_renderer
+from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
 from wb.domain.models import ClusterBidMutation
 
@@ -85,7 +85,7 @@ def cluster_list(
         return
 
     data = [asdict(c) for c in clusters]
-    renderer.display(data, headers=_CLUSTER_HEADERS, title='Search Clusters')
+    renderer.display(data, headers=_CLUSTER_HEADERS, title='Search Clusters', fields=get_fields(ctx))
 
 
 @cluster_app.command('active')
@@ -106,7 +106,7 @@ def cluster_active(
         return
 
     data = [asdict(c) for c in clusters]
-    renderer.display(data, headers=_CLUSTER_HEADERS, title='Active Clusters')
+    renderer.display(data, headers=_CLUSTER_HEADERS, title='Active Clusters', fields=get_fields(ctx))
 
 
 @cluster_app.command('inactive')
@@ -127,7 +127,7 @@ def cluster_inactive(
         return
 
     data = [asdict(c) for c in clusters]
-    renderer.display(data, headers=_CLUSTER_HEADERS, title='Inactive Clusters')
+    renderer.display(data, headers=_CLUSTER_HEADERS, title='Inactive Clusters', fields=get_fields(ctx))
 
 
 @cluster_app.command('bids')
@@ -148,7 +148,7 @@ def cluster_bids(
         return
 
     data = [asdict(c) for c in clusters]
-    renderer.display(data, headers=_CLUSTER_HEADERS, title='Cluster Bids')
+    renderer.display(data, headers=_CLUSTER_HEADERS, title='Cluster Bids', fields=get_fields(ctx))
 
 
 @cluster_app.command('stats')
@@ -179,7 +179,7 @@ def cluster_stats(
         'Norm Query', 'Views', 'Clicks', 'CTR',
         'Orders', 'Spend', 'Avg Pos',
     ]
-    renderer.display(data, headers=headers, title='Cluster Statistics')
+    renderer.display(data, headers=headers, title='Cluster Statistics', fields=get_fields(ctx))
 
 
 @cluster_app.command('stats-daily')
@@ -211,7 +211,7 @@ def cluster_stats_daily(
         'Date', 'Norm Query', 'Views', 'Clicks', 'CTR',
         'Orders', 'Spend', 'Avg Pos',
     ]
-    renderer.display(daily, headers=headers, title='Daily Cluster Statistics')
+    renderer.display(daily, headers=headers, title='Daily Cluster Statistics', fields=get_fields(ctx))
 
 
 # ── Write commands ───────────────────────────────────────────────────
@@ -376,7 +376,7 @@ def minus_list(
 
     data = asdict(phrase_set)
     headers = ['Campaign ID', 'NM ID', 'Phrases']
-    renderer.display(data, headers=headers, title='Minus Phrases')
+    renderer.display(data, headers=headers, title='Minus Phrases', fields=get_fields(ctx))
 
 
 @minus_app.command('set')

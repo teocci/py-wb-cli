@@ -61,6 +61,10 @@ def main_callback(
         quiet: bool = typer.Option(False, '--quiet', '-q', help='Suppress non-essential output'),
         json_output: bool = typer.Option(False, '--json', help='Output in JSON format'),
         profile: str | None = typer.Option(None, '--profile', '-p', help='Use a specific profile'),
+        fields: str | None = typer.Option(
+            None, '--fields',
+            help='Comma-separated output fields to include (e.g. nm_id,orders,views)',
+        ),
 ) -> None:
     """WB CLI global options."""
     _configure_logging(verbose)
@@ -69,6 +73,7 @@ def main_callback(
     ctx.obj['quiet'] = quiet
     ctx.obj['json_output'] = json_output
     ctx.obj['profile'] = profile
+    ctx.obj['fields'] = [f.strip() for f in fields.split(',')] if fields else None
 
 
 @app.command()

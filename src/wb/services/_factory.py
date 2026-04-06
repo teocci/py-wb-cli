@@ -176,11 +176,24 @@ def create_budget_service(profile_name: str | None = None):
 def create_stats_service(profile_name: str | None = None):
     """Create a StatsService from profile credentials.
 
+    Wires in the shared CacheStore so API results are persisted
+    per-day to the campaign_stats SQLite table automatically.
+
     Args:
         profile_name: Profile name, or None for active profile.
     """
+    from wb.storage.cache import CacheStore
     from wb.services.stats import StatsService
-    return StatsService(create_promotion_client(profile_name))
+
+    settings = Settings()
+    settings.ensure_config_dir()
+    resolved = _resolve_profile_name(profile_name, settings)
+    store = CacheStore(settings.config_dir / CACHE_DB_FILE)
+    return StatsService(
+        client=create_promotion_client(profile_name),
+        cache_store=store,
+        profile_name=resolved,
+    )
 
 
 def create_cluster_service(profile_name: str | None = None):

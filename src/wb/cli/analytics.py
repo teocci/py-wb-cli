@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from wb.cli._helpers import get_profile, get_renderer
+from wb.cli._helpers import get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
 
 analytics_app = typer.Typer(
@@ -95,7 +95,7 @@ def funnel_products(
         'NM ID', 'Title', 'Opens', 'Cart', 'Orders',
         'Order Sum', 'Buyouts', 'Cart %', 'Order %',
     ]
-    renderer.display(data, headers=headers, title='Sales Funnel')
+    renderer.display(data, headers=headers, title='Sales Funnel', fields=get_fields(ctx))
 
 
 @funnel_app.command('history')
@@ -122,7 +122,7 @@ def funnel_history(
 
     data = [asdict(item) for item in items]
     headers = ['NM ID', 'Title', 'History']
-    renderer.display(data, headers=headers, title='Funnel History')
+    renderer.display(data, headers=headers, title='Funnel History', fields=get_fields(ctx))
 
 
 @funnel_app.command('grouped')
@@ -152,7 +152,7 @@ def funnel_grouped(
 
     data = [asdict(item) for item in items]
     headers = ['NM ID', 'Title', 'History']
-    renderer.display(data, headers=headers, title='Grouped History')
+    renderer.display(data, headers=headers, title='Grouped History', fields=get_fields(ctx))
 
 
 # ── Search Report commands ───────────────────────────────────────────
@@ -183,7 +183,7 @@ def search_main(
         renderer.success('No search report data available.')
         return
 
-    renderer.display(data, headers=[], title='Search Report')
+    renderer.display(data, headers=[], title='Search Report', fields=get_fields(ctx))
 
 
 @search_app.command('groups')
@@ -217,7 +217,7 @@ def search_groups(
 
     data = [asdict(g) for g in groups]
     headers = ['Subject', 'Brand', 'Tag ID', 'Products']
-    renderer.display(data, headers=headers, title='Search Groups')
+    renderer.display(data, headers=headers, title='Search Groups', fields=get_fields(ctx))
 
 
 @search_app.command('details')
@@ -253,7 +253,7 @@ def search_details(
 
     data = [asdict(p) for p in products]
     headers = ['NM ID', 'Name', 'Opens', 'Cart', 'Orders', 'Avg Pos', 'Visibility']
-    renderer.display(data, headers=headers, title='Search Details')
+    renderer.display(data, headers=headers, title='Search Details', fields=get_fields(ctx))
 
 
 @search_app.command('search-texts')
@@ -277,7 +277,7 @@ def search_texts(
 
     data = [asdict(t) for t in texts]
     headers = ['Text', 'Frequency', 'Avg Pos', 'Opens', 'Cart', 'Orders', 'Visibility']
-    renderer.display(data, headers=headers, title='Search Texts')
+    renderer.display(data, headers=headers, title='Search Texts', fields=get_fields(ctx))
 
 
 @search_app.command('orders')
@@ -300,7 +300,7 @@ def search_orders(
         renderer.success('No order data available.')
         return
 
-    renderer.display(data, headers=[], title='Search Orders')
+    renderer.display(data, headers=[], title='Search Orders', fields=get_fields(ctx))
 
 
 # ── CSV Report commands ──────────────────────────────────────────────
@@ -332,7 +332,7 @@ def csv_create(
     status = svc.create_csv_report(report_type, name, params)
 
     data = asdict(status)
-    renderer.display(data, headers=[], title='Report Created')
+    renderer.display(data, headers=[], title='Report Created', fields=get_fields(ctx))
 
 
 @csv_app.command('list')
@@ -354,7 +354,7 @@ def csv_list(
 
     data = [asdict(r) for r in reports]
     headers = ['ID', 'Name', 'Status', 'Size', 'Created', 'Start', 'End']
-    renderer.display(data, headers=headers, title='CSV Reports')
+    renderer.display(data, headers=headers, title='CSV Reports', fields=get_fields(ctx))
 
 
 @csv_app.command('retry')

@@ -7,7 +7,7 @@ from dataclasses import asdict
 
 import typer
 
-from wb.cli._helpers import get_profile, get_renderer
+from wb.cli._helpers import get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
 from wb.core.exceptions import WbCliError
 

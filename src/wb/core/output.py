@@ -82,6 +82,30 @@ def render_success(message: str) -> None:
     _stdout_console.print(f'[bold green]Success:[/bold green] {message}')
 
 
+def _filter_fields(data: Any, fields: list[str] | None) -> Any:
+    """Filter dict keys or list-of-dicts to only the specified fields.
+
+    Args:
+        data: Value to filter.
+        fields: Field names to keep. None means keep all.
+
+    Returns:
+        Filtered data with only the requested keys, or original if no filter.
+    """
+    if fields is None:
+        return data
+    field_set = set(fields)
+    if isinstance(data, list):
+        return [
+            {k: v for k, v in item.items() if k in field_set}
+            if isinstance(item, dict) else item
+            for item in data
+        ]
+    if isinstance(data, dict):
+        return {k: v for k, v in data.items() if k in field_set}
+    return data
+
+
 class OutputRenderer:
     """Dispatches output to the appropriate renderer based on format and verbosity.
 
@@ -108,6 +132,7 @@ class OutputRenderer:
             data: Any,
             headers: list[str] | None = None,
             title: str | None = None,
+            fields: list[str] | None = None,
     ) -> None:
         """Render data according to the configured output format.
 
@@ -116,18 +141,31 @@ class OutputRenderer:
                 directly; for table format it should be a list of lists.
             headers: Column headers (required for table format).
             title: Optional title for table output.
+            fields: If provided, filter output to only these fields/columns.
+                For JSON: keys are filtered from dicts. For table: columns
+                whose header labels match (case-insensitive) are included.
         """
         if self.output_format == OutputFormat.QUIET:
             return
 
         if self.output_format == OutputFormat.JSON:
-            _stdout_console.print(render_json(data), highlight=False)
+            _stdout_console.print(
+                render_json(_filter_fields(data, fields)), highlight=False,
+            )
             return
 
         if headers is None:
             # Fall back to JSON when no headers are available for a table
-            _stdout_console.print(render_json(data), highlight=False)
+            _stdout_console.print(
+                render_json(_filter_fields(data, fields)), highlight=False,
+            )
             return
+
+        if fields is not None:
+            keep = {f.lower() for f in fields}
+            indices = [i for i, h in enumerate(headers) if h.lower() in keep]
+            headers = [headers[i] for i in indices]
+            data = [[row[i] for i in indices] for row in data]
 
         render_table(headers, data, title=title)
 

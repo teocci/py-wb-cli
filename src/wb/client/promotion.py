@@ -390,6 +390,15 @@ class PromotionClient:
         """
         self._http.patch(EP_BID_SET, json_body={'bids': [payload]})
 
+    def set_item_bids_batch(self, payloads: list[dict]) -> None:
+        """Set bids for multiple campaign items in a single PATCH call.
+
+        Args:
+            payloads: List of bid payload dicts from BidMutation.to_api(),
+                      max BID_BATCH_SIZE per call — caller handles chunking.
+        """
+        self._http.patch(EP_BID_SET, json_body={'bids': payloads})
+
     def set_cluster_bids(self, bids: list[dict]) -> None:
         """Set bids for search clusters via POST normquery/bids.
 

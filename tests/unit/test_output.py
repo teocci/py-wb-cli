@@ -87,3 +87,52 @@ class TestOutputRendererQuietFormat:
         renderer.error('something broke')
         captured = capsys.readouterr()
         assert 'something broke' in captured.err
+
+
+class TestFilterFields:
+    """Tests for _filter_fields and OutputRenderer.display with fields param."""
+
+    def test_filter_fields_none_returns_data_unchanged(self):
+        from wb.core.output import _filter_fields
+        data = [{'nm_id': 1, 'orders': 10, 'views': 100}]
+        assert _filter_fields(data, None) == data
+
+    def test_filter_fields_list_of_dicts(self):
+        from wb.core.output import _filter_fields
+        data = [{'nm_id': 1, 'orders': 10, 'views': 100}]
+        result = _filter_fields(data, ['nm_id'])
+        assert result == [{'nm_id': 1}]
+
+    def test_filter_fields_dict(self):
+        from wb.core.output import _filter_fields
+        data = {'nm_id': 1, 'orders': 10}
+        result = _filter_fields(data, ['nm_id'])
+        assert result == {'nm_id': 1}
+
+    def test_filter_nonexistent_field_returns_empty_dict(self):
+        from wb.core.output import _filter_fields
+        data = [{'nm_id': 1}]
+        result = _filter_fields(data, ['nonexistent'])
+        assert result == [{}]
+
+    def test_display_json_with_fields(self, capsys):
+        renderer = OutputRenderer(
+            output_format=OutputFormat.JSON,
+            verbosity=VerbosityLevel.NORMAL,
+        )
+        data = [{'nm_id': 1, 'orders': 10, 'views': 100}]
+        renderer.display(data, fields=['nm_id'])
+        captured = capsys.readouterr()
+        parsed = json.loads(captured.out)
+        assert parsed == [{'nm_id': 1}]
+
+    def test_display_json_no_fields_shows_all(self, capsys):
+        renderer = OutputRenderer(
+            output_format=OutputFormat.JSON,
+            verbosity=VerbosityLevel.NORMAL,
+        )
+        data = [{'nm_id': 1, 'orders': 10}]
+        renderer.display(data, fields=None)
+        captured = capsys.readouterr()
+        parsed = json.loads(captured.out)
+        assert 'orders' in parsed[0]

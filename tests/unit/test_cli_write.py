@@ -57,23 +57,23 @@ class TestCampaignStart:
     @patch(CAMPAIGN_FACTORY)
     def test_start_with_yes_flag(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.start_campaign.return_value = _ok_result('start campaign 10', '10')
+        svc.start_campaigns.return_value = [_ok_result('start campaign 10', '10')]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'start', '10', '--yes'])
         assert result.exit_code == 0
-        svc.start_campaign.assert_called_once_with(10, dry_run=False)
+        svc.start_campaigns.assert_called_once_with([10], dry_run=False)
 
     @patch(CAMPAIGN_FACTORY)
     def test_start_dry_run(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.start_campaign.return_value = _dry_result()
+        svc.start_campaigns.return_value = [_dry_result()]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'start', '10', '--dry-run'])
         assert result.exit_code == 0
         assert 'DRY-RUN' in result.output
-        svc.start_campaign.assert_called_once_with(10, dry_run=True)
+        svc.start_campaigns.assert_called_once_with([10], dry_run=True)
 
 
 class TestCampaignPause:
@@ -82,17 +82,17 @@ class TestCampaignPause:
     @patch(CAMPAIGN_FACTORY)
     def test_pause_with_yes(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.pause_campaign.return_value = _ok_result()
+        svc.pause_campaigns.return_value = [_ok_result()]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'pause', '5', '--yes'])
         assert result.exit_code == 0
-        svc.pause_campaign.assert_called_once_with(5, dry_run=False)
+        svc.pause_campaigns.assert_called_once_with([5], dry_run=False)
 
     @patch(CAMPAIGN_FACTORY)
     def test_pause_dry_run(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.pause_campaign.return_value = _dry_result()
+        svc.pause_campaigns.return_value = [_dry_result()]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'pause', '5', '--dry-run'])
@@ -106,7 +106,7 @@ class TestCampaignStop:
     @patch(CAMPAIGN_FACTORY)
     def test_stop_with_yes(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.stop_campaign.return_value = _ok_result()
+        svc.stop_campaigns.return_value = [_ok_result()]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'stop', '3', '--yes'])
@@ -115,7 +115,7 @@ class TestCampaignStop:
     @patch(CAMPAIGN_FACTORY)
     def test_stop_dry_run(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.stop_campaign.return_value = _dry_result()
+        svc.stop_campaigns.return_value = [_dry_result()]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'stop', '3', '--dry-run'])
@@ -148,17 +148,17 @@ class TestCampaignDelete:
     @patch(CAMPAIGN_FACTORY)
     def test_delete_with_yes(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.delete_campaign.return_value = _ok_result()
+        svc.delete_campaigns.return_value = [_ok_result()]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'delete', '8', '--yes'])
         assert result.exit_code == 0
-        svc.delete_campaign.assert_called_once_with(8, dry_run=False)
+        svc.delete_campaigns.assert_called_once_with([8], dry_run=False)
 
     @patch(CAMPAIGN_FACTORY)
     def test_delete_dry_run(self, mock_factory, mock_audit):
         svc = MagicMock()
-        svc.delete_campaign.return_value = _dry_result()
+        svc.delete_campaigns.return_value = [_dry_result()]
         mock_factory.return_value = svc
 
         result = runner.invoke(app, ['campaign', 'delete', '8', '--dry-run'])

@@ -33,20 +33,30 @@ python -m wb auth --help
 
 ## Version Scheme
 
-| Version | Milestone |
-|---------|-----------|
-| 0.1.0 | Phase 0 - Foundation |
-| 0.2.0 | Phase 1 - Read-only visibility |
-| 0.3.0 | Phase 2 - Core write controls |
-| 0.3.1 | Auth - Dual auth (portal session + env var fallback) |
-| 0.3.2 | API Fix - Full endpoint migration to current WB API |
-| 0.4.0 | Phase 3 - Search-cluster control |
-| 0.5.0 | Phase 4 - Analytics bridge |
-| 0.6.0 | Phase 5 - Optimization workflows |
-| 0.7.0 | Phase 6 - Agent platform support (SDK) |
-| 0.8.0 | Phase 7 - Local SQLite cache |
-| 0.9.0 | Agent Fixes - JSON errors, per-NM stats, shared helpers |
-| 0.10.0 | Phase 8A - Warehouse inventory reports |
+Phase naming: `N` = core implementation · `NA` = sub-phase of N · `F-N` = fix · `I-N` = improvement
+
+| Version | Phase | Milestone |
+|---------|-------|-----------|
+| 0.1.0 | 0 | Foundation |
+| 0.2.0 | 1 | Read-only visibility |
+| 0.3.0 | 2 | Core write controls |
+| 0.3.1 | F-1 | Auth fix — dual auth, portal session, env var fallback |
+| 0.3.2 | F-2 | API fix — full endpoint migration to current WB API |
+| 0.4.0 | 3 | Search-cluster control |
+| 0.5.0 | 4 | Analytics bridge |
+| 0.6.0 | 5 | Optimization workflows |
+| 0.7.0 | 6 | Agent platform support (SDK) |
+| 0.8.0 | 7 | Local SQLite cache |
+| 0.9.0 | F-3 | Agent-critical fixes — JSON errors, per-NM stats, shared helpers |
+| 0.10.0 | 8A | Warehouse inventory reports |
+| 0.11.0 | 8B | Stock runway (days-until-stockout) |
+| 0.12.0 | 8C | Report caching & multi-seller storage |
+| 0.13.0 | 8D | Prices & Discounts command |
+| 0.14.0 | I-1 | Batch operations — multi-ID, auto-chunking, --fields |
+| 0.15.0 | I-2 | Per-product cost tracking — product-spend, booster stats |
+| 1.0.0 | I-3 | Composite commands (stable release) |
+| 1.1.0 | I-4 | Rate limiting & resilience |
+| 1.2.0 | I-5 | Polish & agent ergonomics |
 
 ## Project Layout
 
@@ -133,9 +143,56 @@ Full design: `wb_cli_authorization_plan.md`
 
 ### Known WB API quirks
 
-| API | Field | Wrong | Correct |
-|-----|-------|-------|---------|
+| API | Field/Behavior | Wrong assumption | Correct behavior |
+|-----|----------------|-----------------|-----------------|
 | Analytics v3 `sales-funnel/*` | `selectedPeriod` start key | `begin` | `start` |
+| Analytics v3 `sales-funnel/products/history` | Date range limit | Any 30-day window accepted | Max ~7-day lookback; farther dates → 400 "invalid start day: excess limit on days" |
+| Analytics v3 `sales-funnel/products/history` | Rate limit | Same as other analytics endpoints | Strict per-minute limit; >2 rapid calls → 429. Space calls or accept exit 5 in tests |
+| Analytics v3 `sales-funnel/products/history` | Unknown NM IDs | Returns empty list | Returns 400 — only use real seller NM IDs in integration tests |
+| Promotion `/adv/v3/fullstats` | Campaigns with no data | Returns empty list | Returns HTTP 400 — don't call for never-started campaigns |
+| Promotion `/adv/v3/fullstats` | Rate limit | Relaxed | Strict: ~3 calls/min. Space calls ≥ 20s apart in integration tests |
+| Normquery `/adv/v0/normquery/list` | `items` field | Always a list | Can be `null` when campaign has no clusters — use `(raw.get('items') or [])` |
+| Analytics v3 `sales-funnel/products/history` | `dt` field | ISO date string | Returns empty string `""` — date is not reliably parsed from this endpoint |
+| Promotion `/api/advert/v0/bids/recommendations` | Paused campaigns | Returns bid data | Returns HTTP 400 for campaigns not currently running |
+| Analytics `search-report` | Any API token | Works with standard token | Requires `Analytics/Advanced` scope — returns HTTP 403 otherwise |
+
+## CLI Output Rendering Pattern
+
+`OutputRenderer.display()` is **JSON-only**. For table mode it passes `data` straight to
+`render_table()` which calls `table.add_row(*row)` — this only works when `data` is a
+**list of lists** (strings). Passing a list of dicts produces the dict *keys* as cell
+values, not the values.
+
+**Rule:** Every command must branch on `renderer.is_json`:
+
+```python
+if renderer.is_json:
+    typer.echo(json.dumps([asdict(s) for s in results], indent=2, ensure_ascii=False))
+    return
+
+from wb.core.output import render_table
+rows = [[str(s.field_a), str(s.field_b), ...] for s in results]
+render_table(['Col A', 'Col B', ...], rows, title='My Table')
+```
+
+Never pass `[asdict(s) for s in results]` directly to `renderer.display()` for table output.
+The `--fields` filtering provided by `renderer.display()` only works in JSON mode. For table
+field filtering, filter `headers`/`rows` manually or omit columns.
+
+## Null-Safety Pattern for WB API Responses
+
+WB API sometimes returns `null` where a list is expected (e.g. `normquery/list` returns
+`{"items": null}` for campaigns with no clusters). Always guard list fields:
+
+```python
+# Wrong — crashes on null
+for item in raw.get('items', []):
+
+# Correct — handles null and missing key
+for item in (raw.get('items') or []):
+```
+
+Apply this to any `raw.get(key, [])` call that processes API responses.
 
 ## Key Design Decisions
 
