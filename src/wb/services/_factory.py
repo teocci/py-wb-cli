@@ -9,6 +9,7 @@ from wb.core.config import Settings
 from wb.core.constants import (
     ANALYTICS_BASE_URL,
     CACHE_DB_FILE,
+    PRICES_BASE_URL,
     PROMOTION_BASE_URL,
     STATISTICS_BASE_URL,
 )
@@ -32,6 +33,7 @@ __all__ = [
     'create_reports_service',
     'create_statistics_client',
     'create_stock_runway_service',
+    'create_prices_service',
 ]
 
 
@@ -443,3 +445,23 @@ def create_cache_service(profile_name: str | None = None):
         stats_svc=_lazy_stats(client),
         cluster_svc=_lazy_cluster(client),
     )
+
+
+def create_prices_service(profile_name: str | None = None):
+    """Create a PricesService from profile credentials.
+
+    Uses the same promotion token as other seller API calls.
+    The Prices & Discounts API uses the identical Authorization header format.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured PricesService instance.
+    """
+    from wb.client.prices import PricesClient
+    from wb.services.prices import PricesService
+
+    token = _get_promotion_token(profile_name)
+    http = WbHttpClient(base_url=PRICES_BASE_URL, token=token)
+    return PricesService(PricesClient(http))

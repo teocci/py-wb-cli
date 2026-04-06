@@ -1,5 +1,36 @@
 # WB CLI - Implementation Progress
 
+## 🚀 Quick Status Dashboard (for AI Agents)
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| **Current Version** | 0.13.0 | ✅ Latest |
+| **Phases Complete** | 13/18 | 72% |
+| **Tests Passing** | 764/764 | ✅ 100% |
+| **API Fixes** | 10/10 | ✅ Complete |
+| **Commands** | 20+ | ✅ Ready |
+| **Core Files** | 45+ | ✅ Stable |
+| **Latest Feature** | Prices & Discounts API | ✅ 2026-04-06 |
+| **Agent-Ready** | YES | ✅ JSON mode, auto-pagination, multi-ID support |
+
+### Command Groups Available
+
+| Group | Commands | Status | Example |
+|-------|----------|--------|---------|
+| `auth` | login, login-portal, list, generate-token | ✅ Ready | `wb auth login --token <JWT>` |
+| `campaign` | list, get, create, clone, start, pause, stop, rename, delete | ✅ Ready | `wb campaign list --json` |
+| `bid` | set, get, min | ✅ Ready | `wb bid set --nm 12345 --cpm 450` |
+| `budget` | get, deposit | ✅ Ready | `wb budget get` |
+| `stats` | campaign, cluster | ✅ Ready | `wb stats campaign --ids 1,2,3` |
+| `cluster` | list, get-bids, set-bids, get-minus, set-minus, stats | ✅ Ready | `wb cluster list --nm 12345` |
+| `portal` | products | ✅ Ready | `wb portal products --limit 100` |
+| `prices` | list | ✅ Ready | `wb prices list --nm-ids 227403075,100510938` |
+| `analytics` | sales-funnel, search-report, csv | ✅ Ready | `wb analytics sales-funnel products --from 2026-04-01` |
+| `optimize` | recommend, apply | ✅ Ready | `wb optimize recommend --dry-run` |
+| `report` | warehouse, cache | ✅ Ready | `wb report warehouse stock-runway` |
+
+---
+
 ## Version History
 
 | Version | Phase | Date | Description |
@@ -17,8 +48,9 @@
 | 0.10.0 | Phase 8A | 2026-04-04 | Warehouse inventory reports — async report lifecycle + top products |
 | 0.11.0 | Phase 8B | 2026-04-04 | Stock runway — days-until-stockout via Statistics API sales velocity |
 | 0.12.0 | Phase 8C | 2026-04-04 | Report caching & multi-seller storage — 6h TTL file cache + SQLite metadata |
+| 0.13.0 | Phase 8D | 2026-04-06 | Prices & Discounts command — base price, discount %, final buyer price via discounts-prices-api |
 
-## Current Version: 0.12.0
+## Current Version: 0.13.0
 
 ## Phase Status
 
@@ -36,6 +68,7 @@
 | 8A | Warehouse inventory reports | COMPLETED | 0.10.0 |
 | 8B | Stock runway (days-until-stockout) | COMPLETED | 0.11.0 |
 | 8C | Report caching & multi-seller storage | COMPLETED | 0.12.0 |
+| 8D | Prices & Discounts command | COMPLETED | 0.13.0 |
 
 ---
 

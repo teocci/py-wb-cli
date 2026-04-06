@@ -31,6 +31,8 @@ __all__ = [
     'CampaignCreate',
     'BidMutation',
     'PlacementConfig',
+    'ProductPriceSize',
+    'ProductPrice',
 ]
 
 
@@ -780,3 +782,100 @@ class PortalProductCard:
             tags=data.get('tags', []),
             updated_at=data.get('updateAt', ''),
         )
+
+
+@dataclass(slots=True)
+class ProductPriceSize:
+    """A single size entry from the Prices & Discounts API.
+
+    Attributes:
+        size_id: WB size identifier.
+        price: Base price in currency units (before any discount).
+        discounted_price: Final buyer-facing price after seller discount.
+        club_discounted_price: WB Club member price.
+        tech_size_name: Size label ('0' for non-sized items, 'XL', etc.).
+    """
+
+    size_id: int
+    price: float
+    discounted_price: float
+    club_discounted_price: float
+    tech_size_name: str = '0'
+
+    @classmethod
+    def from_api(cls, data: dict) -> ProductPriceSize:
+        """Create from a sizes[] entry in the listGoods response.
+
+        Args:
+            data: Raw size dict from the Prices API response.
+        """
+        return cls(
+            size_id=data.get('sizeID', 0),
+            price=float(data.get('price', 0)),
+            discounted_price=float(data.get('discountedPrice', 0)),
+            club_discounted_price=float(data.get('clubDiscountedPrice', 0)),
+            tech_size_name=data.get('techSizeName', '0'),
+        )
+
+
+@dataclass(slots=True)
+class ProductPrice:
+    """Normalized product price record from the Prices & Discounts API.
+
+    For non-sized products, sizes contains exactly one entry.
+    For clothing products, sizes may contain multiple entries.
+
+    Convenience properties (base_price, final_price, club_price) always
+    reflect the first size entry — the canonical price for non-sized goods
+    and the first/default size for clothing.
+
+    Attributes:
+        nm_id: WB nomenclature ID (article number).
+        vendor_code: Seller's own article/vendor code.
+        currency_iso: ISO 4217 currency code (e.g. 'RUB').
+        discount: Seller discount percentage applied across all sizes.
+        club_discount: WB Club additional discount percentage (0 when none).
+        editable_size_price: Whether per-size pricing is enabled.
+        sizes: List of size-level price entries.
+    """
+
+    nm_id: int
+    vendor_code: str
+    currency_iso: str
+    discount: int
+    club_discount: int
+    editable_size_price: bool
+    sizes: list[ProductPriceSize] = field(default_factory=list)
+
+    @classmethod
+    def from_api(cls, data: dict) -> ProductPrice:
+        """Create from a listGoods[] entry in the Prices API response.
+
+        Args:
+            data: Raw product dict from the listGoods array.
+        """
+        sizes = [ProductPriceSize.from_api(s) for s in data.get('sizes', [])]
+        return cls(
+            nm_id=data.get('nmID', 0),
+            vendor_code=data.get('vendorCode', ''),
+            currency_iso=data.get('currencyIsoCode4217', 'RUB'),
+            discount=data.get('discount', 0),
+            club_discount=data.get('clubDiscount', 0),
+            editable_size_price=data.get('editableSizePrice', False),
+            sizes=sizes,
+        )
+
+    @property
+    def base_price(self) -> float:
+        """Base price from the first size (before any discount)."""
+        return self.sizes[0].price if self.sizes else 0.0
+
+    @property
+    def final_price(self) -> float:
+        """Final buyer price from the first size (after seller discount)."""
+        return self.sizes[0].discounted_price if self.sizes else 0.0
+
+    @property
+    def club_price(self) -> float:
+        """WB Club member price from the first size."""
+        return self.sizes[0].club_discounted_price if self.sizes else 0.0

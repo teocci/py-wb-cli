@@ -81,6 +81,8 @@ __all__ = [
     'EXCLUDED_WAREHOUSE_PREFIXES',
     'REPORT_CACHE_TTL_HOURS',
     'REPORTS_DIR_NAME',
+    'PRICES_BASE_URL',
+    'EP_PRICES_GOODS_FILTER',
 ]
 
 from enum import IntEnum
@@ -89,6 +91,7 @@ from enum import IntEnum
 PROMOTION_BASE_URL = 'https://advert-api.wildberries.ru'
 ANALYTICS_BASE_URL = 'https://seller-analytics-api.wildberries.ru'
 STATISTICS_BASE_URL = 'https://statistics-api.wildberries.ru'
+PRICES_BASE_URL = 'https://discounts-prices-api.wildberries.ru'
 COMMON_API_BASE_URL = 'https://common-api.wildberries.ru'
 
 # ── Seller portal base URLs ──────────────────────────────────────────
@@ -221,6 +224,10 @@ EXCLUDED_WAREHOUSE_PREFIXES = ('В пути', 'Всего')
 # ── Report cache settings ─────────────────────────────────────────────
 REPORT_CACHE_TTL_HOURS = 6
 REPORTS_DIR_NAME = 'reports'
+
+# ── Prices & Discounts API endpoint paths ───────────────────────────
+# Source: discounts-prices-api.wildberries.ru (verified live 2026-04-05)
+EP_PRICES_GOODS_FILTER = '/api/v2/list/goods/filter'
 
 # ── Seller portal endpoint paths ─────────────────────────────────────
 EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'

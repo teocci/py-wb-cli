@@ -4,6 +4,31 @@ This document tracks improvements to make the WB CLI optimally usable by AI agen
 Discovered during real agent sessions (2026-04-03) where the CLI's limitations forced
 the agent to bypass it and call raw HTTP endpoints.
 
+## 🚀 Quick Status (for AI Agents)
+
+| Version | Phase | Status | Theme | Files | Date |
+|---------|-------|--------|-------|-------|------|
+| 0.1.0 | 0 | ✅ DONE | Foundation | core setup | 2026-01-15 |
+| 0.2.0 | 1 | ✅ DONE | Read-only visibility | campaign/stats | 2026-01-20 |
+| 0.3.0 | 2 | ✅ DONE | Core write controls | campaign mutations | 2026-02-01 |
+| 0.4.0 | 3 | ✅ DONE | Search-cluster control | cluster commands | 2026-02-10 |
+| 0.5.0 | 4 | ✅ DONE | Analytics bridge | analytics commands | 2026-02-20 |
+| 0.6.0 | 5 | ✅ DONE | Optimization workflows | optimize commands | 2026-03-01 |
+| 0.7.0 | 6 | ✅ DONE | Agent platform support | SDK | 2026-03-10 |
+| 0.8.0 | 7 | ✅ DONE | Local SQLite cache | storage/cache | 2026-03-20 |
+| 0.9.0 | A1 | ✅ DONE | Agent-critical fixes | JSON errors, per-NM stats | 2026-03-28 |
+| 0.10.0 | 8A | ✅ DONE | Warehouse inventory reports | report commands | 2026-04-04 |
+| 0.11.0 | 8B | ✅ DONE | Stock runway analysis | days-until-stockout | 2026-04-04 |
+| 0.12.0 | 8C | ✅ DONE | Report caching & multi-seller | file cache + SQLite | 2026-04-04 |
+| 0.13.0 | 8D | ✅ DONE | Prices & Discounts command | wb prices list | 2026-04-06 |
+| 0.14.0 | 2 | ⏳ PENDING | Batch operations | multi-ID support, auto-chunking | TBD |
+| 0.15.0 | 3 | ⏳ PENDING | Per-product cost tracking | product-spend command | TBD |
+| 1.0.0 | 4 | ⏳ PENDING | Composite commands | product summary | TBD |
+| 1.1.0 | 5 | ⏳ PENDING | Rate limiting & resilience | RateLimiter, backoff | TBD |
+| 1.2.0 | 6 | ⏳ PENDING | Polish & ergonomics | --compact, cache-first | TBD |
+
+**Current:** v0.13.0 — **13 phases complete**, 5 planned. **764 tests passing**.
+
 ---
 
 ## Best Practices for AI Agent CLIs
@@ -216,6 +241,43 @@ The SQLite `report_cache` table stores metadata (`profile_name`, `seller_id`,
 
 ---
 
+### Phase 8D — Prices & Discounts Command (v0.13.0)
+
+**Theme:** First-class `wb prices` command so agents always get base price, seller discount %,
+and final buyer-facing price in one call — no raw HTTP workarounds needed.
+
+Discovered during a live agent session (2026-04-05) where `wb portal products` only returned
+the base price (1,190 ₽) and the agent had to bypass the CLI to call
+`discounts-prices-api.wildberries.ru` directly.
+
+| Task | Files | Description |
+|------|-------|-------------|
+| Constants | `core/constants.py` | `PRICES_BASE_URL`, `EP_PRICES_GOODS_FILTER` |
+| Domain models | `domain/models.py` | `ProductPriceSize`, `ProductPrice` with `base_price`, `final_price`, `club_price` properties |
+| HTTP client | `client/prices.py` | `PricesClient.list_goods(limit, offset, filter_nm_id)` |
+| Service | `services/prices.py` | `PricesService.get_prices()` with auto-pagination + client-side filter |
+| Factory | `services/_factory.py` | `create_prices_service()` via promotion token |
+| CLI | `cli/prices.py` | `wb prices list --nm-ids --min-discount --json` |
+| App | `cli/app.py` | Register `prices_app` after `portal_app` |
+| Tests | `tests/unit/` | `test_prices_client.py` (8 tests), `test_prices_service.py` (20 tests) |
+
+**Output format** (`wb prices list --nm-ids 227403075,100510938,100525085`):
+```
+┌───────────────┬─────────────┬────────────┬──────────┬─────────────┬──────────┐
+│        NM ID  │ Vendor Code │ Base Price │ Discount │ Final Price │ Currency │
+├───────────────┼─────────────┼────────────┼──────────┼─────────────┼──────────┤
+│     100510938 │ 00-0002064  │  1,190 ₽   │   -27%   │     869 ₽   │   RUB    │
+│     100525085 │ 00-0002261  │  1,490 ₽   │   -28%   │   1,073 ₽   │   RUB    │
+│     227403075 │ 28447       │  1,190 ₽   │   -27%   │     869 ₽   │   RUB    │
+└───────────────┴─────────────┴────────────┴──────────┴─────────────┴──────────┘
+```
+Club Price column appears automatically when any product has a WB Club discount.
+
+**Future:** `--enrich` flag to cross-reference titles from the portal (requires separate
+portal credentials; omitted in v0.13.0 to keep the command API-token-only).
+
+---
+
 ## Version Scheme
 
 | Version | Milestone |
@@ -224,8 +286,9 @@ The SQLite `report_cache` table stores metadata (`profile_name`, `seller_id`,
 | 0.10.0 | Phase 8A — Warehouse inventory reports |
 | 0.11.0 | Phase 8B — Stock runway (days-until-stockout) |
 | 0.12.0 | Phase 8C — Report caching & multi-seller storage |
-| 0.13.0 | Phase 2 — Batch operations |
-| 0.14.0 | Phase 3 — Per-product cost tracking |
+| 0.13.0 | Phase 8D — Prices & Discounts command |
+| 0.14.0 | Phase 2 — Batch operations |
+| 0.15.0 | Phase 3 — Per-product cost tracking |
 | 1.0.0 | Phase 4 — Composite commands (stable release) |
 | 1.1.0 | Phase 5 — Rate limiting & resilience |
 | 1.2.0 | Phase 6 — Polish & agent ergonomics |

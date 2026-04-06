@@ -15,7 +15,12 @@
       "Bash(grep *)",
       "Bash(grep -n \"DisplayFormat\\\\|output.*format\\\\|--json\" /d/teocci/code/python/py-wb-cli/src/wb/cli/*.py)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_statistics_client.py tests/unit/test_stock_runway_models.py tests/unit/test_stock_runway_service.py tests/unit/test_cli_stock_runway.py -v)",
-      "Bash(.venv/Scripts/python -m pytest tests/unit/test_reports_service.py tests/unit/test_stock_runway_service.py tests/unit/test_cli_report.py -q)"
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_reports_service.py tests/unit/test_stock_runway_service.py tests/unit/test_cli_report.py -q)",
+      "Bash(ls -1 /d/teocci/code/python/py-wb-cli/src/wb/cli/*.py)",
+      "Bash(find /d/teocci/code/python/py-wb-cli/src/wb -name \"*.py\" -type f -exec grep -l \"format.*price\\\\|format.*currency\\\\|kopeck\" {} \\\\;)",
+      "Bash(ls -lh /d/teocci/code/python/py-wb-cli/src/wb/cli/*.py)",
+      "Read(//d/teocci/code/python/py-wb-cli/**)",
+      "Bash(xargs -I {} basename {})"
     ]
   }
 }

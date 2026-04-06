@@ -2,6 +2,25 @@
 
 Tracks the migration from dead WB API endpoints to the current API (discovered 2026-04-02).
 
+## 🚀 Quick Status (for AI Agents)
+
+| Fix | Name | Status | Scope | Date | Notes |
+|-----|------|--------|-------|------|-------|
+| 0 | Documentation & guard rails | ✅ DONE | docs | 2026-04-02 | Added CLAUDE.md rules + FIXES.md |
+| 1 | Constants migration | ✅ DONE | constants.py | 2026-04-02 | 14 endpoints updated, 8 normquery added |
+| 2 | Domain model updates | ✅ DONE | 9 models | 2026-04-02 | from_api() rewritten, 3 enums extended |
+| 3 | HTTP client (PUT+PATCH) | ✅ DONE | client/http.py | 2026-04-02 | Added put() and patch() methods |
+| 4 | PromotionClient rewrite | ✅ DONE | client/promotion.py | 2026-04-02 | 8 methods updated, GET→POST migrations |
+| 5 | Service layer adjustments | ✅ DONE | services/*.py | 2026-04-02 | ClusterService rewrite, StatsService cleanup |
+| 6 | CLI adjustments | ✅ DONE | cli/*.py | 2026-04-02 | Cluster commands updated, new options |
+| 7 | Test updates | ✅ DONE | tests/unit/ | 2026-04-02 | 366 tests pass (+2 cluster tests) |
+| 8 | Write endpoint verification | ✅ DONE | live API test | 2026-04-02 | Campaign create/rename/delete verified |
+| 9 | Analytics token fallback + selectedPeriod | ✅ DONE | _factory.py, analytics.py | 2026-04-03 | WB_API_TOKEN fallback, start→begin fix |
+
+**Summary:** All 10 fixes complete. **366 tests passing**. API migration ready for production.
+
+---
+
 ## Summary
 
 Live testing revealed that **10 of 12 endpoint paths** in the codebase return HTTP 404.
