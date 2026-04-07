@@ -30,7 +30,10 @@
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_cli_stats.py tests/unit/test_stats_product_spend.py -v --tb=short)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_product_service.py -v)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=short -q)",
-      "Bash(.venv/Scripts/python -m pytest tests/integration/test_composite_read.py -v)"
+      "Bash(.venv/Scripts/python -m pytest tests/integration/test_composite_read.py -v)",
+      "Bash(python -c ':*)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_rate_limiter.py tests/unit/test_batching.py -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ --tb=short)"
     ]
   }
 }

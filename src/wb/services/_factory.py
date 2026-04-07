@@ -16,6 +16,7 @@ from wb.core.constants import (
 from wb.storage.audit import AuditLogger
 
 __all__ = [
+    'ServiceContainer',
     'create_promotion_client',
     'create_portal_client',
     'create_audit_logger',
@@ -38,6 +39,102 @@ __all__ = [
 ]
 
 
+# ── Service container ─────────────────────────────────────────────────────────
+
+
+class _Container:
+    """Module-level cache for Settings and HTTP clients.
+
+    Avoids re-parsing environment variables and re-creating ``httpx.Client``
+    instances on every factory call. All access is through class methods.
+
+    The promotion HTTP client is built once with per-path rate limiters from
+    :data:`wb.core.rate_limits.ENDPOINT_LIMITS` so preemptive throttling
+    applies across all service calls that share the same client.
+
+    Call :meth:`reset` in test teardown to clear all cached state.
+    """
+
+    _settings: Settings | None = None
+    _http_clients: dict[tuple[str, str], WbHttpClient] = {}
+
+    @classmethod
+    def settings(cls) -> Settings:
+        """Return the cached Settings instance, creating it on first call.
+
+        Returns:
+            Shared Settings object with config dir ensured.
+        """
+        if cls._settings is None:
+            cls._settings = Settings()
+            cls._settings.ensure_config_dir()
+        return cls._settings
+
+    @classmethod
+    def http_client(
+            cls,
+            base_url: str,
+            token: str,
+            *,
+            with_rate_limits: bool = False,
+    ) -> WbHttpClient:
+        """Return a cached WbHttpClient for the given base URL and token.
+
+        Args:
+            base_url: API base URL.
+            token: Authorization token.
+            with_rate_limits: When True, inject per-path rate limiters from
+                :data:`wb.core.rate_limits.ENDPOINT_LIMITS`. Only the
+                promotion client needs this; analytics/statistics clients use
+                different base URLs with no shared limiter state.
+
+        Returns:
+            Existing or newly created WbHttpClient.
+        """
+        key = (base_url, token)
+        if key not in cls._http_clients:
+            limiters = _build_limiters() if with_rate_limits else None
+            cls._http_clients[key] = WbHttpClient(
+                base_url=base_url,
+                token=token,
+                path_limiters=limiters,
+            )
+        return cls._http_clients[key]
+
+    @classmethod
+    def reset(cls) -> None:
+        """Clear all cached state.
+
+        Call this in test teardown to prevent state leaking between tests::
+
+            @pytest.fixture(autouse=True)
+            def reset_container():
+                yield
+                ServiceContainer.reset()
+        """
+        cls._settings = None
+        cls._http_clients.clear()
+
+
+#: Public alias for ``_Container`` — use in tests and SDK code.
+ServiceContainer = _Container
+
+
+def _build_limiters():
+    """Build per-path RateLimiter instances from ENDPOINT_LIMITS.
+
+    Returns:
+        Dict mapping endpoint path → RateLimiter.
+    """
+    from wb.core.rate_limiter import RateLimiter
+    from wb.core.rate_limits import ENDPOINT_LIMITS
+    return {path: RateLimiter(calls, period)
+            for path, (calls, period) in ENDPOINT_LIMITS.items()}
+
+
+# ── Token resolution ──────────────────────────────────────────────────────────
+
+
 def _get_promotion_token(
         profile_name: str | None = None,
         cli_token: str | None = None,
@@ -55,10 +152,9 @@ def _get_promotion_token(
     """
     if cli_token:
         return cli_token
-    settings = Settings()
+    settings = _Container.settings()
     if settings.api_token:
         return settings.api_token
-    settings.ensure_config_dir()
     store = ProfileStore(settings.config_dir)
     profile = store.get_profile(profile_name)
     return profile.get_token('promotion')
@@ -95,7 +191,7 @@ def create_portal_client(
         return PortalClient(authorizev3=cli_authorizev3, cookie=cli_cookie)
 
     # Priority 2: Env vars / .env (handled by pydantic-settings)
-    settings = Settings()
+    settings = _Container.settings()
     if settings.authorizev3 and settings.portal_cookie:
         return PortalClient(
             authorizev3=settings.authorizev3,
@@ -103,7 +199,6 @@ def create_portal_client(
         )
 
     # Priority 3: profiles.json
-    settings.ensure_config_dir()
     store = ProfileStore(settings.config_dir)
     profile = store.get_profile(profile_name)
     session = profile.get_portal_session()
@@ -133,8 +228,7 @@ def create_audit_logger(profile_name: str | None = None) -> AuditLogger:
     Returns:
         Configured AuditLogger instance.
     """
-    settings = Settings()
-    settings.ensure_config_dir()
+    settings = _Container.settings()
     return AuditLogger(settings.config_dir)
 
 
@@ -143,6 +237,9 @@ def create_promotion_client(
 ) -> PromotionClient:
     """Create a PromotionClient using the given or active profile's token.
 
+    The returned client shares a cached HTTP connection and per-path rate
+    limiters with all other promotion clients created in this process.
+
     Args:
         profile_name: Profile name, or None for active profile.
 
@@ -150,7 +247,7 @@ def create_promotion_client(
         Configured PromotionClient instance.
     """
     token = _get_promotion_token(profile_name)
-    http = WbHttpClient(base_url=PROMOTION_BASE_URL, token=token)
+    http = _Container.http_client(PROMOTION_BASE_URL, token, with_rate_limits=True)
     return PromotionClient(http)
 
 
@@ -186,8 +283,7 @@ def create_stats_service(profile_name: str | None = None):
     from wb.storage.cache import CacheStore
     from wb.services.stats import StatsService
 
-    settings = Settings()
-    settings.ensure_config_dir()
+    settings = _Container.settings()
     resolved = _resolve_profile_name(profile_name, settings)
     store = CacheStore(settings.config_dir / CACHE_DB_FILE)
     return StatsService(
@@ -237,12 +333,11 @@ def _get_analytics_token(
     """
     if cli_token:
         return cli_token
-    settings = Settings()
+    settings = _Container.settings()
     if settings.analytics_token:
         return settings.analytics_token
     if settings.api_token:
         return settings.api_token
-    settings.ensure_config_dir()
     store = ProfileStore(settings.config_dir)
     profile = store.get_profile(profile_name)
     return profile.get_token('analytics')
@@ -261,7 +356,7 @@ def create_analytics_client(
     """
     from wb.client.analytics import AnalyticsClient
     token = _get_analytics_token(profile_name)
-    http = WbHttpClient(base_url=ANALYTICS_BASE_URL, token=token)
+    http = _Container.http_client(ANALYTICS_BASE_URL, token, with_rate_limits=True)
     return AnalyticsClient(http)
 
 
@@ -331,7 +426,7 @@ def create_reports_client(profile_name: str | None = None):
     """
     from wb.client.reports import ReportsClient
     token = _get_analytics_token(profile_name)
-    http = WbHttpClient(base_url=ANALYTICS_BASE_URL, token=token)
+    http = _Container.http_client(ANALYTICS_BASE_URL, token, with_rate_limits=True)
     return ReportsClient(http)
 
 
@@ -366,8 +461,7 @@ def create_reports_service(profile_name: str | None = None):
     from wb.storage.cache import CacheStore
     from wb.services.reports import ReportsService
 
-    settings = Settings()
-    settings.ensure_config_dir()
+    settings = _Container.settings()
     resolved = _resolve_profile_name(profile_name, settings)
     rdir = settings.reports_dir(resolved)
     store = CacheStore(settings.config_dir / CACHE_DB_FILE)
@@ -390,7 +484,7 @@ def create_statistics_client(profile_name: str | None = None):
     """
     from wb.client.statistics import StatisticsClient
     token = _get_analytics_token(profile_name)
-    http = WbHttpClient(base_url=STATISTICS_BASE_URL, token=token)
+    http = _Container.http_client(STATISTICS_BASE_URL, token)
     return StatisticsClient(http)
 
 
@@ -407,8 +501,7 @@ def create_stock_runway_service(profile_name: str | None = None):
     from wb.storage.cache import CacheStore
     from wb.services.reports import ReportsService
 
-    settings = Settings()
-    settings.ensure_config_dir()
+    settings = _Container.settings()
     resolved = _resolve_profile_name(profile_name, settings)
     rdir = settings.reports_dir(resolved)
     store = CacheStore(settings.config_dir / CACHE_DB_FILE)
@@ -436,8 +529,7 @@ def create_cache_store(profile_name: str | None = None):
     """
     from wb.core.constants import CACHE_DB_FILE
     from wb.storage.cache import CacheStore
-    settings = Settings()
-    settings.ensure_config_dir()
+    settings = _Container.settings()
     return CacheStore(settings.config_dir / CACHE_DB_FILE)
 
 
@@ -477,7 +569,7 @@ def create_prices_service(profile_name: str | None = None):
     from wb.services.prices import PricesService
 
     token = _get_promotion_token(profile_name)
-    http = WbHttpClient(base_url=PRICES_BASE_URL, token=token)
+    http = _Container.http_client(PRICES_BASE_URL, token)
     return PricesService(PricesClient(http))
 
 

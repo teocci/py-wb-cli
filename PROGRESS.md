@@ -4,14 +4,14 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.16.0 | ✅ Latest |
-| **Phases Complete** | 16/18 | 89% |
-| **Tests Passing** | 876/876 | ✅ 100% |
+| **Current Version** | 0.17.0 | ✅ Latest |
+| **Phases Complete** | 17/18 | 94% |
+| **Tests Passing** | 901/901 | ✅ 100% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
-| **Core Files** | 49+ | ✅ Stable |
-| **Latest Feature** | Composite Commands (product summary, campaign overview) | ✅ 2026-04-06 |
-| **Agent-Ready** | YES | ✅ JSON mode, composite reads, idempotent mutations, --fields filtering |
+| **Core Files** | 53+ | ✅ Stable |
+| **Latest Feature** | Rate Limiting & Resilience (preemptive throttle, paginate_all, service container) | ✅ 2026-04-07 |
+| **Agent-Ready** | YES | ✅ JSON mode, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available
 
@@ -53,8 +53,9 @@
 | 0.14.0 | I-1 | 2026-04-06 | Batch operations — N+1 elimination, --ids multi-campaign, --bids inline JSON, auto-chunk analytics, --fields output filtering |
 | 0.15.0 | I-2 | 2026-04-06 | Per-product cost tracking — wb stats product-spend, booster avg_position, fullstats auto-chunking, stats cache write-through |
 | 0.16.0 | I-3 | 2026-04-06 | Composite commands — wb product summary, wb campaign overview, idempotent mutations, SDK parity (rename, delete, stats, prices) |
+| 0.17.0 | I-4 | 2026-04-07 | Rate limiting & resilience — RateLimiter (sliding window), RATE_LIMITS.md, paginate_all helper, _Container service cache, swagger-sourced limits |
 
-## Current Version: 0.16.0
+## Current Version: 0.17.0
 
 ## Phase Status
 
@@ -77,8 +78,8 @@
 | 8D | Prices & Discounts command | COMPLETED | 0.13.0 |
 | I-1 | Batch operations — multi-ID, auto-chunking, --fields | COMPLETED | 0.14.0 |
 | I-2 | Per-product cost tracking — product-spend, booster stats | COMPLETED | 0.15.0 |
-| I-3 | Composite commands — product summary (1 call = all data) | PENDING | 0.16.0 |
-| I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | PENDING | 0.17.0 |
+| I-3 | Composite commands — product summary (1 call = all data) | COMPLETED | 0.16.0 |
+| I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | COMPLETED | 0.17.0 |
 | I-5 | Polish & ergonomics — --compact, cache-first, AGENT.md | PENDING | 0.18.0 |
 
 ---

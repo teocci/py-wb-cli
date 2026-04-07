@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from wb.client.prices import PricesClient
+from wb.core.batching import paginate_all
 from wb.domain.models import ProductPrice
 
 __all__ = ['PricesService']
@@ -55,21 +56,15 @@ class PricesService:
     def _fetch_all_pages(self) -> list[dict]:
         """Fetch all goods pages via auto-pagination.
 
-        Loops with offset 0, 1000, 2000, ... until a page returns fewer
-        records than the page limit, indicating the last page.
+        Uses :func:`wb.core.batching.paginate_all` with the standard
+        offset-based sentinel: stops when a page returns fewer items than
+        the page limit.
 
         Returns:
             Flat list of raw listGoods item dicts.
         """
-        all_items: list[dict] = []
-        offset = 0
+        def _fetch(limit: int, offset: int) -> list[dict]:
+            raw = self._client.list_goods(limit=limit, offset=offset)
+            return raw.get('data', {}).get('listGoods') or []
 
-        while True:
-            raw = self._client.list_goods(limit=_PAGE_LIMIT, offset=offset)
-            page_items: list[dict] = raw.get('data', {}).get('listGoods') or []
-            all_items.extend(page_items)
-            if len(page_items) < _PAGE_LIMIT:
-                break
-            offset += _PAGE_LIMIT
-
-        return all_items
+        return paginate_all(_fetch, _PAGE_LIMIT)

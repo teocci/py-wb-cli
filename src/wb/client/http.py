@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -19,6 +19,9 @@ from wb.core.exceptions import (
     AuthenticationError,
     RateLimitError,
 )
+
+if TYPE_CHECKING:
+    from wb.core.rate_limiter import RateLimiter
 
 __all__ = ['WbHttpClient']
 
@@ -34,6 +37,10 @@ _JITTER_FRACTION = 0.5
 class WbHttpClient:
     """Low-level HTTP client for WB API with retry and rate-limit support.
 
+    Supports optional per-path preemptive rate limiting via ``path_limiters``.
+    When a limiter is registered for a path, :meth:`acquire` is called before
+    the first attempt — preventing 429 responses rather than reacting to them.
+
     Attributes:
         base_url: API base URL.
         token: Bearer token for authentication.
@@ -46,12 +53,14 @@ class WbHttpClient:
             timeout: float = DEFAULT_TIMEOUT,
             max_retries: int = DEFAULT_MAX_RETRIES,
             retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY,
+            path_limiters: dict[str, 'RateLimiter'] | None = None,
     ) -> None:
         self._base_url = base_url.rstrip('/')
         self._token = token
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_base_delay = retry_base_delay
+        self._path_limiters: dict[str, RateLimiter] = path_limiters or {}
         self._client = httpx.Client(
             base_url=self._base_url,
             headers={
@@ -97,6 +106,9 @@ class WbHttpClient:
             ApiError: On other non-success responses after retries.
         """
         last_exception: Exception | None = None
+
+        if limiter := self._path_limiters.get(path):
+            limiter.acquire()
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -247,6 +259,9 @@ class WbHttpClient:
             ApiError: On other non-success responses after retries.
         """
         last_exception: Exception | None = None
+
+        if limiter := self._path_limiters.get(path):
+            limiter.acquire()
 
         for attempt in range(self._max_retries + 1):
             try:
