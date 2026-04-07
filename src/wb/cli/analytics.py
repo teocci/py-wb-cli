@@ -57,6 +57,46 @@ _TO_OPT = typer.Option(..., '--to', help='End date (YYYY-MM-DD)')
 _LIMIT_OPT = typer.Option(20, '--limit', '-l', help='Number of results')
 _OFFSET_OPT = typer.Option(0, '--offset', help='Results to skip')
 
+_SORT_FIELD_MAP = {
+    'orders': 'order_count',
+    'opens': 'open_count',
+    'cart': 'cart_count',
+    'revenue': 'order_sum',
+    'buyouts': 'buyout_count',
+}
+
+
+def _sort_funnel(
+        stats: list,
+        sort_by: str | None,
+        top: int | None,
+) -> list:
+    """Sort and slice a list of ProductFunnelStats.
+
+    Args:
+        stats: List of ProductFunnelStats objects.
+        sort_by: Field alias to sort by (orders, opens, cart, revenue, buyouts).
+        top: Maximum number of results to return after sorting.
+
+    Returns:
+        Sorted (descending) and optionally sliced list.
+
+    Raises:
+        typer.BadParameter: If sort_by is not a recognised field alias.
+    """
+    if sort_by is not None:
+        field = _SORT_FIELD_MAP.get(sort_by)
+        if field is None:
+            valid = ', '.join(_SORT_FIELD_MAP)
+            raise typer.BadParameter(
+                f'Unknown sort field "{sort_by}". Valid options: {valid}',
+                param_hint='--sort-by',
+            )
+        stats = sorted(stats, key=lambda s: getattr(s, field), reverse=True)
+    if top is not None:
+        stats = stats[:top]
+    return stats
+
 
 # ── Sales Funnel commands ────────────────────────────────────────────
 
@@ -71,6 +111,14 @@ def funnel_products(
         subjects: str | None = typer.Option(None, '--subjects', help='Comma-separated subject IDs'),
         limit: int = _LIMIT_OPT,
         offset: int = _OFFSET_OPT,
+        sort_by: str | None = typer.Option(
+            None, '--sort-by',
+            help='Sort by: orders, opens, cart, revenue, buyouts',
+        ),
+        top: int | None = typer.Option(
+            None, '--top', '-n',
+            help='Return only the top N results after sorting',
+        ),
 ) -> None:
     """Product cards statistics for a period."""
     from wb.services._factory import create_analytics_service
@@ -85,6 +133,7 @@ def funnel_products(
         limit=limit,
         offset=offset,
     )
+    stats = _sort_funnel(stats, sort_by, top)
 
     if not stats:
         renderer.success('No funnel data available.')

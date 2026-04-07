@@ -67,6 +67,10 @@ def main_callback(
             None, '--fields',
             help='Comma-separated output fields to include (e.g. nm_id,orders,views)',
         ),
+        compact: bool = typer.Option(
+            False, '--compact',
+            help='Output JSON as a single line (reduces token count for agents)',
+        ),
 ) -> None:
     """WB CLI global options."""
     _configure_logging(verbose)
@@ -76,6 +80,7 @@ def main_callback(
     ctx.obj['json_output'] = json_output
     ctx.obj['profile'] = profile
     ctx.obj['fields'] = [f.strip() for f in fields.split(',')] if fields else None
+    ctx.obj['compact'] = compact
 
 
 @app.command()

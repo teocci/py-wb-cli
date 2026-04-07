@@ -29,7 +29,7 @@ def get_renderer(ctx: typer.Context) -> OutputRenderer:
     verb = VerbosityLevel.QUIET if obj.get('quiet') else VerbosityLevel.NORMAL
     if obj.get('verbose'):
         verb = VerbosityLevel.VERBOSE
-    return OutputRenderer(fmt, verb)
+    return OutputRenderer(fmt, verb, compact=obj.get('compact', False))
 
 
 def get_profile(ctx: typer.Context) -> str | None:

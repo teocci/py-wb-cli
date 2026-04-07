@@ -112,15 +112,18 @@ class OutputRenderer:
     Attributes:
         output_format: Active output format (table, json, quiet).
         verbosity: Active verbosity level.
+        compact: When True and JSON mode is active, emit single-line JSON.
     """
 
     def __init__(
             self,
             output_format: OutputFormat,
             verbosity: VerbosityLevel,
+            compact: bool = False,
     ) -> None:
         self.output_format = output_format
         self.verbosity = verbosity
+        self.compact = compact
 
     @property
     def is_json(self) -> bool:
@@ -149,9 +152,14 @@ class OutputRenderer:
             return
 
         if self.output_format == OutputFormat.JSON:
-            _stdout_console.print(
-                render_json(_filter_fields(data, fields)), highlight=False,
-            )
+            filtered = _filter_fields(data, fields)
+            if self.compact:
+                _stdout_console.print(
+                    json.dumps(filtered, separators=(',', ':'), ensure_ascii=False, default=str),
+                    highlight=False,
+                )
+            else:
+                _stdout_console.print(render_json(filtered), highlight=False)
             return
 
         if headers is None:

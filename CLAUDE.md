@@ -141,16 +141,25 @@ Full design: `wb_cli_authorization_plan.md`
 - WB deprecates endpoints without notice; if any call returns 404, check the docs for the new path
 - All endpoint constants live in `src/wb/core/constants.py` — no hardcoded paths elsewhere
 
+## Rate Limits
+
+- **Authoritative reference**: `RATE_LIMITS.md` — maps every CLI command → endpoint → limit → source
+- **Machine-enforced**: `src/wb/core/rate_limits.py` — endpoint→(calls, period) map consumed by `_factory.py`
+- **Implementation**: `src/wb/core/rate_limiter.py` — sliding-window `RateLimiter` injected into `WbHttpClient` via `path_limiters`
+- **Source**: Limits are sourced from `docs/swagger/08-promotion.yaml`, `11-analytics.yaml`, `12-reports.yaml` (authoritative), and empirical observation (noted inline in `rate_limits.py`)
+- The CLI throttles **preemptively** — agents do not need to add sleeps between calls
+- Most critical: `EP_CAMPAIGN_FULLSTATS` → 1 call/20 s (burst=1), analytics funnel/history → 3 calls/min
+
 ### Known WB API quirks
 
 | API | Field/Behavior | Wrong assumption | Correct behavior |
 |-----|----------------|-----------------|-----------------|
 | Analytics v3 `sales-funnel/*` | `selectedPeriod` start key | `begin` | `start` |
 | Analytics v3 `sales-funnel/products/history` | Date range limit | Any 30-day window accepted | Max ~7-day lookback; farther dates → 400 "invalid start day: excess limit on days" |
-| Analytics v3 `sales-funnel/products/history` | Rate limit | Same as other analytics endpoints | Strict per-minute limit; >2 rapid calls → 429. Space calls or accept exit 5 in tests |
+| Analytics v3 `sales-funnel/products/history` | Rate limit | Same as other analytics endpoints | 3/min, 20 s interval — CLI enforces preemptively. Space calls or accept exit 5 in integration tests |
 | Analytics v3 `sales-funnel/products/history` | Unknown NM IDs | Returns empty list | Returns 400 — only use real seller NM IDs in integration tests |
 | Promotion `/adv/v3/fullstats` | Campaigns with no data | Returns empty list | Returns HTTP 400 — don't call for never-started campaigns |
-| Promotion `/adv/v3/fullstats` | Rate limit | Relaxed | Strict: ~3 calls/min. Space calls ≥ 20s apart in integration tests |
+| Promotion `/adv/v3/fullstats` | Rate limit | Relaxed | 3/min, burst=1 → CLI enforces 1 call/20 s. Space calls ≥ 20 s apart in integration tests |
 | Normquery `/adv/v0/normquery/list` | `items` field | Always a list | Can be `null` when campaign has no clusters — use `(raw.get('items') or [])` |
 | Analytics v3 `sales-funnel/products/history` | `dt` field | ISO date string | Returns empty string `""` — date is not reliably parsed from this endpoint |
 | Promotion `/api/advert/v0/bids/recommendations` | Paused campaigns | Returns bid data | Returns HTTP 400 for campaigns not currently running |

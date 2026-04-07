@@ -4,14 +4,14 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.17.0 | ✅ Latest |
-| **Phases Complete** | 17/18 | 94% |
-| **Tests Passing** | 901/901 | ✅ 100% |
+| **Current Version** | 0.18.0 | ✅ Latest |
+| **Phases Complete** | 18/18 | 100% |
+| **Tests Passing** | 918/918 | ✅ 100% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
-| **Core Files** | 53+ | ✅ Stable |
-| **Latest Feature** | Rate Limiting & Resilience (preemptive throttle, paginate_all, service container) | ✅ 2026-04-07 |
-| **Agent-Ready** | YES | ✅ JSON mode, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
+| **Core Files** | 55+ | ✅ Stable |
+| **Latest Feature** | Polish & Agent Ergonomics (--compact, --sort-by/--top N, AGENT.md) | ✅ 2026-04-07 |
+| **Agent-Ready** | YES | ✅ JSON mode, --compact, --sort-by/--top N, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available
 
@@ -25,7 +25,7 @@
 | `cluster` | list, get-bids, set-bids, get-minus, set-minus, stats | ✅ Ready | `wb cluster list --nm 12345` |
 | `portal` | products | ✅ Ready | `wb portal products --limit 100` |
 | `prices` | list | ✅ Ready | `wb prices list --nm-ids 227403075,100510938` |
-| `analytics` | sales-funnel, search-report, csv | ✅ Ready | `wb analytics sales-funnel products --from 2026-04-01` |
+| `analytics` | sales-funnel, search-report, csv | ✅ Ready | `wb analytics sales-funnel products --from 2026-04-01 --sort-by orders --top 10` |
 | `optimize` | recommend, apply | ✅ Ready | `wb optimize recommend --dry-run` |
 | `report` | warehouse, cache | ✅ Ready | `wb report warehouse stock-runway` |
 | `product` | summary | ✅ Ready | `wb product summary --nms 100525085,227403075 --json` |
@@ -54,8 +54,9 @@
 | 0.15.0 | I-2 | 2026-04-06 | Per-product cost tracking — wb stats product-spend, booster avg_position, fullstats auto-chunking, stats cache write-through |
 | 0.16.0 | I-3 | 2026-04-06 | Composite commands — wb product summary, wb campaign overview, idempotent mutations, SDK parity (rename, delete, stats, prices) |
 | 0.17.0 | I-4 | 2026-04-07 | Rate limiting & resilience — RateLimiter (sliding window), RATE_LIMITS.md, paginate_all helper, _Container service cache, swagger-sourced limits |
+| 0.18.0 | I-5 | 2026-04-07 | Polish & agent ergonomics — --compact single-line JSON, --sort-by/--top N on funnel products, AGENT.md command reference |
 
-## Current Version: 0.17.0
+## Current Version: 0.18.0
 
 ## Phase Status
 
@@ -80,7 +81,7 @@
 | I-2 | Per-product cost tracking — product-spend, booster stats | COMPLETED | 0.15.0 |
 | I-3 | Composite commands — product summary (1 call = all data) | COMPLETED | 0.16.0 |
 | I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | COMPLETED | 0.17.0 |
-| I-5 | Polish & ergonomics — --compact, cache-first, AGENT.md | PENDING | 0.18.0 |
+| I-5 | Polish & ergonomics — --compact, --sort-by/--top N, AGENT.md | COMPLETED | 0.18.0 |
 
 ---
 
@@ -864,3 +865,81 @@ wb report warehouse stock-runway --days 30  # cached after first run
 
 - **817 unit tests passed** (0 failures) — +23 new tests
 - **7 integration tests passed** (0 failures) — live API coverage
+
+---
+
+## Phase I-2 — Per-Product Cost Tracking (v0.15.0) - COMPLETED
+
+### What was built
+
+- **`src/wb/domain/models.py`**: Added `NmStats` (per-NM spend, views, clicks, orders, avg_position) and `DayStats`; `CampaignStats.nm_stats` populated from `boosterStats[]` in fullstats response
+- **`src/wb/services/stats.py`**: `get_product_spend(nm_ids, date_from, date_to)` — aggregates spend across all campaigns for each NM ID; `_fetch_fullstats_chunked()` auto-chunks campaign IDs into FULLSTATS_BATCH_SIZE=50 batches
+- **`src/wb/cli/stats.py`**: `wb stats product-spend --nms <ids> --from <date> --to <date>` command; table shows NM ID, spend (₽), views, clicks, orders, avg position; cache write-through on every fullstats call
+- **`src/wb/storage/cache.py`**: Cache auto-populated on fullstats API calls (write-through); `get_cached_stats()` for same-day reads
+
+### Test results
+
+- **843 unit tests passed** (0 failures) — +26 new tests
+
+---
+
+## Phase I-3 — Composite Commands (v0.16.0) - COMPLETED
+
+### What was built
+
+- **`src/wb/services/product.py`** (new): `ProductService.get_summary(nm_ids)` — single call returning `ProductSummary` with sales funnel + ad spend + clusters + bids; analytics and prices are best-effort (zero if token unavailable)
+- **`src/wb/domain/models.py`**: Added `ProductSummary`, `CampaignOverview` dataclasses with `to_dict()` for JSON serialization
+- **`src/wb/cli/product.py`** (new): `wb product summary --nms <ids> --json` — composite command; `wb campaign overview --id <id>` — details + budget + stats + per-NM + clusters in one call
+- **`src/wb/domain/models.py`**: `MutationResult.already_applied: bool` — idempotent mutations return `already_applied: true` when state unchanged instead of error
+- **`src/wb/services/campaigns.py`**: All lifecycle mutations (`start`, `pause`, `stop`) detect current state and set `already_applied=True` for idempotent retries
+- **`src/wb/sdk.py`**: SDK parity — `get_product_summary()`, `get_campaign_overview()`, `rename_campaign()`, `delete_campaign()`, `get_campaign_stats()`, `get_prices()` callable from Python
+- **`src/wb/services/_factory.py`**: `create_product_service()` wires all sub-services with best-effort analytics/prices
+
+### Test results
+
+- **876 unit tests passed** (0 failures) — +33 new tests
+
+---
+
+## Phase I-4 — Rate Limiting & Resilience (v0.17.0) - COMPLETED
+
+### What was built
+
+- **`RATE_LIMITS.md`** (new): Agent-optimized reference table mapping every CLI command → endpoint constant → path → limit (calls, period, burst) → swagger source. Includes per-endpoint guidance for agents (batch sizing, cache-first recommendations), notes on burst=1 endpoints, and instructions for updating when new limits are discovered.
+
+- **`src/wb/core/rate_limits.py`** (new): `ENDPOINT_LIMITS` dict mapping 30 endpoint path constants to `(calls, period_seconds)` tuples. Values sourced from `docs/swagger/08-promotion.yaml`, `11-analytics.yaml`, `12-reports.yaml`; empirical entries noted inline. Burst=1 endpoints stored as `(1, interval)` to enforce spacing (e.g. fullstats: `(1, 20.0)` for its 3/min, burst=1 limit).
+
+- **`src/wb/core/rate_limiter.py`** (new): Thread-safe sliding-window `RateLimiter` using `collections.deque` + `threading.Lock`. `acquire()` evicts expired timestamps, sleeps until a slot opens if the window is full, then records the call. Raises `ValueError` for invalid `calls < 1` or `period <= 0`.
+
+- **`src/wb/core/batching.py`**: Added `paginate_all(fetch, page_size)` — reusable offset-based pagination helper. Calls `fetch(limit, offset)` until a page shorter than `page_size` is returned (last-page sentinel). Used by `PricesService` and available for all future offset-based APIs.
+
+- **`src/wb/client/http.py`**: Added `path_limiters: dict[str, RateLimiter] | None` constructor param. In both `request()` and `request_raw()`, calls `limiter.acquire()` once before the retry loop — preemptive throttle, not reactive. Default `None` → zero behaviour change for existing tests.
+
+- **`src/wb/services/_factory.py`**: Added `_Container` class (`ServiceContainer` public alias) caching `Settings` and `WbHttpClient` instances per `(base_url, token)` key. Avoids re-parsing env vars and re-creating `httpx.Client` on every factory call. `_Container.reset()` clears all state for test isolation. `_build_limiters()` constructs per-path `RateLimiter` instances from `ENDPOINT_LIMITS`; injected into promotion and analytics HTTP clients.
+
+- **`src/wb/services/prices.py`**: `_fetch_all_pages()` refactored to use `paginate_all()` instead of a hand-rolled offset loop — same behaviour, shared implementation.
+
+### Key design decisions
+
+- **Per-path limiters, not per-client**: Different endpoints on the same base URL have different limits (e.g. fullstats 1/20s vs. campaign list 5/s). `path_limiters` dict gives precise control without over-throttling.
+- **Preemptive over reactive**: `acquire()` runs before the HTTP call. The existing 429 retry backoff in `WbHttpClient` remains as a safety net for limits the preemptive layer doesn't cover (e.g. `EP_PRICES_GOODS_FILTER` — not in swagger).
+- **Burst=1 → interval encoding**: Swagger `burst=1` means calls must be evenly spaced. Stored as `(1, interval)` (e.g. `(1, 20.0)` for fullstats) rather than `(3, 60.0)` to enforce the interval constraint in the sliding window.
+- **Container caching scope**: `_Container` is module-level (process-scoped). One process → one token → one HTTP client with shared rate limiters. This is correct for CLI usage. For tests, `ServiceContainer.reset()` clears state between test cases.
+
+### Files changed
+
+| File | Type | Change |
+|---|---|---|
+| `RATE_LIMITS.md` | new | Full endpoint rate limit reference for agents |
+| `src/wb/core/rate_limits.py` | new | 30-entry endpoint→limit map (swagger-sourced) |
+| `src/wb/core/rate_limiter.py` | new | Thread-safe sliding-window `RateLimiter` |
+| `src/wb/core/batching.py` | modified | Added `paginate_all()` helper |
+| `src/wb/client/http.py` | modified | `path_limiters` param + `acquire()` call |
+| `src/wb/services/_factory.py` | modified | `_Container` caching + rate limiter wiring |
+| `src/wb/services/prices.py` | modified | `_fetch_all_pages()` uses `paginate_all()` |
+| `tests/unit/test_rate_limiter.py` | new | 11 tests: init validation, acquire, eviction, threads |
+| `tests/unit/test_batching.py` | modified | 9 new `TestPaginateAll` tests |
+
+### Test results
+
+- **901 unit tests passed** (0 failures) — +25 new tests (+11 rate_limiter, +9 batching, +5 prices refactor)

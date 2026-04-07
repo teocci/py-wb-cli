@@ -28,10 +28,10 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 | 0.14.0 | I-1 | ✅ DONE | Batch operations | multi-ID support, auto-chunking | 2026-04-06 |
 | 0.15.0 | I-2 | ✅ DONE | Per-product cost tracking | product-spend command | 2026-04-06 |
 | 0.16.0 | I-3 | ✅ DONE | Composite commands | product summary, campaign overview | 2026-04-06 |
-| 0.17.0 | I-4 | ⏳ PENDING | Rate limiting & resilience | RateLimiter, backoff | TBD |
-| 0.18.0 | I-5 | ⏳ PENDING | Polish & ergonomics | --compact, cache-first | TBD |
+| 0.17.0 | I-4 | ✅ DONE | Rate limiting & resilience | RateLimiter, RATE_LIMITS.md, paginate_all, _Container | 2026-04-07 |
+| 0.18.0 | I-5 | ✅ DONE | Polish & ergonomics | --compact, --sort-by/--top N, AGENT.md | 2026-04-07 |
 
-**Current:** v0.16.0 — **16 phases complete**, 2 planned. **876 tests passing**.
+**Current:** v0.18.0 — **18 phases complete**, 0 planned. **918 tests passing**.
 
 ---
 
@@ -177,15 +177,16 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 
 ---
 
-### I-4 — Rate Limiting & Resilience (v1.1.0)
+### I-4 — Rate Limiting & Resilience (v0.17.0) ✅ DONE 2026-04-07
 
 **Theme:** Production-grade reliability for long-running agent sessions.
 
-| Task | Files | Description |
-|------|-------|-------------|
-| Rate-limit-aware batching | `batching.py`, `http.py` | `RateLimiter` class, preemptive throttling |
-| Auto-pagination | `analytics.py`, `batching.py` | Fetch all pages and concatenate |
-| Service container | `_factory.py` | Cache `Settings`, HTTP clients, services |
+| Task | Files | Status | Description |
+|------|-------|--------|-------------|
+| Rate-limit-aware batching | `rate_limits.py` (new), `rate_limiter.py` (new), `http.py` | ✅ | `RateLimiter` sliding-window class; 30-entry swagger-sourced endpoint→limit map; `path_limiters` injected into `WbHttpClient` |
+| Documentation | `RATE_LIMITS.md` (new) | ✅ | Agent-optimized reference: CLI command → endpoint → limit → source; burst/spacing guidance |
+| Auto-pagination | `batching.py`, `prices.py` | ✅ | `paginate_all(fetch, page_size)` helper; `PricesService` refactored to use it |
+| Service container | `_factory.py` | ✅ | `_Container` / `ServiceContainer` caches `Settings` + HTTP clients per process |
 
 ---
 
