@@ -6,7 +6,7 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Latest Release Tag** | v0.18.0 | ✅ Tagged |
+| **Latest Release Tag** | v0.19.0 | ✅ Tagged |
 | **Latest Bundle Version** | 0.18.0 | ✅ Matches source |
 | **Pipeline** | `.github/workflows/release.yml` | ✅ Ready |
 | **Targets** | windows-x64, linux-x64, macos-arm64 | ✅ 3 platforms |
@@ -17,6 +17,7 @@
 
 | Tag | Version | Date | Notes |
 |-----|---------|------|-------|
+| v0.19.0 | 0.19.0 | 2026-04-08 | Full token category support |
 | v0.18.0 | 0.18.0 | 2026-04-08 | First release — polish & agent ergonomics |
 
 > **AI Agent instructions:** When cutting a release, update the table above with the new tag, version, and date. The tag must match `git tag --list 'v*'`. Update **Latest Release Tag** and add a row to Release History.
