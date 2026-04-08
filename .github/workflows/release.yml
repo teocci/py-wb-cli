@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset_os: windows
+            asset_arch: x64
+            bin: wb.exe
+          - os: ubuntu-latest
+            asset_os: linux
+            asset_arch: x64
+            bin: wb
+          - os: macos-latest
+            asset_os: macos
+            asset_arch: arm64
+            bin: wb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install project + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pyinstaller
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          version=$(python -c "import wb; print(wb.__version__)")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Building wb v${version}"
+
+      - name: Build with PyInstaller
+        run: pyinstaller packaging/wb.spec --noconfirm --clean
+
+      - name: Smoke test bundle (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          ./dist/wb/${{ matrix.bin }} --version
+          ./dist/wb/${{ matrix.bin }} --help
+          ./dist/wb/${{ matrix.bin }} auth --help
+
+      - name: Smoke test bundle (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          dist\wb\${{ matrix.bin }} --version
+          dist\wb\${{ matrix.bin }} --help
+          dist\wb\${{ matrix.bin }} auth --help
+
+      - name: Package zip (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          cd dist
+          zip -r "../wb-${{ steps.version.outputs.version }}-${{ matrix.asset_os }}-${{ matrix.asset_arch }}.zip" wb
+          cd ..
+          ls -lh wb-*.zip
+
+      - name: Package zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "wb-${{ steps.version.outputs.version }}-${{ matrix.asset_os }}-${{ matrix.asset_arch }}.zip"
+          Compress-Archive -Path dist/wb -DestinationPath $name -Force
+          Get-ChildItem wb-*.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wb-${{ matrix.asset_os }}-${{ matrix.asset_arch }}
+          path: wb-*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/wb-*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true

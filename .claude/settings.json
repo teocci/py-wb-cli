@@ -34,7 +34,18 @@
       "Bash(python -c ':*)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_rate_limiter.py tests/unit/test_batching.py -v)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/ --tb=short)",
-      "Bash(.venv/Scripts/python -m pytest tests/unit/test_compact_output.py tests/unit/test_analytics_sorting.py -v)"
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_compact_output.py tests/unit/test_analytics_sorting.py -v)",
+      "Bash(gh --version)",
+      "Bash(gh auth:*)",
+      "Bash(where gh:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)",
+      "Bash(\"/c/Users/teocci/AppData/Local/Programs/GitHub CLI/gh.exe\" --version)",
+      "Bash(/d/libs/gh/bin/gh.exe --version)",
+      "Bash(/d/libs/gh/bin/gh.exe auth:*)",
+      "Read(//d/libs/gh//**)",
+      "Read(//d/libs/gh/**)",
+      "Bash(/d/libs/gh/gh.exe --version)",
+      "Bash(/d/libs/gh/gh.exe auth:*)"
     ]
   }
 }
