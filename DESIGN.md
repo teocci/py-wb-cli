@@ -45,7 +45,7 @@ CLI Layer (Typer)
 
 ```bash
 # Auth
-wb auth login / logout / list / use / status / ping
+wb auth login / logout / list / use / status / ping / categories
 wb auth login-portal / generate-token
 
 # Portal

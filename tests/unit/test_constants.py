@@ -3,7 +3,9 @@
 import pytest
 
 from wb.core.constants import (
+    ALL_CATEGORY,
     ANALYTICS_BASE_URL,
+    CATEGORY_DISPLAY_NAMES,
     PROMOTION_BASE_URL,
     ExitCode,
     TOKEN_CATEGORIES,
@@ -50,13 +52,43 @@ class TestExitCode:
 
 
 class TestTokenCategories:
-    """Tests for TOKEN_CATEGORIES constant."""
+    """Tests for TOKEN_CATEGORIES, ALL_CATEGORY, and CATEGORY_DISPLAY_NAMES."""
 
-    def test_contains_promotion(self) -> None:
-        assert 'promotion' in TOKEN_CATEGORIES
+    _EXPECTED_SLUGS = [
+        'promotion',
+        'analytics',
+        'statistics',
+        'content',
+        'marketplace',
+        'buyers-returns',
+        'documents',
+        'finance',
+        'supplies',
+        'feedbacks-questions',
+        'prices-discounts',
+    ]
 
-    def test_contains_analytics(self) -> None:
-        assert 'analytics' in TOKEN_CATEGORIES
+    def test_contains_all_expected_slugs(self) -> None:
+        assert TOKEN_CATEGORIES == self._EXPECTED_SLUGS
+
+    def test_has_eleven_categories(self) -> None:
+        assert len(TOKEN_CATEGORIES) == 11
+
+    @pytest.mark.parametrize('slug', _EXPECTED_SLUGS)
+    def test_each_slug_present(self, slug: str) -> None:
+        assert slug in TOKEN_CATEGORIES
+
+    def test_all_category_sentinel(self) -> None:
+        assert ALL_CATEGORY == 'all'
+        assert ALL_CATEGORY not in TOKEN_CATEGORIES
+
+    def test_display_names_covers_all_categories(self) -> None:
+        assert set(TOKEN_CATEGORIES) == set(CATEGORY_DISPLAY_NAMES.keys())
+
+    @pytest.mark.parametrize('slug', _EXPECTED_SLUGS)
+    def test_display_name_is_non_empty(self, slug: str) -> None:
+        assert isinstance(CATEGORY_DISPLAY_NAMES[slug], str)
+        assert len(CATEGORY_DISPLAY_NAMES[slug]) > 0
 
 
 class TestUrlConstants:

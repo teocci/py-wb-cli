@@ -7,7 +7,7 @@ import typer
 from wb.auth.profiles import ProfileStore
 from wb.auth.token_validation import validate_promotion_token
 from wb.core.config import Settings
-from wb.core.constants import ExitCode
+from wb.core.constants import ALL_CATEGORY, ExitCode, TOKEN_CATEGORIES
 from wb.core.exceptions import WbCliError
 
 auth_app = typer.Typer(
@@ -27,14 +27,17 @@ def _get_profile_store() -> ProfileStore:
 def auth_login(
         ctx: typer.Context,
         profile: str = typer.Option('default', '--profile', '-p', help='Profile name'),
-        category: str = typer.Option('promotion', '--category', '-c', help='Token category'),
+        category: str = typer.Option(
+            'promotion', '--category', '-c',
+            help='Token category (run `wb auth categories` to list valid values)',
+        ),
         token: str = typer.Option(..., '--token', '-t', help='WB API token'),
         skip_validation: bool = typer.Option(False, '--skip-validation', help='Skip token validation'),
 ) -> None:
     """Store an API token for a profile."""
     store = _get_profile_store()
 
-    if not skip_validation and category == 'promotion':
+    if not skip_validation and category in ('promotion', ALL_CATEGORY):
         typer.echo('Validating token...')
         try:
             validate_promotion_token(token)
@@ -45,7 +48,13 @@ def auth_login(
 
     store.save_token(profile, category, token)
     store.set_active(profile)
-    typer.secho(f'Token saved to profile {profile!r} [{category}].', fg=typer.colors.GREEN)
+    if category == ALL_CATEGORY:
+        typer.secho(
+            f'Token saved to profile {profile!r} [all {len(TOKEN_CATEGORIES)} categories].',
+            fg=typer.colors.GREEN,
+        )
+    else:
+        typer.secho(f'Token saved to profile {profile!r} [{category}].', fg=typer.colors.GREEN)
 
 
 @auth_app.command('logout')
@@ -190,6 +199,36 @@ def auth_ping(
     except WbCliError as exc:
         typer.secho(f'Connection failed: {exc}', fg=typer.colors.RED, err=True)
         raise typer.Exit(code=ExitCode.AUTH_FAILURE) from exc
+
+
+@auth_app.command('categories')
+def auth_categories(ctx: typer.Context) -> None:
+    """List all valid token categories for use with --category."""
+    from wb.core.constants import CATEGORY_DISPLAY_NAMES
+
+    json_output = ctx.obj.get('json_output', False) if ctx.obj else False
+
+    if json_output:
+        import json
+        data = [
+            {'slug': s, 'display': CATEGORY_DISPLAY_NAMES[s], 'meta': False}
+            for s in TOKEN_CATEGORIES
+        ]
+        data.append({'slug': ALL_CATEGORY, 'display': 'All categories', 'meta': True})
+        typer.echo(json.dumps(data, indent=2))
+        return
+
+    from rich.console import Console
+    from rich.table import Table
+
+    table = Table(title='Token Categories')
+    table.add_column('Slug', style='cyan')
+    table.add_column('Display Name', style='green')
+    table.add_column('Note', style='dim')
+    for slug in TOKEN_CATEGORIES:
+        table.add_row(slug, CATEGORY_DISPLAY_NAMES[slug], '')
+    table.add_row(ALL_CATEGORY, 'All categories', 'saves token under all above')
+    Console().print(table)
 
 
 @auth_app.command('login-portal')

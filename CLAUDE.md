@@ -57,6 +57,7 @@ Phase naming: `N` = core implementation · `NA` = sub-phase of N · `F-N` = fix 
 | 0.16.0 | I-3 | Composite commands (stable release) |
 | 0.17.0 | I-4 | Rate limiting & resilience |
 | 0.18.0 | I-5 | Polish & agent ergonomics |
+| 0.19.0 | I-6 | Full token category support |
 
 ## Project Layout
 
@@ -112,6 +113,8 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 
 1. **API Key** — raw JWT in `Authorization` header (no Bearer). Created via seller portal UI.
    - `wb auth login --token <JWT> --category promotion`
+   - `wb auth login --token <JWT> --category all` — saves token under all 11 categories at once
+   - `wb auth categories` — list all valid `--category` values (table or `--json`)
 2. **Portal Session** — `cookie + authorizev3` headers together (both required) to seller portal.
    - `wb auth login-portal --authorizev3 <key> --cookie <str>`
    - `wb auth generate-token` — generate tokens via portal JRPC

@@ -5,7 +5,7 @@ import json
 import pytest
 
 from wb.auth.profiles import Profile, ProfileStore
-from wb.core.constants import TOKEN_CATEGORIES
+from wb.core.constants import ALL_CATEGORY, TOKEN_CATEGORIES
 from wb.core.exceptions import ConfigError, ValidationError
 
 
@@ -283,6 +283,21 @@ class TestProfileStore:
 
         profile = store.get_profile('auto-created')
         assert profile.has_token('analytics')
+
+    def test_save_token_all_saves_every_category(self, tmp_path):
+        """save_token with ALL_CATEGORY stores token under every real category."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        store.save_token('p', ALL_CATEGORY, 'my-token')
+        profile = store.get_profile('p')
+        for cat in TOKEN_CATEGORIES:
+            assert profile.get_token(cat) == 'my-token'
+
+    def test_set_token_rejects_all_sentinel(self):
+        """Profile.set_token must not accept the 'all' sentinel directly."""
+        profile = Profile(name='p')
+        with pytest.raises(ValidationError, match='Unknown token category'):
+            profile.set_token(ALL_CATEGORY, 'tok')
 
     def test_delete_profile_removes(self, tmp_path):
         """delete_profile removes the profile from the store."""

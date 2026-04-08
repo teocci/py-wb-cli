@@ -4,9 +4,9 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.18.0 | ✅ Latest |
-| **Phases Complete** | 18/18 | 100% |
-| **Tests Passing** | 918/918 | ✅ 100% |
+| **Current Version** | 0.19.0 | ✅ Latest |
+| **Phases Complete** | 19/19 | 100% |
+| **Tests Passing** | 952/952 | ✅ 100% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
 | **Core Files** | 55+ | ✅ Stable |
@@ -17,7 +17,7 @@
 
 | Group | Commands | Status | Example |
 |-------|----------|--------|---------|
-| `auth` | login, login-portal, list, generate-token | ✅ Ready | `wb auth login --token <JWT>` |
+| `auth` | login, logout, list, use, status, ping, categories, login-portal, generate-token | ✅ Ready | `wb auth login --token <JWT>` |
 | `campaign` | list, get, create, clone, start, pause, stop, rename, delete | ✅ Ready | `wb campaign list --json` |
 | `bid` | set, get, min | ✅ Ready | `wb bid set --nm 12345 --cpm 450` |
 | `budget` | get, deposit | ✅ Ready | `wb budget get` |
@@ -55,8 +55,9 @@
 | 0.16.0 | I-3 | 2026-04-06 | Composite commands — wb product summary, wb campaign overview, idempotent mutations, SDK parity (rename, delete, stats, prices) |
 | 0.17.0 | I-4 | 2026-04-07 | Rate limiting & resilience — RateLimiter (sliding window), RATE_LIMITS.md, paginate_all helper, _Container service cache, swagger-sourced limits |
 | 0.18.0 | I-5 | 2026-04-07 | Polish & agent ergonomics — --compact single-line JSON, --sort-by/--top N on funnel products, AGENT.md command reference |
+| 0.19.0 | I-6 | 2026-04-08 | Full token category support — 11 categories, --category all, wb auth categories command |
 
-## Current Version: 0.18.0
+## Current Version: 0.19.0
 
 ## Phase Status
 
@@ -82,6 +83,7 @@
 | I-3 | Composite commands — product summary (1 call = all data) | COMPLETED | 0.16.0 |
 | I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | COMPLETED | 0.17.0 |
 | I-5 | Polish & ergonomics — --compact, --sort-by/--top N, AGENT.md | COMPLETED | 0.18.0 |
+| I-6 | Full token category support — 11 categories, --category all, wb auth categories | COMPLETED | 0.19.0 |
 
 ---
 
@@ -101,7 +103,7 @@
 - **Token validation**: Lightweight WB API ping for promotion tokens
 - **Audit logging**: Append-only JSONL audit trail for mutating operations
 - **CLI layer**: Typer-based with global options (--verbose, --quiet, --json, --profile)
-- **Auth commands**: login, logout, list, use, status, ping
+- **Auth commands**: login, logout, list, use, status, ping, categories, login-portal, generate-token
 
 ### Test results
 

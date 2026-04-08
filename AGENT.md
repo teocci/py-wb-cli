@@ -20,6 +20,12 @@ export WB_PORTAL_COOKIE="<browser-cookie>"
 
 No profile registration needed when env vars are set.
 
+To store a token under all 11 API categories at once use `--category all`:
+```bash
+wb auth login --token "<jwt>" --category all
+```
+Run `wb auth categories` (or `wb auth categories --json`) to list all valid `--category` values.
+
 ---
 
 ## Global Flags

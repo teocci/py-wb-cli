@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from wb.core.constants import (
+    ALL_CATEGORY,
     DEFAULT_PROFILE_NAME,
     PROFILES_FILE,
     TOKEN_CATEGORIES,
@@ -219,11 +220,17 @@ class ProfileStore:
         self._save()
 
     def save_token(self, profile_name: str, category: str, token: str) -> None:
-        """Save a token to a profile, creating it if needed."""
+        """Save a token to a profile, creating it if needed.
+
+        If category is ALL_CATEGORY ('all'), saves the token under every
+        category in TOKEN_CATEGORIES.
+        """
         if profile_name not in self._profiles:
             self.create_profile(profile_name)
         profile = self._profiles[profile_name]
-        profile.set_token(category, token)
+        categories = TOKEN_CATEGORIES if category == ALL_CATEGORY else [category]
+        for cat in categories:
+            profile.set_token(cat, token)
         self._save()
 
     def save_portal_session(

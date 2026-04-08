@@ -30,8 +30,9 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 | 0.16.0 | I-3 | ✅ DONE | Composite commands | product summary, campaign overview | 2026-04-06 |
 | 0.17.0 | I-4 | ✅ DONE | Rate limiting & resilience | RateLimiter, RATE_LIMITS.md, paginate_all, _Container | 2026-04-07 |
 | 0.18.0 | I-5 | ✅ DONE | Polish & ergonomics | --compact, --sort-by/--top N, AGENT.md | 2026-04-07 |
+| 0.19.0 | I-6 | ✅ DONE | Full token category support + wb auth categories | constants, profiles, cli/auth | 2026-04-08 |
 
-**Current:** v0.18.0 — **18 phases complete**, 0 planned. **918 tests passing**.
+**Current:** v0.19.0 — **19 phases complete**, 0 planned. **952 tests passing**.
 
 ---
 
@@ -187,6 +188,21 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 | Documentation | `RATE_LIMITS.md` (new) | ✅ | Agent-optimized reference: CLI command → endpoint → limit → source; burst/spacing guidance |
 | Auto-pagination | `batching.py`, `prices.py` | ✅ | `paginate_all(fetch, page_size)` helper; `PricesService` refactored to use it |
 | Service container | `_factory.py` | ✅ | `_Container` / `ServiceContainer` caches `Settings` + HTTP clients per process |
+
+---
+
+### I-6 — Full Token Category Support (v0.19.0)
+
+**Theme:** All 11 WB API token categories supported; `--category all` saves a single token
+under every category; `wb auth categories` provides a machine-readable discovery endpoint.
+
+| Task | Files | Description |
+|------|-------|-------------|
+| Expand TOKEN_CATEGORIES | `core/constants.py` | 11 slugs + `ALL_CATEGORY` sentinel + `CATEGORY_DISPLAY_NAMES` dict |
+| `all` expansion in save_token | `auth/profiles.py` | `ProfileStore.save_token` loops over TOKEN_CATEGORIES when category == 'all' |
+| `wb auth categories` subcommand | `cli/auth.py` | Table/JSON listing of all valid slugs + the `all` meta-shortcut |
+| Validation guard update | `cli/auth.py` | Token validation also fires when `--category all` (since promotion is included) |
+| Tests | `tests/unit/` | 34 new tests — expanded constants assertions, all-expansion, sentinel rejection |
 
 ---
 

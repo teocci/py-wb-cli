@@ -24,7 +24,9 @@ __all__ = [
     'HISTORY_CHUNK_SIZE',
     'PRODUCTS_CHUNK_SIZE',
     'ExitCode',
+    'ALL_CATEGORY',
     'TOKEN_CATEGORIES',
+    'CATEGORY_DISPLAY_NAMES',
     'PING_PATH',
     'PORTAL_AUTH_HEADER',
     'PORTAL_SESSION_HEADER',
@@ -146,7 +148,35 @@ class ExitCode(IntEnum):
 
 
 # ── Token categories ──────────────────────────────────────────────────
-TOKEN_CATEGORIES: list[str] = ['promotion', 'analytics']
+ALL_CATEGORY: str = 'all'
+
+TOKEN_CATEGORIES: list[str] = [
+    'promotion',
+    'analytics',
+    'statistics',
+    'content',
+    'marketplace',
+    'buyers-returns',
+    'documents',
+    'finance',
+    'supplies',
+    'feedbacks-questions',
+    'prices-discounts',
+]
+
+CATEGORY_DISPLAY_NAMES: dict[str, str] = {
+    'promotion':           'Promotion',
+    'analytics':           'Analytics',
+    'statistics':          'Statistics',
+    'content':             'Content',
+    'marketplace':         'Marketplace',
+    'buyers-returns':      'Buyers Returns',
+    'documents':           'Documents',
+    'finance':             'Finance',
+    'supplies':            'Supplies',
+    'feedbacks-questions': 'Feedbacks and Questions',
+    'prices-discounts':    'Prices and Discounts',
+}
 
 # ── Connection check ─────────────────────────────────────────────────
 PING_PATH = '/ping'
