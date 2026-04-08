@@ -45,7 +45,13 @@
       "Read(//d/libs/gh//**)",
       "Read(//d/libs/gh/**)",
       "Bash(/d/libs/gh/gh.exe --version)",
-      "Bash(/d/libs/gh/gh.exe auth:*)"
+      "Bash(/d/libs/gh/gh.exe auth:*)",
+      "Bash(git status:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git push:*)",
+      "Bash(/d/libs/gh/gh.exe workflow:*)",
+      "Bash(/d/libs/gh/gh.exe run:*)"
     ]
   }
 }
