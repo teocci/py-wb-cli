@@ -62,17 +62,20 @@ jobs:
       - name: Smoke test bundle (POSIX)
         if: runner.os != 'Windows'
         run: |
-          ./dist/wb/${{ matrix.bin }} --version
+          ./dist/wb/${{ matrix.bin }} version
           ./dist/wb/${{ matrix.bin }} --help
           ./dist/wb/${{ matrix.bin }} auth --help
 
       - name: Smoke test bundle (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
+        shell: pwsh
         run: |
-          dist\wb\${{ matrix.bin }} --version
+          dist\wb\${{ matrix.bin }} version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dist\wb\${{ matrix.bin }} --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dist\wb\${{ matrix.bin }} auth --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package zip (POSIX)
         if: runner.os != 'Windows'

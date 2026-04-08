@@ -106,7 +106,7 @@ The spec explicitly collects:
 After downloading a release zip:
 
 ```bash
-./wb --version
+./wb version
 ./wb --help
 ./wb auth --help
 ./wb portal --help
