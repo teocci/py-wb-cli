@@ -58,6 +58,7 @@ Phase naming: `N` = core implementation · `NA` = sub-phase of N · `F-N` = fix 
 | 0.17.0 | I-4 | Rate limiting & resilience |
 | 0.18.0 | I-5 | Polish & agent ergonomics |
 | 0.19.0 | I-6 | Full token category support |
+| 0.20.0 | I-7 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills |
 
 ## Project Layout
 

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "last_calibrated": null,
+  "confidence": "low",
+  "note": "Initial defaults — not validated against real campaign data. Run wb-calibrate after 14+ days of campaign data.",
+  "strategies": {
+    "new_product_visibility": {
+      "payment_type": "cpm",
+      "placements": ["search"],
+      "bid_percentile": 75,
+      "validated": false
+    },
+    "volume_sales": {
+      "payment_type": "cpm",
+      "placements": ["search", "recommendations"],
+      "bid_percentile": 90,
+      "validated": false
+    },
+    "steady_low_cost": {
+      "payment_type": "cpc",
+      "placements": ["recommendations"],
+      "bid_percentile": 50,
+      "validated": false
+    },
+    "brand_defense": {
+      "payment_type": "cpm",
+      "placements": ["search"],
+      "bid_percentile": 95,
+      "validated": false
+    }
+  }
+}

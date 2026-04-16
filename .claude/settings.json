@@ -54,7 +54,20 @@
       "Bash(/d/libs/gh/gh.exe run:*)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_constants.py tests/unit/test_profiles.py -v)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_cli.py -v --tb=short -q)",
-      "Bash(.venv/Scripts/python -m pytest tests/unit/test_cli.py tests/unit/test_constants.py tests/unit/test_profiles.py -v)"
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_cli.py tests/unit/test_constants.py tests/unit/test_profiles.py -v)",
+      "Read(//c/Users/teocci/.wb-cli/**)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_assess_service.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ --tb=short -q)",
+      "Edit(/.claude/skills/wb-assess/**)",
+      "Edit(/.claude/skills/wb-pulse/**)",
+      "Edit(/.claude/skills/wb-launch/**)",
+      "Edit(/.claude/skills/wb-optimize/**)",
+      "Edit(/.claude/skills/wb-manage/**)",
+      "Edit(/.claude/skills/wb-keywords/**)",
+      "Edit(/.claude/skills/wb-calibrate/**)"
+    ],
+    "additionalDirectories": [
+      "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills"
     ]
   }
 }

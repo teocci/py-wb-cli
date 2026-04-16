@@ -4,13 +4,13 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.19.0 | ✅ Latest |
-| **Phases Complete** | 19/19 | 100% |
+| **Current Version** | 0.20.0 | ✅ Latest |
+| **Phases Complete** | 20/20 | 100% |
 | **Tests Passing** | 952/952 | ✅ 100% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
 | **Core Files** | 55+ | ✅ Stable |
-| **Latest Feature** | Polish & Agent Ergonomics (--compact, --sort-by/--top N, AGENT.md) | ✅ 2026-04-07 |
+| **Latest Feature** | Agent Skills — wb assess/pulse native commands + 7 Claude Code skills | ✅ 2026-04-17 |
 | **Agent-Ready** | YES | ✅ JSON mode, --compact, --sort-by/--top N, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available
@@ -29,6 +29,8 @@
 | `optimize` | recommend, apply | ✅ Ready | `wb optimize recommend --dry-run` |
 | `report` | warehouse, cache | ✅ Ready | `wb report warehouse stock-runway` |
 | `product` | summary | ✅ Ready | `wb product summary --nms 100525085,227403075 --json` |
+| `assess` | snapshot | ✅ Ready | `wb assess --json --compact` |
+| `pulse` | intraday | ✅ Ready | `wb pulse --campaigns 123 --json --compact` |
 
 ---
 
@@ -56,8 +58,9 @@
 | 0.17.0 | I-4 | 2026-04-07 | Rate limiting & resilience — RateLimiter (sliding window), RATE_LIMITS.md, paginate_all helper, _Container service cache, swagger-sourced limits |
 | 0.18.0 | I-5 | 2026-04-07 | Polish & agent ergonomics — --compact single-line JSON, --sort-by/--top N on funnel products, AGENT.md command reference |
 | 0.19.0 | I-6 | 2026-04-08 | Full token category support — 11 categories, --category all, wb auth categories command |
+| 0.20.0 | I-7 | 2026-04-17 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills (wb-launch, wb-optimize, wb-manage, wb-keywords, wb-calibrate) |
 
-## Current Version: 0.19.0
+## Current Version: 0.20.0
 
 ## Phase Status
 
@@ -84,6 +87,7 @@
 | I-4 | Rate limiting & resilience — RateLimiter, auto-pagination | COMPLETED | 0.17.0 |
 | I-5 | Polish & ergonomics — --compact, --sort-by/--top N, AGENT.md | COMPLETED | 0.18.0 |
 | I-6 | Full token category support — 11 categories, --category all, wb auth categories | COMPLETED | 0.19.0 |
+| I-7 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills | COMPLETED | 0.20.0 |
 
 ---
 
@@ -945,3 +949,76 @@ wb report warehouse stock-runway --days 30  # cached after first run
 ### Test results
 
 - **901 unit tests passed** (0 failures) — +25 new tests (+11 rate_limiter, +9 batching, +5 prices refactor)
+
+---
+
+## Phase I-7 — Agent Skills (v0.20.0) - COMPLETED
+
+### What was built
+
+**Native CLI commands** (`wb assess`, `wb pulse`) — rate-limit-coordinated multi-endpoint aggregation that cannot be done safely from external subprocess scripts (rate limiter is process-local):
+
+- **`src/wb/domain/assess_models.py`** (new): `AssessSnapshot`, `CampaignAssessSummary`, `PulseReport`, `CampaignPulse`, `PulseBaseline` dataclasses (all `slots=True`)
+- **`src/wb/services/assess.py`** (new): `AssessService` — sequential `_safe_*` pattern; full mode (balance + campaigns + product spend + bid baselines); `--quick` skips product spend (avoids 20s rate limit wait); saves `~/.wb-cli/pulse_baseline.json`
+- **`src/wb/services/pulse.py`** (new): `PulseService` — reads `pulse_baseline.json`, computes bid drift %; fires four alert codes (`competitor_surge`, `budget_low`, `campaign_paused`, `bid_floor_rising`)
+- **`src/wb/cli/assess.py`** (new): `wb assess [--nm <id>] [--quick] [--json] [--compact]`
+- **`src/wb/cli/pulse.py`** (new): `wb pulse --campaigns <ids> [--json] [--compact]`
+- **`src/wb/services/_factory.py`**: Added `create_assess_service()`, `create_pulse_service()`
+- **`src/wb/cli/app.py`**: Registered `assess` and `pulse` commands
+
+**Claude Code skills** (`.claude/skills/<name>/SKILL.md` — subdirectory format):
+
+| Skill | Cadence | Backed by |
+|-------|---------|-----------|
+| `wb-assess` | Once per morning | `wb assess` native command |
+| `wb-pulse` | Every 1-2h intraday | `wb pulse` native command |
+| `wb-launch` | Per new product | Sequential wb commands + `rules.json` |
+| `wb-optimize` | Daily per campaign | Sequential wb commands |
+| `wb-manage` | As needed | Direct wb command dispatch |
+| `wb-keywords` | Weekly | `wb-keywords/scripts/wb_keywords.py` |
+| `wb-calibrate` | Biweekly | `wb-calibrate/scripts/wb_calibrate.py` |
+
+**External scripts** (co-located with their skill):
+
+- **`.claude/skills/wb-keywords/scripts/wb_keywords.py`**: Calls wb cluster commands sequentially, joins `keyword_rules.json` lifecycle state, classifies keywords as hot/underperforming/blocked/ready-to-restore
+- **`.claude/skills/wb-calibrate/scripts/wb_calibrate.py`**: Reads 30-day campaign analytics grouped by `[goal]` name prefix, adjusts `bid_percentile` per strategy, sets `validated: true` when data is sufficient
+
+**Adaptive rule templates** (bootstrapped to `~/.wb-cli/` on first use):
+
+- **`.claude/skills/wb-launch/rules.json`**: 4 strategy definitions (`new_product_visibility`, `volume_sales`, `steady_low_cost`, `brand_defense`) with `confidence: "low"` until `wb-calibrate` validates them
+- **`.claude/skills/wb-keywords/keyword_rules.json`**: Empty keyword lifecycle store
+
+### File structure additions
+
+```
+src/wb/
+  domain/
+    assess_models.py       # NEW: AssessSnapshot, CampaignAssessSummary, PulseReport, CampaignPulse, PulseBaseline
+  services/
+    assess.py              # NEW: AssessService
+    pulse.py               # NEW: PulseService
+    _factory.py            # +create_assess_service, create_pulse_service
+  cli/
+    assess.py              # NEW: wb assess command
+    pulse.py               # NEW: wb pulse command
+    app.py                 # +assess, pulse registrations
+.claude/skills/
+  wb-assess/SKILL.md
+  wb-pulse/SKILL.md
+  wb-launch/SKILL.md
+  wb-launch/rules.json
+  wb-optimize/SKILL.md
+  wb-manage/SKILL.md
+  wb-keywords/SKILL.md
+  wb-keywords/keyword_rules.json
+  wb-keywords/scripts/wb_keywords.py
+  wb-calibrate/SKILL.md
+  wb-calibrate/scripts/wb_calibrate.py
+tests/unit/
+  test_assess_service.py   # NEW: 35 tests
+  test_pulse_service.py    # NEW (in test_assess_service.py)
+```
+
+### Test results
+
+- **952 unit tests passed** (0 failures) — +35 new tests covering AssessService, PulseService, drift computation, alert logic, CLI JSON output

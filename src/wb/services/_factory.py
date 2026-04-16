@@ -36,6 +36,8 @@ __all__ = [
     'create_stock_runway_service',
     'create_prices_service',
     'create_product_service',
+    'create_assess_service',
+    'create_pulse_service',
 ]
 
 
@@ -571,6 +573,44 @@ def create_prices_service(profile_name: str | None = None):
     token = _get_promotion_token(profile_name)
     http = _Container.http_client(PRICES_BASE_URL, token)
     return PricesService(PricesClient(http))
+
+
+def create_assess_service(profile_name: str | None = None):
+    """Create an AssessService from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured AssessService instance.
+    """
+    from wb.services.assess import AssessService
+    client = create_promotion_client(profile_name)
+    return AssessService(
+        campaign_service=_lazy_campaign(client),
+        budget_service=_lazy_budget(client),
+        stats_service=_lazy_stats(client),
+    )
+
+
+def create_pulse_service(profile_name: str | None = None):
+    """Create a PulseService from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured PulseService with config_dir for baseline persistence.
+    """
+    from wb.services.pulse import PulseService
+    client = create_promotion_client(profile_name)
+    settings = _Container.settings()
+    return PulseService(
+        campaign_service=_lazy_campaign(client),
+        budget_service=_lazy_budget(client),
+        bid_service=_lazy_bid(client),
+        config_dir=settings.config_dir,
+    )
 
 
 def create_product_service(profile_name: str | None = None):

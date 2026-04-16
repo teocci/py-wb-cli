@@ -48,6 +48,9 @@
 | `wb reports warehouse status` | `EP_WAREHOUSE_REMAINS_STATUS` | `/api/v1/warehouse_remains/tasks` (GET) | 1 | 5 s | 5 | 1/5 s | swagger 12 |
 | `wb reports warehouse download` | `EP_WAREHOUSE_REMAINS_DOWNLOAD` | `/api/v1/warehouse_remains/tasks` (GET) | 1 | 1 min | 1 | **1/min** | swagger 12 |
 | `wb prices list` | `EP_PRICES_GOODS_FILTER` | `/api/v2/list/goods/filter` | unknown | — | — | use default retry | not in swagger |
+| `wb assess` (full) | composite: `EP_ACCOUNT_BALANCE` + `EP_CAMPAIGN_INFO` + `EP_CAMPAIGN_FULLSTATS` + `EP_RECOMMENDED_BID` | multiple | see each endpoint | — | — | ~20-25s total (fullstats bottleneck) | composite |
+| `wb assess --quick` | composite: `EP_ACCOUNT_BALANCE` + `EP_CAMPAIGN_INFO` | multiple | fast | — | — | <5s | composite |
+| `wb pulse` | composite: `EP_RECOMMENDED_BID` + `EP_CAMPAIGN_BUDGET` + `EP_CAMPAIGN_INFO` per campaign | multiple | see each endpoint | — | — | ~1s/campaign (budget/status fast; bid recommend 5/min) | composite |
 
 ---
 
@@ -79,6 +82,14 @@ These endpoints are most likely to cause 429 errors in automated workflows:
 ### `EP_WAREHOUSE_REMAINS_CREATE` — `wb reports warehouse`
 - **Limit:** 1/min
 - **Agent guidance:** The CLI caches results for 6 h (`REPORT_CACHE_TTL_HOURS`). Always use cached results; only create a new report if the cache is stale.
+
+### `wb assess` / `wb pulse` — composite commands
+
+`wb assess` (full mode) is the slowest composite command: it calls `EP_CAMPAIGN_FULLSTATS` (1/20s) once per batch of up to 50 campaign IDs. With 7 running campaigns this is one fullstats call → ~20s wait. For 51+ campaigns it would be two calls → ~40s.
+
+`wb pulse` calls `EP_RECOMMENDED_BID` (5/60s) once per campaign — sequential, rate-limiter spaced. For 7 campaigns: 7 bid-recommend calls at ~12s intervals = ~84s maximum. In practice campaigns with no active bids return 400 immediately (no wait), so pulse is typically fast.
+
+> Both commands are native CLI (not external scripts) specifically because the rate limiter is process-local — external subprocesses cannot share the limiter and would cause 429 errors.
 
 ### Analytics endpoints (funnel, search-report)
 - **Limit:** 3/min across all funnel/search variants
