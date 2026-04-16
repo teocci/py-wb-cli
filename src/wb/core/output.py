@@ -15,14 +15,15 @@ __all__ = [
 import json
 from typing import Any
 
+import typer
 from rich.console import Console
 from rich.table import Table
 
 from wb.domain.enums import OutputFormat, VerbosityLevel
 
-# Module-level consoles to avoid repeated instantiation
-_stdout_console = Console()
-_stderr_console = Console(stderr=True)
+# force_terminal + legacy_windows=False bypasses the Windows charmap codec
+_stdout_console = Console(force_terminal=True, legacy_windows=False)
+_stderr_console = Console(stderr=True, force_terminal=True, legacy_windows=False)
 
 
 def render_json(data: Any) -> str:
@@ -154,19 +155,14 @@ class OutputRenderer:
         if self.output_format == OutputFormat.JSON:
             filtered = _filter_fields(data, fields)
             if self.compact:
-                _stdout_console.print(
-                    json.dumps(filtered, separators=(',', ':'), ensure_ascii=False, default=str),
-                    highlight=False,
-                )
+                typer.echo(json.dumps(filtered, separators=(',', ':'), ensure_ascii=False, default=str))
             else:
-                _stdout_console.print(render_json(filtered), highlight=False)
+                typer.echo(render_json(filtered))
             return
 
         if headers is None:
             # Fall back to JSON when no headers are available for a table
-            _stdout_console.print(
-                render_json(_filter_fields(data, fields)), highlight=False,
-            )
+            typer.echo(render_json(_filter_fields(data, fields)))
             return
 
         if fields is not None:
@@ -195,7 +191,7 @@ class OutputRenderer:
             error_data: dict = {'status': 'error', 'error': {'message': message}}
             if details:
                 error_data['error']['details'] = details
-            _stdout_console.print(render_json(error_data), highlight=False)
+            typer.echo(render_json(error_data))
             return
         render_error(message, details=details)
 

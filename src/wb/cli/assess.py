@@ -86,7 +86,7 @@ def _render_assess_table(snapshot, date_from: str, date_to: str) -> None:
     from rich.console import Console
     from rich.table import Table
 
-    console = Console()
+    console = Console(force_terminal=True, legacy_windows=False)
 
     n_running = len(snapshot.running)
     n_paused = len(snapshot.paused)

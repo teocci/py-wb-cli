@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from io import StringIO
 from unittest.mock import patch
 
 import pytest
@@ -14,10 +13,8 @@ from wb.domain.enums import OutputFormat, VerbosityLevel
 
 def _capture_display(renderer: OutputRenderer, data, **kwargs) -> str:
     """Capture stdout from renderer.display() and return it."""
-    buf = StringIO()
-    with patch('wb.core.output._stdout_console') as mock_console:
-        captured: list[str] = []
-        mock_console.print.side_effect = lambda text, **kw: captured.append(str(text))
+    captured: list[str] = []
+    with patch('wb.core.output.typer.echo', side_effect=captured.append):
         renderer.display(data, **kwargs)
     return '\n'.join(captured)
 
@@ -31,10 +28,8 @@ class TestCompactJsonOutput:
         renderer = _make_renderer(compact=True)
         data = [{'nm_id': 1, 'orders': 10}, {'nm_id': 2, 'orders': 5}]
 
-        buf = StringIO()
-        with patch('wb.core.output._stdout_console') as mock:
-            calls = []
-            mock.print.side_effect = lambda text, **kw: calls.append(str(text))
+        calls: list[str] = []
+        with patch('wb.core.output.typer.echo', side_effect=calls.append):
             renderer.display(data)
 
         assert len(calls) == 1
@@ -49,9 +44,8 @@ class TestCompactJsonOutput:
         renderer = _make_renderer(compact=False)
         data = {'nm_id': 1, 'orders': 10}
 
-        with patch('wb.core.output._stdout_console') as mock:
-            calls = []
-            mock.print.side_effect = lambda text, **kw: calls.append(str(text))
+        calls: list[str] = []
+        with patch('wb.core.output.typer.echo', side_effect=calls.append):
             renderer.display(data)
 
         output = calls[0]
@@ -76,9 +70,8 @@ class TestCompactJsonOutput:
         renderer = _make_renderer(compact=True)
         data = [{'nm_id': 1, 'orders': 10, 'opens': 500}]
 
-        with patch('wb.core.output._stdout_console') as mock:
-            calls = []
-            mock.print.side_effect = lambda text, **kw: calls.append(str(text))
+        calls: list[str] = []
+        with patch('wb.core.output.typer.echo', side_effect=calls.append):
             renderer.display(data, fields=['nm_id', 'orders'])
 
         output = calls[0]

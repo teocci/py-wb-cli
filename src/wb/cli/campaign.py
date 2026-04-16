@@ -8,7 +8,7 @@ import typer
 
 from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
-from wb.core.output import OutputRenderer
+from wb.core.output import OutputRenderer, render_table
 from wb.domain.enums import CampaignStatus, CampaignType
 from wb.domain.models import CampaignCreate, MutationResult, PlacementConfig
 
@@ -129,7 +129,6 @@ def campaign_list(
         renderer.success('No campaigns found.')
         return
 
-    data = [asdict(c) for c in campaigns]
     headers = ['ID', 'Name', 'Status', 'Type', 'Daily Budget', 'Created']
     rows = [
         [
@@ -142,7 +141,12 @@ def campaign_list(
         ]
         for c in campaigns
     ]
-    renderer.display(data, headers=headers, title='Campaigns', fields=get_fields(ctx))
+    if renderer.is_json:
+        import json as _json
+        data = [asdict(c) for c in campaigns]
+        typer.echo(_json.dumps(data, indent=2, ensure_ascii=False, default=str))
+        return
+    render_table(headers, rows, title='Campaigns')
 
 
 @campaign_app.command('get')
@@ -157,7 +161,6 @@ def campaign_get(
     svc = create_campaign_service(get_profile(ctx))
     campaign = svc.get_campaign(campaign_id)
 
-    data = asdict(campaign)
     headers = ['Field', 'Value']
     nm_ids_str = ', '.join(str(n) for n in campaign.nm_ids) or 'none'
     rows = [
@@ -172,7 +175,11 @@ def campaign_get(
         ['Started', campaign.start_time or ''],
         ['Updated', campaign.updated_time or ''],
     ]
-    renderer.display(data, headers=headers, title=f'Campaign {campaign_id}', fields=get_fields(ctx))
+    if renderer.is_json:
+        import json as _json
+        typer.echo(_json.dumps(asdict(campaign), indent=2, ensure_ascii=False, default=str))
+        return
+    render_table(headers, rows, title=f'Campaign {campaign_id}')
 
 
 @campaign_app.command('eligible-subjects')
@@ -193,7 +200,11 @@ def campaign_eligible_subjects(ctx: typer.Context) -> None:
         [str(s.get('id', '')), s.get('name', '')]
         for s in subjects
     ]
-    renderer.display(subjects, headers=headers, title='Eligible Subjects', fields=get_fields(ctx))
+    if renderer.is_json:
+        import json as _json
+        typer.echo(_json.dumps(subjects, indent=2, ensure_ascii=False, default=str))
+        return
+    render_table(headers, rows, title='Eligible Subjects')
 
 
 @campaign_app.command('eligible-items')
@@ -214,7 +225,6 @@ def campaign_eligible_items(
         renderer.success('No eligible items found.')
         return
 
-    data = [asdict(item) for item in items]
     headers = ['NM ID', 'Name', 'Subject ID', 'Subject Name']
     rows = [
         [
@@ -225,7 +235,11 @@ def campaign_eligible_items(
         ]
         for item in items
     ]
-    renderer.display(data, headers=headers, title='Eligible Items', fields=get_fields(ctx))
+    if renderer.is_json:
+        import json as _json
+        typer.echo(_json.dumps([asdict(item) for item in items], indent=2, ensure_ascii=False, default=str))
+        return
+    render_table(headers, rows, title='Eligible Items')
 
 
 

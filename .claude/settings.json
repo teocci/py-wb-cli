@@ -58,13 +58,11 @@
       "Read(//c/Users/teocci/.wb-cli/**)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_assess_service.py -v --tb=short)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/ --tb=short -q)",
-      "Edit(/.claude/skills/wb-assess/**)",
-      "Edit(/.claude/skills/wb-pulse/**)",
-      "Edit(/.claude/skills/wb-launch/**)",
-      "Edit(/.claude/skills/wb-optimize/**)",
-      "Edit(/.claude/skills/wb-manage/**)",
-      "Edit(/.claude/skills/wb-keywords/**)",
-      "Edit(/.claude/skills/wb-calibrate/**)"
+      "Edit(/.claude/skills/**)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git tag:*)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_compact_output.py tests/unit/test_cli.py -v --tb=short)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills"

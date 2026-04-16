@@ -128,7 +128,7 @@ class CacheStore:
 
     def _connect(self) -> sqlite3.Connection:
         """Open and configure a SQLite connection."""
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row
         conn.execute('PRAGMA journal_mode=WAL')
         return conn
