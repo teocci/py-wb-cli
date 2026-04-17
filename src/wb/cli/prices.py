@@ -10,6 +10,7 @@ import typer
 from wb.cli._helpers import get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
 from wb.core.exceptions import WbCliError
+from wb.core.output import _stdout_console
 
 __all__ = ['prices_app']
 
@@ -95,7 +96,6 @@ def prices_list(
 
 def _render_prices_table(prices) -> None:
     """Render a list of ProductPrice objects as a Rich table."""
-    from rich.console import Console
     from rich.table import Table
 
     has_club = any(p.club_discount > 0 for p in prices)
@@ -129,4 +129,4 @@ def _render_prices_table(prices) -> None:
         row.append(p.currency_iso)
         table.add_row(*row)
 
-    Console().print(table)
+    _stdout_console.print(table)

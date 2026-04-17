@@ -7,6 +7,7 @@ import typer
 from wb.cli._helpers import get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
 from wb.core.exceptions import WbCliError
+from wb.core.output import _stdout_console
 
 report_app = typer.Typer(
     help='Reports (warehouse remains, orders, sales)',
@@ -228,7 +229,6 @@ def warehouse_stock_runway(
 
 def _render_warehouse_table(items: list) -> None:
     """Render warehouse remain items as a Rich table."""
-    from rich.console import Console
     from rich.table import Table
 
     table = Table(title=f'Warehouse Remains ({len(items)} items)')
@@ -253,12 +253,11 @@ def _render_warehouse_table(items: list) -> None:
             wh_str,
         )
 
-    Console().print(table)
+    _stdout_console.print(table)
 
 
 def _render_top_table(summaries: list, *, from_cache: bool = False) -> None:
     """Render top product stock summaries as a Rich table."""
-    from rich.console import Console
     from rich.table import Table
 
     cache_label = ' \[cached]' if from_cache else ''
@@ -286,12 +285,11 @@ def _render_top_table(summaries: list, *, from_cache: bool = False) -> None:
             wh_str,
         )
 
-    Console().print(table)
+    _stdout_console.print(table)
 
 
 def _render_runway_table(report, *, from_cache: bool = False) -> None:
     """Render stock runway report as a Rich table."""
-    from rich.console import Console
     from rich.table import Table
 
     cache_label = ' \[cached]' if from_cache else ''
@@ -328,4 +326,4 @@ def _render_runway_table(report, *, from_cache: bool = False) -> None:
             style=_alert_style.get(item.alert, ''),
         )
 
-    Console().print(table)
+    _stdout_console.print(table)

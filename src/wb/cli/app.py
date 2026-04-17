@@ -104,6 +104,12 @@ def _is_json_mode() -> bool:
 
 def main() -> None:
     """CLI entry point with top-level exception handling."""
+    # WB content is in Russian — reconfigure to UTF-8 so piped output never
+    # crashes with cp437 (the Windows legacy console default).
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     try:
         app()
     except WbCliError as exc:

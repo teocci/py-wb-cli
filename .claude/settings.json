@@ -62,7 +62,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git tag:*)",
-      "Bash(.venv/Scripts/python -m pytest tests/unit/test_compact_output.py tests/unit/test_cli.py -v --tb=short)"
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_compact_output.py tests/unit/test_cli.py -v --tb=short)",
+      "Read(//d/d/teocci/code/python/py-wb-cli/src/wb/cli/**)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=line)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills"

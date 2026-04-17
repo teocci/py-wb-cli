@@ -8,7 +8,7 @@ import typer
 
 from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
-from wb.core.output import OutputRenderer, render_table
+from wb.core.output import OutputRenderer, _stdout_console, render_table
 from wb.domain.enums import CampaignStatus, CampaignType
 from wb.domain.models import CampaignCreate, MutationResult, PlacementConfig
 
@@ -603,10 +603,9 @@ def campaign_overview(
 
 def _render_campaign_overview(overview, date_from: str, date_to: str) -> None:
     """Render CampaignOverview as Rich tables."""
-    from rich.console import Console
     from rich.table import Table
 
-    console = Console()
+    console = _stdout_console
 
     header = Table(
         title=f'Campaign {overview.campaign_id} Overview ({date_from} \u2192 {date_to})',

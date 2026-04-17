@@ -9,6 +9,7 @@ from wb.auth.token_validation import validate_promotion_token
 from wb.core.config import Settings
 from wb.core.constants import ALL_CATEGORY, ExitCode, TOKEN_CATEGORIES
 from wb.core.exceptions import WbCliError
+from wb.core.output import _stdout_console
 
 auth_app = typer.Typer(
     help='Authentication and profile management',
@@ -101,7 +102,6 @@ def auth_list(
         typer.echo(json.dumps(data, indent=2))
         return
 
-    from rich.console import Console
     from rich.table import Table
 
     table = Table(title='WB CLI Profiles')
@@ -115,7 +115,7 @@ def auth_list(
         categories = ', '.join(p.tokens.keys()) or 'none'
         table.add_row(p.name, is_active, categories, p.created_at[:10])
 
-    Console().print(table)
+    _stdout_console.print(table)
 
 
 @auth_app.command('use')
@@ -218,7 +218,6 @@ def auth_categories(ctx: typer.Context) -> None:
         typer.echo(json.dumps(data, indent=2))
         return
 
-    from rich.console import Console
     from rich.table import Table
 
     table = Table(title='Token Categories')
@@ -228,7 +227,7 @@ def auth_categories(ctx: typer.Context) -> None:
     for slug in TOKEN_CATEGORIES:
         table.add_row(slug, CATEGORY_DISPLAY_NAMES[slug], '')
     table.add_row(ALL_CATEGORY, 'All categories', 'saves token under all above')
-    Console().print(table)
+    _stdout_console.print(table)
 
 
 @auth_app.command('login-portal')

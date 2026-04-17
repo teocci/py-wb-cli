@@ -11,6 +11,7 @@ import typer
 from wb.cli._helpers import get_fields, get_profile, get_renderer
 from wb.core.constants import ExitCode
 from wb.core.exceptions import WbCliError
+from wb.core.output import _stdout_console
 
 __all__ = ['product_app']
 
@@ -99,7 +100,6 @@ def product_summary(
 
 def _render_summary_table(summaries) -> None:
     """Render ProductSummary list as a Rich table."""
-    from rich.console import Console
     from rich.table import Table
 
     table = Table(
@@ -138,4 +138,4 @@ def _render_summary_table(summaries) -> None:
             clusters_str,
         )
 
-    Console().print(table)
+    _stdout_console.print(table)

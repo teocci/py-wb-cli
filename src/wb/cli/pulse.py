@@ -9,6 +9,7 @@ import typer
 
 from wb.cli._helpers import get_profile, get_renderer
 from wb.core.constants import ExitCode
+from wb.core.output import _stdout_console
 
 __all__ = ['pulse_command']
 
@@ -76,10 +77,9 @@ def pulse_command(
 
 def _render_pulse_report(report) -> None:
     """Render PulseReport as Rich console output."""
-    from rich.console import Console
     from rich.table import Table
 
-    console = Console()
+    console = _stdout_console
     ts = report.timestamp[:19].replace('T', ' ') + ' UTC'
 
     if not report.action_needed:

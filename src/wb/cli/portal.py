@@ -6,6 +6,7 @@ import typer
 
 from wb.core.constants import ExitCode
 from wb.core.exceptions import WbCliError
+from wb.core.output import _stdout_console
 
 portal_app = typer.Typer(
     help='Seller portal operations (requires portal session)',
@@ -54,7 +55,6 @@ def portal_products(
         typer.echo('No products found.')
         return
 
-    from rich.console import Console
     from rich.table import Table
 
     table = Table(title=f'Products ({len(cards)})')
@@ -77,4 +77,4 @@ def portal_products(
             str(c.feedback_count),
         )
 
-    Console().print(table)
+    _stdout_console.print(table)
