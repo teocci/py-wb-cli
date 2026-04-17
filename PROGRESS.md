@@ -4,13 +4,13 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.20.0 | ✅ Latest |
+| **Current Version** | 0.20.2 | ✅ Latest |
 | **Phases Complete** | 20/20 | 100% |
-| **Tests Passing** | 952/952 | ✅ 100% |
+| **Tests Passing** | 987/987 | ✅ 100% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
 | **Core Files** | 55+ | ✅ Stable |
-| **Latest Feature** | Agent Skills — wb assess/pulse native commands + 7 Claude Code skills | ✅ 2026-04-17 |
+| **Latest Feature** | F-4 — UTF-8 pipe fix: stdout reconfigure + centralized console | ✅ 2026-04-17 |
 | **Agent-Ready** | YES | ✅ JSON mode, --compact, --sort-by/--top N, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available
@@ -59,8 +59,9 @@
 | 0.18.0 | I-5 | 2026-04-07 | Polish & agent ergonomics — --compact single-line JSON, --sort-by/--top N on funnel products, AGENT.md command reference |
 | 0.19.0 | I-6 | 2026-04-08 | Full token category support — 11 categories, --category all, wb auth categories command |
 | 0.20.0 | I-7 | 2026-04-17 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills (wb-launch, wb-optimize, wb-manage, wb-keywords, wb-calibrate) |
+| 0.20.2 | F-4 | 2026-04-17 | UTF-8 pipe fix — sys.stdout.reconfigure at startup + centralized _stdout_console across all CLI modules |
 
-## Current Version: 0.20.0
+## Current Version: 0.20.2
 
 ## Phase Status
 
@@ -88,6 +89,7 @@
 | I-5 | Polish & ergonomics — --compact, --sort-by/--top N, AGENT.md | COMPLETED | 0.18.0 |
 | I-6 | Full token category support — 11 categories, --category all, wb auth categories | COMPLETED | 0.19.0 |
 | I-7 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills | COMPLETED | 0.20.0 |
+| F-4 | UTF-8 pipe fix — stdout reconfigure + centralized console | COMPLETED | 0.20.2 |
 
 ---
 
@@ -1022,3 +1024,38 @@ tests/unit/
 ### Test results
 
 - **952 unit tests passed** (0 failures) — +35 new tests covering AssessService, PulseService, drift computation, alert logic, CLI JSON output
+
+---
+
+## Phase F-4 — UTF-8 Pipe Fix (v0.20.2) - COMPLETED
+
+### Problem
+
+`wb campaign list | more` (and any piped command) crashed with:
+
+```
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 597-604
+```
+
+WB content is in Russian (Cyrillic). When the CLI ran in agent shells (Codex, etc.) inheriting the Windows legacy code page (cp437), piped stdout couldn't encode Cyrillic — crash with no output. Interactive Windows Terminal sessions were unaffected because they configure UTF-8 separately.
+
+### Root cause
+
+`sys.stdout` encoding was never reconfigured at startup. Python inherited the system code page (cp437) on piped stdout. Rich wrote UTF-8 Cyrillic through `sys.stdout` which then tried to encode with cp437.
+
+Secondary: 10 bare `Console()` calls across CLI modules bypassed the centralized `_stdout_console` (which had `legacy_windows=False`) — scattering output logic.
+
+### Files changed
+
+- **`src/wb/cli/app.py`**: Added `sys.stdout.reconfigure(encoding='utf-8', errors='replace')` + stderr at top of `main()`. Primary fix — covers all output paths.
+- **`src/wb/cli/auth.py`**: Replaced `Console().print(table)` with `_stdout_console.print(table)`.
+- **`src/wb/cli/campaign.py`**: Replaced `console = Console()` with `console = _stdout_console`.
+- **`src/wb/cli/portal.py`**: Replaced `Console().print(table)` with `_stdout_console.print(table)`.
+- **`src/wb/cli/prices.py`**: Replaced `Console().print(table)` with `_stdout_console.print(table)`.
+- **`src/wb/cli/product.py`**: Replaced `Console().print(table)` with `_stdout_console.print(table)`.
+- **`src/wb/cli/pulse.py`**: Replaced `console = Console()` with `console = _stdout_console`.
+- **`src/wb/cli/report.py`**: Replaced 3× `Console().print(table)` with `_stdout_console.print(table)`.
+
+### Test results
+
+- **987 unit tests passed** (0 failures) — no regressions

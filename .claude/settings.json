@@ -64,10 +64,13 @@
       "Bash(git tag:*)",
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_compact_output.py tests/unit/test_cli.py -v --tb=short)",
       "Read(//d/d/teocci/code/python/py-wb-cli/src/wb/cli/**)",
-      "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=line)"
+      "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=line)",
+      "Read(//d/d/teocci/code/python/py-wb-cli/**)",
+      "Read(//d/d/teocci/code/python/py-wb-cli/src/wb/**)"
     ],
     "additionalDirectories": [
-      "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills"
+      "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
+      "d:\\d\\teocci\\code\\python\\py-wb-cli"
     ]
   }
 }

@@ -1,6 +1,6 @@
-# WB CLI — API Fix Log
+# WB CLI — Fix Log
 
-Tracks the migration from dead WB API endpoints to the current API (discovered 2026-04-02).
+Tracks bug fixes and non-feature improvements across all versions.
 
 ## 🚀 Quick Status (for AI Agents)
 
@@ -16,8 +16,9 @@ Tracks the migration from dead WB API endpoints to the current API (discovered 2
 | 7 | Test updates | ✅ DONE | tests/unit/ | 2026-04-02 | 366 tests pass (+2 cluster tests) |
 | 8 | Write endpoint verification | ✅ DONE | live API test | 2026-04-02 | Campaign create/rename/delete verified |
 | 9 | Analytics token fallback + selectedPeriod | ✅ DONE | _factory.py, analytics.py | 2026-04-03 | WB_API_TOKEN fallback, start→begin fix |
+| 10 | UTF-8 pipe fix (F-4) | ✅ DONE | cli/app.py + 7 CLI modules | 2026-04-17 | stdout reconfigure + centralized _stdout_console |
 
-**Summary:** All 10 fixes complete. **366 tests passing**. API migration ready for production.
+**Summary:** All 11 fixes complete. **987 tests passing**.
 
 ---
 
@@ -184,3 +185,57 @@ This caused every `analytics sales-funnel` command to return `HTTP 400 Bad Reque
 
 **Fix:** Replaced all three occurrences (`get_product_funnel`, `get_product_history`,
 `get_grouped_funnel`) with `'start'`.
+
+---
+
+## Fix 10 — UTF-8 Pipe Fix (F-4, v0.20.2)
+
+**Status:** DONE (2026-04-17)
+**Version:** 0.20.2
+
+### Problem
+
+`wb campaign list | more` (and any piped CLI command) crashed with:
+
+```
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 597-604: character maps to <undefined>
+```
+
+WB content is entirely in Russian (Cyrillic). Agent shells (Codex, CI) inherit the Windows legacy code page (cp437), which cannot encode Cyrillic. Interactive Windows Terminal sessions were unaffected because they configure UTF-8 separately. Agents received no output — the process crashed silently.
+
+### Root cause
+
+`sys.stdout` encoding was never reconfigured at startup. Python inherited the system code page (cp437) on piped stdout. Rich wrote Cyrillic content through `sys.stdout`, which then tried to encode with cp437.
+
+Secondary: 10 bare `Console()` calls across CLI modules bypassed the centralized `_stdout_console` (which carries `legacy_windows=False`) — scattering output logic and making each call independently vulnerable.
+
+### Steps
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 1 | Add `sys.stdout.reconfigure(encoding='utf-8', errors='replace')` at top of `main()` in `app.py` | ✅ DONE |
+| 2 | Replace bare `Console()` in `auth.py` (×2) with `_stdout_console` | ✅ DONE |
+| 3 | Replace bare `Console()` in `campaign.py` with `_stdout_console` | ✅ DONE |
+| 4 | Replace bare `Console()` in `portal.py` with `_stdout_console` | ✅ DONE |
+| 5 | Replace bare `Console()` in `prices.py` with `_stdout_console` | ✅ DONE |
+| 6 | Replace bare `Console()` in `product.py` with `_stdout_console` | ✅ DONE |
+| 7 | Replace bare `Console()` in `pulse.py` with `_stdout_console` | ✅ DONE |
+| 8 | Replace bare `Console()` in `report.py` (×3) with `_stdout_console` | ✅ DONE |
+| 9 | Verify: 987 unit tests pass, no regressions | ✅ DONE |
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/wb/cli/app.py` | `sys.stdout/stderr.reconfigure(encoding='utf-8', errors='replace')` at top of `main()` |
+| `src/wb/cli/auth.py` | Removed 2× local `Console()`, added `_stdout_console` import |
+| `src/wb/cli/campaign.py` | `console = Console()` → `console = _stdout_console` |
+| `src/wb/cli/portal.py` | `Console().print(table)` → `_stdout_console.print(table)` |
+| `src/wb/cli/prices.py` | `Console().print(table)` → `_stdout_console.print(table)` |
+| `src/wb/cli/product.py` | `Console().print(table)` → `_stdout_console.print(table)` |
+| `src/wb/cli/pulse.py` | `console = Console()` → `console = _stdout_console` |
+| `src/wb/cli/report.py` | 3× `Console().print(table)` → `_stdout_console.print(table)` |
+
+### Test results
+
+- **987 unit tests passed** (0 failures) — no regressions

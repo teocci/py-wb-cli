@@ -31,8 +31,10 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 | 0.17.0 | I-4 | ✅ DONE | Rate limiting & resilience | RateLimiter, RATE_LIMITS.md, paginate_all, _Container | 2026-04-07 |
 | 0.18.0 | I-5 | ✅ DONE | Polish & ergonomics | --compact, --sort-by/--top N, AGENT.md | 2026-04-07 |
 | 0.19.0 | I-6 | ✅ DONE | Full token category support + wb auth categories | constants, profiles, cli/auth | 2026-04-08 |
+| 0.20.0 | I-7 | ✅ DONE | Agent skills — wb assess/pulse native commands + 7 Claude Code skills | cli/assess.py, cli/pulse.py, skills/ | 2026-04-17 |
+| 0.20.2 | F-4 | ✅ DONE | UTF-8 pipe fix — stdout reconfigure + centralized console | cli/app.py, all CLI modules | 2026-04-17 |
 
-**Current:** v0.19.0 — **19 phases complete**, 0 planned. **952 tests passing**.
+**Current:** v0.20.2 — **21 phases complete**, 0 planned. **987 tests passing**.
 
 ---
 
@@ -203,6 +205,36 @@ under every category; `wb auth categories` provides a machine-readable discovery
 | `wb auth categories` subcommand | `cli/auth.py` | Table/JSON listing of all valid slugs + the `all` meta-shortcut |
 | Validation guard update | `cli/auth.py` | Token validation also fires when `--category all` (since promotion is included) |
 | Tests | `tests/unit/` | 34 new tests — expanded constants assertions, all-expansion, sentinel rejection |
+
+---
+
+### I-7 — Agent Skills (v0.20.0) ✅ DONE 2026-04-17
+
+**Theme:** Native `wb assess` / `wb pulse` CLI commands and seven Claude Code skills for
+full AI-agent-driven campaign management without raw HTTP workarounds.
+
+| Task | Files | Status | Description |
+|------|-------|--------|-------------|
+| `wb assess` command | `cli/assess.py` (new) | ✅ | Morning snapshot: balance + running campaigns + 7-day product spend in one call |
+| `wb pulse` command | `cli/pulse.py` (new) | ✅ | Intraday health check: bid drift, budget depletion, paused campaigns via real-time endpoints |
+| `wb-assess` skill | `skills/wb-assess.md` | ✅ | Claude Code skill — runs `wb assess`, interprets results, saves bid baselines |
+| `wb-pulse` skill | `skills/wb-pulse.md` | ✅ | Claude Code skill — runs `wb pulse`, detects drift vs baselines saved by wb-assess |
+| `wb-launch` skill | `skills/wb-launch.md` | ✅ | Claude Code skill — creates and starts a new campaign from strategy rules.json |
+| `wb-optimize` skill | `skills/wb-optimize.md` | ✅ | Claude Code skill — daily bid/budget optimization for a running campaign |
+| `wb-manage` skill | `skills/wb-manage.md` | ✅ | Claude Code skill — direct campaign operations (pause/resume/stop/budget/placements) |
+| `wb-keywords` skill | `skills/wb-keywords.md` | ✅ | Claude Code skill — weekly keyword lifecycle: protect, block, re-test |
+| `wb-calibrate` skill | `skills/wb-calibrate.md` | ✅ | Claude Code skill — biweekly strategy calibration; updates rules.json from 30-day data |
+
+---
+
+### F-4 — UTF-8 Pipe Fix (v0.20.2) ✅ DONE 2026-04-17
+
+**Theme:** Windows console encoding fix so all Rich output survives `| more`, `> file`, and pipe redirection.
+
+| Task | Files | Status | Description |
+|------|-------|--------|-------------|
+| `sys.stdout.reconfigure` at startup | `cli/app.py` | ✅ | Force UTF-8 on Windows stdout before any Rich output |
+| Centralized `_stdout_console` | All CLI modules | ✅ | Single `Console(file=sys.stdout)` shared across all command groups; eliminates per-module Console instances |
 
 ---
 
