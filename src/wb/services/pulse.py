@@ -102,7 +102,7 @@ class PulseService:
             baseline_data[str(cid)] = {
                 'recommend_kopecks': recommend,
                 'minimum_kopecks': minimum,
-                'budget_kopecks': budget.total,
+                'budget_rub': budget.total,
             }
 
         baseline = PulseBaseline(
@@ -124,7 +124,7 @@ class PulseService:
 
         nm_id = campaign.nm_ids[0] if campaign and campaign.nm_ids else 0
         status = campaign.status.name.lower() if campaign else 'unknown'
-        budget_rub = budget.total / 100.0 if budget else 0.0
+        budget_rub = float(budget.total) if budget else 0.0
 
         recommend_rub = 0.0
         minimum_rub = 0.0
@@ -144,7 +144,7 @@ class PulseService:
         alerts = _compute_alerts(
             status=status,
             budget_rub=budget_rub,
-            baseline_budget_kopecks=base.get('budget_kopecks', 0),
+            baseline_budget_rub=base.get('budget_rub', 0),
             bid_drift_pct=drift_pct,
             floor_drift_pct=floor_drift_pct,
         )
@@ -234,7 +234,7 @@ def _compute_alerts(
         *,
         status: str,
         budget_rub: float,
-        baseline_budget_kopecks: int,
+        baseline_budget_rub: float,
         bid_drift_pct: float,
         floor_drift_pct: float,
 ) -> list[str]:
@@ -244,9 +244,8 @@ def _compute_alerts(
         alerts.append('campaign_paused')
     if budget_rub < _BUDGET_LOW_RUB:
         alerts.append('budget_low')
-    elif baseline_budget_kopecks > 0:
-        baseline_rub = baseline_budget_kopecks / 100.0
-        if baseline_rub > 0 and (budget_rub / baseline_rub) * 100 < _BUDGET_LOW_PCT:
+    elif baseline_budget_rub > 0:
+        if (budget_rub / baseline_budget_rub) * 100 < _BUDGET_LOW_PCT:
             alerts.append('budget_low')
     if bid_drift_pct >= _BID_SURGE_THRESHOLD_PCT:
         alerts.append('competitor_surge')

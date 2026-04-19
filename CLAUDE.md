@@ -169,6 +169,7 @@ Full design: `wb_cli_authorization_plan.md`
 | Analytics v3 `sales-funnel/products/history` | `dt` field | ISO date string | Returns empty string `""` — date is not reliably parsed from this endpoint |
 | Promotion `/api/advert/v0/bids/recommendations` | Paused campaigns | Returns bid data | Returns HTTP 400 for campaigns not currently running |
 | Analytics `search-report` | Any API token | Works with standard token | Requires `Analytics/Advanced` scope — returns HTTP 403 otherwise |
+| Promotion `/adv/v1/budget/deposit` | `sum` field unit | Kopecks | Rubles — minimum 1000, must be a multiple of 50 |
 
 ## CLI Output Rendering Pattern
 

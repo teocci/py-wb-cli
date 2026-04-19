@@ -295,13 +295,22 @@ class TestCampaignCreate:
         assert payload['bid_type'] == 'manual'
         assert payload['placement_types'] == ['search']
 
-    def test_to_api_with_unified_bid(self):
+    def test_to_api_with_unified_bid_omits_placements(self):
         params = CampaignCreate(
             name='T', bid_type='unified',
             placement_types=['search', 'recommendations'],
         )
         payload = params.to_api()
         assert payload['bid_type'] == 'unified'
+        assert 'placement_types' not in payload
+
+    def test_to_api_with_manual_bid_includes_placements(self):
+        params = CampaignCreate(
+            name='T', bid_type='manual',
+            placement_types=['search', 'recommendations'],
+        )
+        payload = params.to_api()
+        assert payload['bid_type'] == 'manual'
         assert payload['placement_types'] == ['search', 'recommendations']
 
     def test_to_api_empty_nms(self):

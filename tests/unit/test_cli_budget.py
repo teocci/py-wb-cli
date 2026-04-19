@@ -130,7 +130,7 @@ class TestBudgetHistory:
                 success=True,
                 action='deposit 500',
                 target_id='42',
-                message='Deposited 500 kopecks',
+                message='Deposited 500 rubles',
             )
             mock_svc_factory.return_value = svc
             result = runner.invoke(

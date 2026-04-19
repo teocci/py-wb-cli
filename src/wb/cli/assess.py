@@ -83,10 +83,9 @@ def assess_command(
 
 def _render_assess_table(snapshot, date_from: str, date_to: str) -> None:
     """Render AssessSnapshot as Rich output."""
-    from rich.console import Console
     from rich.table import Table
 
-    console = Console(force_terminal=True, legacy_windows=False)
+    from wb.core.output import _stdout_console as console
 
     n_running = len(snapshot.running)
     n_paused = len(snapshot.paused)

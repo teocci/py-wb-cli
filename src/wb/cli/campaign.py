@@ -275,7 +275,7 @@ def campaign_create(
         ),
         placements: str = typer.Option(
             'search', '--placements',
-            help='Comma-separated placement types (search, recommendations)',
+            help='Comma-separated placement types (search, recommendations). Only for manual/custom bid — ignored for unified bid.',
         ),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),

@@ -80,8 +80,8 @@ wb campaign create \
   --payment-type <payment_type> \
   --yes
 
-# Fund (convert budget_rub to kopecks: rub * 100)
-wb budget topup --campaign <campaign_id> --sum <budget_kopecks> --yes
+# Fund (budget in rubles — do NOT convert to kopecks)
+wb budget topup --campaign <campaign_id> --sum <budget_rub> --yes
 
 # Start
 wb campaign start <campaign_id> --yes

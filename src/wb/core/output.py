@@ -13,6 +13,7 @@ __all__ = [
 ]
 
 import json
+import sys
 from typing import Any
 
 import typer
@@ -21,9 +22,10 @@ from rich.table import Table
 
 from wb.domain.enums import OutputFormat, VerbosityLevel
 
-# force_terminal + legacy_windows=False bypasses the Windows charmap codec
-_stdout_console = Console(force_terminal=True, legacy_windows=False)
-_stderr_console = Console(stderr=True, force_terminal=True, legacy_windows=False)
+# Emit ANSI only when connected to a real terminal; plain text when piped.
+# legacy_windows=False keeps UTF-8 output on Windows regardless of TTY state.
+_stdout_console = Console(force_terminal=sys.stdout.isatty(), legacy_windows=False)
+_stderr_console = Console(stderr=True, force_terminal=sys.stderr.isatty(), legacy_windows=False)
 
 
 def render_json(data: Any) -> str:

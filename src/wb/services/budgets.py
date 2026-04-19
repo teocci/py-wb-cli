@@ -50,7 +50,7 @@ class BudgetService:
 
         Args:
             campaign_id: Target campaign identifier.
-            amount: Amount to deposit in kopecks (must be positive).
+            amount: Amount to deposit in rubles (must be positive, min 1000, multiple of 50).
             dry_run: If True, plan without executing.
 
         Returns:
@@ -61,14 +61,14 @@ class BudgetService:
         """
         if amount <= 0:
             raise ValidationError(f'Deposit amount must be positive, got {amount}')
-        action = f'deposit {amount} kopecks to campaign {campaign_id}'
+        action = f'deposit {amount} rubles to campaign {campaign_id}'
         if dry_run:
             return MutationResult(
                 success=True, action=action, target_id=str(campaign_id),
-                dry_run=True, message=f'Would deposit {amount} kopecks',
+                dry_run=True, message=f'Would deposit {amount} rubles',
             )
         self._client.deposit_budget(campaign_id, amount)
         return MutationResult(
             success=True, action=action, target_id=str(campaign_id),
-            message=f'Deposited {amount} kopecks',
+            message=f'Deposited {amount} rubles',
         )

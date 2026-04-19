@@ -4,13 +4,13 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.20.2 | ✅ Latest |
+| **Current Version** | 0.20.4 | ✅ Latest |
 | **Phases Complete** | 20/20 | 100% |
-| **Tests Passing** | 987/987 | ✅ 100% |
+| **Tests Passing** | 988/989 | ✅ 99.9% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
 | **Core Files** | 55+ | ✅ Stable |
-| **Latest Feature** | F-4 — UTF-8 pipe fix: stdout reconfigure + centralized console | ✅ 2026-04-17 |
+| **Latest Feature** | F-6 — TTY-aware ANSI output — no escape codes when piped | ✅ 2026-04-19 |
 | **Agent-Ready** | YES | ✅ JSON mode, --compact, --sort-by/--top N, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available
@@ -60,8 +60,10 @@
 | 0.19.0 | I-6 | 2026-04-08 | Full token category support — 11 categories, --category all, wb auth categories command |
 | 0.20.0 | I-7 | 2026-04-17 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills (wb-launch, wb-optimize, wb-manage, wb-keywords, wb-calibrate) |
 | 0.20.2 | F-4 | 2026-04-17 | UTF-8 pipe fix — sys.stdout.reconfigure at startup + centralized _stdout_console across all CLI modules |
+| 0.20.3 | F-5 | 2026-04-19 | Budget unit fix (rubles not kopecks) + unified bid_type omits placement_types |
+| 0.20.4 | F-6 | 2026-04-19 | TTY-aware ANSI output — force_terminal=sys.stdout.isatty(); plain text when piped |
 
-## Current Version: 0.20.2
+## Current Version: 0.20.4
 
 ## Phase Status
 
@@ -90,6 +92,8 @@
 | I-6 | Full token category support — 11 categories, --category all, wb auth categories | COMPLETED | 0.19.0 |
 | I-7 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills | COMPLETED | 0.20.0 |
 | F-4 | UTF-8 pipe fix — stdout reconfigure + centralized console | COMPLETED | 0.20.2 |
+| F-5 | Budget unit fix (rubles) + unified bid_type omits placement_types | COMPLETED | 0.20.3 |
+| F-6 | TTY-aware ANSI output — no escape codes when piped | COMPLETED | 0.20.4 |
 
 ---
 

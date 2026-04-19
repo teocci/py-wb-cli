@@ -54,8 +54,8 @@ def _make_nm_stats(nm_id: int = 100, spend: float = 840.0) -> NmStats:
     return NmStats(nm_id=nm_id, spend=spend, views=1200, clicks=50, orders=10)
 
 
-def _make_budget(campaign_id: int = 1, total: int = 100_000) -> BudgetSnapshot:
-    return BudgetSnapshot(campaign_id=campaign_id, total=total, cash=100_000)
+def _make_budget(campaign_id: int = 1, total: int = 1000) -> BudgetSnapshot:
+    return BudgetSnapshot(campaign_id=campaign_id, total=total, cash=1000)
 
 
 def _make_recommended_bid(
@@ -191,7 +191,7 @@ class TestPulseService:
 
     def test_healthy_campaign_has_no_alerts(self) -> None:
         svc = _make_pulse_service(
-            budget=_make_budget(total=200_000),
+            budget=_make_budget(total=2000),
             bids=[_make_recommended_bid(recommended=2000, minimum=800)],
         )
         report = svc.get_pulse([1])
@@ -200,7 +200,7 @@ class TestPulseService:
 
     def test_budget_low_alert_fires_below_threshold(self) -> None:
         svc = _make_pulse_service(
-            budget=_make_budget(total=40_000),  # 400 RUB < 500 threshold
+            budget=_make_budget(total=400),  # 400 RUB < 500 threshold
         )
         report = svc.get_pulse([1])
         assert 'budget_low' in report.campaigns[0].alerts
@@ -214,7 +214,7 @@ class TestPulseService:
     def test_competitor_surge_detected_from_baseline(self, tmp_path) -> None:
         baseline = {
             'saved_at': '2026-04-17T09:00:00',
-            'campaigns': {'1': {'recommend_kopecks': 1000, 'minimum_kopecks': 400, 'budget_kopecks': 200_000}},
+            'campaigns': {'1': {'recommend_kopecks': 1000, 'minimum_kopecks': 400, 'budget_rub': 2000}},
         }
         (tmp_path / 'pulse_baseline.json').write_text(
             json.dumps(baseline), encoding='utf-8',
@@ -230,7 +230,7 @@ class TestPulseService:
     def test_bid_floor_rising_detected(self, tmp_path) -> None:
         baseline = {
             'saved_at': '2026-04-17T09:00:00',
-            'campaigns': {'1': {'recommend_kopecks': 2000, 'minimum_kopecks': 800, 'budget_kopecks': 200_000}},
+            'campaigns': {'1': {'recommend_kopecks': 2000, 'minimum_kopecks': 800, 'budget_rub': 2000}},
         }
         (tmp_path / 'pulse_baseline.json').write_text(
             json.dumps(baseline), encoding='utf-8',
@@ -249,7 +249,7 @@ class TestPulseService:
         assert report.campaigns[0].bid_recommend_drift_pct == pytest.approx(0.0)
 
     def test_action_needed_true_when_any_alert(self) -> None:
-        svc = _make_pulse_service(budget=_make_budget(total=40_000))
+        svc = _make_pulse_service(budget=_make_budget(total=400))
         report = svc.get_pulse([1])
         assert report.action_needed is True
 
@@ -261,14 +261,14 @@ class TestPulseService:
     def test_bid_values_converted_to_rub(self) -> None:
         svc = _make_pulse_service(
             bids=[_make_recommended_bid(recommended=2500, minimum=1000)],
-            budget=_make_budget(total=200_000),
+            budget=_make_budget(total=2000),
         )
         report = svc.get_pulse([1])
         assert report.campaigns[0].bid_recommend_rub == pytest.approx(25.0)
         assert report.campaigns[0].bid_minimum_rub == pytest.approx(10.0)
 
     def test_budget_converted_to_rub(self) -> None:
-        svc = _make_pulse_service(budget=_make_budget(total=750_000))
+        svc = _make_pulse_service(budget=_make_budget(total=7500))
         report = svc.get_pulse([1])
         assert report.campaigns[0].budget_remaining_rub == pytest.approx(7500.0)
 
@@ -306,7 +306,7 @@ class TestComputeAlerts:
     def test_no_alerts_for_healthy_state(self) -> None:
         alerts = _compute_alerts(
             status='running', budget_rub=1000.0,
-            baseline_budget_kopecks=200_000,
+            baseline_budget_rub=2000.0,
             bid_drift_pct=5.0, floor_drift_pct=3.0,
         )
         assert alerts == []
@@ -314,7 +314,7 @@ class TestComputeAlerts:
     def test_campaign_paused_alert(self) -> None:
         alerts = _compute_alerts(
             status='paused', budget_rub=1000.0,
-            baseline_budget_kopecks=200_000,
+            baseline_budget_rub=2000.0,
             bid_drift_pct=0.0, floor_drift_pct=0.0,
         )
         assert 'campaign_paused' in alerts
@@ -322,7 +322,7 @@ class TestComputeAlerts:
     def test_budget_low_absolute(self) -> None:
         alerts = _compute_alerts(
             status='running', budget_rub=400.0,
-            baseline_budget_kopecks=200_000,
+            baseline_budget_rub=2000.0,
             bid_drift_pct=0.0, floor_drift_pct=0.0,
         )
         assert 'budget_low' in alerts
@@ -330,7 +330,7 @@ class TestComputeAlerts:
     def test_competitor_surge_at_threshold(self) -> None:
         alerts = _compute_alerts(
             status='running', budget_rub=1000.0,
-            baseline_budget_kopecks=200_000,
+            baseline_budget_rub=2000.0,
             bid_drift_pct=15.0, floor_drift_pct=0.0,
         )
         assert 'competitor_surge' in alerts
@@ -338,7 +338,7 @@ class TestComputeAlerts:
     def test_bid_floor_rising_at_threshold(self) -> None:
         alerts = _compute_alerts(
             status='running', budget_rub=1000.0,
-            baseline_budget_kopecks=200_000,
+            baseline_budget_rub=2000.0,
             bid_drift_pct=0.0, floor_drift_pct=10.0,
         )
         assert 'bid_floor_rising' in alerts

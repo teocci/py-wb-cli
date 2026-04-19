@@ -63,7 +63,7 @@ def budget_get(
 def budget_topup(
         ctx: typer.Context,
         campaign_id: int = typer.Option(..., '--campaign', '-c', help='Campaign ID'),
-        amount: int = typer.Option(..., '--sum', '-s', help='Amount to deposit in kopecks'),
+        amount: int = typer.Option(..., '--sum', '-s', help='Amount to deposit in rubles (min 1000, multiple of 50)'),
         dry_run: bool = typer.Option(False, '--dry-run', help='Plan without executing'),
         yes: bool = typer.Option(False, '--yes', '-y', help='Skip confirmation'),
 ) -> None:
@@ -71,7 +71,7 @@ def budget_topup(
     from wb.services._factory import create_audit_logger, create_budget_service
 
     renderer = get_renderer(ctx)
-    action = f'deposit {amount} kopecks to campaign {campaign_id}'
+    action = f'deposit {amount} rubles to campaign {campaign_id}'
     confirm_or_abort(renderer, action, yes or dry_run)
 
     svc = create_budget_service(get_profile(ctx))

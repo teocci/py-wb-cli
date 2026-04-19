@@ -659,12 +659,14 @@ class CampaignCreate:
 
     def to_api(self) -> dict:
         """Serialize to WB API /adv/v2/seacat/save-ad payload."""
-        return {
+        payload: dict = {
             'name': self.name,
             'nms': self.nm_ids,
             'bid_type': self.bid_type,
-            'placement_types': self.placement_types,
         }
+        if self.bid_type != 'unified':
+            payload['placement_types'] = self.placement_types
+        return payload
 
 
 @dataclass(slots=True)

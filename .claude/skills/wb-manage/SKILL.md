@@ -29,8 +29,8 @@ wb campaign pause <campaign_id> --yes
 # Check budget first — don't resume with empty balance
 wb budget get --campaign <campaign_id> --json --compact
 
-# Top up if < 500 RUB
-wb budget topup --campaign <campaign_id> --sum <kopecks> --yes
+# Top up if < 500 RUB (amount in rubles)
+wb budget topup --campaign <campaign_id> --sum <rubles> --yes
 
 # Start
 wb campaign start <campaign_id> --yes
@@ -45,11 +45,11 @@ wb campaign stop <campaign_id> --yes
 ### replenish
 
 ```bash
-# Convert RUB to kopecks: amount_rub * 100
-wb budget topup --campaign <campaign_id> --sum <amount_kopecks> --yes
+# Amount in rubles — do NOT convert to kopecks
+wb budget topup --campaign <campaign_id> --sum <amount_rub> --yes
 ```
 
-Typical amounts: 1000 RUB = 100000 kopecks, 500 RUB = 50000 kopecks.
+Typical amounts: 1000, 2000, 5000 (rubles). Min 1000, must be a multiple of 50.
 
 ### change placements
 

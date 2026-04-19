@@ -33,8 +33,10 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 | 0.19.0 | I-6 | ✅ DONE | Full token category support + wb auth categories | constants, profiles, cli/auth | 2026-04-08 |
 | 0.20.0 | I-7 | ✅ DONE | Agent skills — wb assess/pulse native commands + 7 Claude Code skills | cli/assess.py, cli/pulse.py, skills/ | 2026-04-17 |
 | 0.20.2 | F-4 | ✅ DONE | UTF-8 pipe fix — stdout reconfigure + centralized console | cli/app.py, all CLI modules | 2026-04-17 |
+| 0.20.3 | F-5 | ✅ DONE | Budget unit fix (rubles) + unified bid_type omits placement_types | services/budgets.py, cli/budget.py, domain/models.py, skills | 2026-04-19 |
+| 0.20.4 | F-6 | ✅ DONE | TTY-aware ANSI output — no escape codes when piped | core/output.py, cli/assess.py | 2026-04-19 |
 
-**Current:** v0.20.2 — **21 phases complete**, 0 planned. **987 tests passing**.
+**Current:** v0.20.4 — **21 phases complete**, 0 planned. **988 tests passing**.
 
 ---
 
@@ -235,6 +237,17 @@ full AI-agent-driven campaign management without raw HTTP workarounds.
 |------|-------|--------|-------------|
 | `sys.stdout.reconfigure` at startup | `cli/app.py` | ✅ | Force UTF-8 on Windows stdout before any Rich output |
 | Centralized `_stdout_console` | All CLI modules | ✅ | Single `Console(file=sys.stdout)` shared across all command groups; eliminates per-module Console instances |
+
+---
+
+### F-6 — TTY-Aware ANSI Output (v0.20.4) ✅ DONE 2026-04-19
+
+**Theme:** Agents and piped commands receive clean plain text, not ANSI escape sequences.
+
+| Task | Files | Status | Description |
+|------|-------|--------|-------------|
+| Replace `force_terminal=True` with TTY detection | `core/output.py` | ✅ | `Console(force_terminal=sys.stdout.isatty())` — ANSI only when connected to real terminal |
+| Fix `assess.py` local Console | `cli/assess.py` | ✅ | Removed local `Console(force_terminal=True)`, use shared `_stdout_console` |
 
 ---
 

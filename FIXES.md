@@ -17,8 +17,10 @@ Tracks bug fixes and non-feature improvements across all versions.
 | 8 | Write endpoint verification | ✅ DONE | live API test | 2026-04-02 | Campaign create/rename/delete verified |
 | 9 | Analytics token fallback + selectedPeriod | ✅ DONE | _factory.py, analytics.py | 2026-04-03 | WB_API_TOKEN fallback, start→begin fix |
 | 10 | UTF-8 pipe fix (F-4) | ✅ DONE | cli/app.py + 7 CLI modules | 2026-04-17 | stdout reconfigure + centralized _stdout_console |
+| 11 | Budget unit + unified bid_type (F-5) | ✅ DONE | services/budgets.py, cli/budget.py, domain/models.py, skills | 2026-04-19 | Budget deposit expects rubles not kopecks; unified must omit placement_types |
+| 12 | TTY-aware ANSI output (F-6) | ✅ DONE | core/output.py, cli/assess.py | 2026-04-19 | force_terminal=True → sys.stdout.isatty(); plain text when piped |
 
-**Summary:** All 11 fixes complete. **987 tests passing**.
+**Summary:** All 13 fixes complete. **988 tests passing** (989 total; 1 pre-existing env test). No ANSI codes in piped/agent output.
 
 ---
 
@@ -185,6 +187,82 @@ This caused every `analytics sales-funnel` command to return `HTTP 400 Bad Reque
 
 **Fix:** Replaced all three occurrences (`get_product_funnel`, `get_product_history`,
 `get_grouped_funnel`) with `'start'`.
+
+---
+
+## Fix 11 — Budget unit + unified bid_type (F-5, v0.20.3)
+
+**Status:** IN PROGRESS (2026-04-19)
+
+### Bug A — Budget deposit accepts rubles, not kopecks
+
+The `/adv/v1/budget/deposit` API `sum` field expects **rubles**. WB error messages confirm:
+"Минимальная сумма пополнения 1000 рублей", "кратна 50 руб". The example `"sum": 5000`
+satisfies ≥1000 only if interpreted as rubles (5000 kopecks = 50 rubles would fail minimum).
+
+The wb-launch and wb-manage skills incorrectly multiply `budget_rub * 100` before calling
+`wb budget topup --sum`, causing 100× over-deposit (1000 RUB → 100,000 RUB deposited).
+
+### Bug B — unified bid_type must not send placement_types
+
+WB API docs state `placement_types` is "Specify for campaign with custom bid only".
+For `bid_type: unified` (flat rate), WB activates all placements simultaneously —
+no placement selection is applicable. Current `CampaignCreate.to_api()` always sends
+`placement_types` regardless.
+
+### Steps
+
+| Step | Description | Status |
+|------|-------------|--------|
+| A1 ✅ |  Fix `services/budgets.py` — kopecks → rubles in docstring + log messages | [ ] |
+| A2 ✅ |  Fix `cli/budget.py` — kopecks → rubles in `--sum` help and log string | [ ] |
+| A3 ✅ |  Fix `tests/unit/test_cli_budget.py` — update expected message string | [ ] |
+| A4 ✅ |  Fix `skills/wb-launch/SKILL.md` — remove `* 100` conversion | [ ] |
+| A5 ✅ |  Fix `skills/wb-manage/SKILL.md` — remove `* 100` conversion | [ ] |
+| A6 ✅ |  Add CLAUDE.md quirk entry for budget deposit unit | [ ] |
+| B1 ✅ | Fix `domain/models.py` `CampaignCreate.to_api()` — skip placement_types for unified | [ ] |
+| B2 ✅ | Fix `cli/campaign.py` — update `--placements` help text | [ ] |
+| B3 ✅ | Add tests: unified payload has no placement_types; manual payload does | [ ] |
+| C ✅ | Bump version to 0.20.3, update PROGRESS.md | [ ] |
+
+---
+
+## Fix 12 — TTY-Aware ANSI Output (F-6, v0.20.4)
+
+**Status:** DONE (2026-04-19)
+**Version:** 0.20.4
+
+### Problem
+
+Commands piped to files, `2>&1` captures, or agent shells (Codex, CI) received raw ANSI escape codes in the output:
+
+```
+[3m                  campaign stop                   [0m
+[1;32mSuccess:[0m [1;36m1[0m/[1;36m1[0m succeeded
+```
+
+This made output unparseable for agents that don't have a real terminal.
+
+### Root cause
+
+`_stdout_console` in `core/output.py` was created with `force_terminal=True`, which tells Rich to always emit ANSI codes regardless of whether stdout is actually a TTY. This was added to fix Windows UTF-8 encoding (F-4), but it broke piped output.
+
+`cli/assess.py` had its own `Console(force_terminal=True)` instance instead of using the shared `_stdout_console`.
+
+### Fix
+
+Replace `force_terminal=True` with `sys.stdout.isatty()` — Rich emits ANSI only when connected to a real terminal. `legacy_windows=False` is retained on both consoles for UTF-8 correctness on Windows regardless of TTY state.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/wb/core/output.py` | `force_terminal=True` → `force_terminal=sys.stdout.isatty()` on both `_stdout_console` and `_stderr_console`; added `import sys` |
+| `src/wb/cli/assess.py` | Removed local `Console(force_terminal=True)` import; use shared `_stdout_console` |
+
+### Test results
+
+- **988 unit tests passed** (0 failures) — no regressions
 
 ---
 
