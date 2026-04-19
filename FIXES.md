@@ -19,8 +19,9 @@ Tracks bug fixes and non-feature improvements across all versions.
 | 10 | UTF-8 pipe fix (F-4) | ✅ DONE | cli/app.py + 7 CLI modules | 2026-04-17 | stdout reconfigure + centralized _stdout_console |
 | 11 | Budget unit + unified bid_type (F-5) | ✅ DONE | services/budgets.py, cli/budget.py, domain/models.py, skills | 2026-04-19 | Budget deposit expects rubles not kopecks; unified must omit placement_types |
 | 12 | TTY-aware ANSI output (F-6) | ✅ DONE | core/output.py, cli/assess.py | 2026-04-19 | force_terminal=True → sys.stdout.isatty(); plain text when piped |
+| 13 | campaign list --fields projection (F-7) | ✅ DONE | cli/campaign.py | 2026-04-19 | --fields silently ignored; route through renderer.display() |
 
-**Summary:** All 13 fixes complete. **988 tests passing** (989 total; 1 pre-existing env test). No ANSI codes in piped/agent output.
+**Summary:** All 14 fixes complete. **988 tests passing** (989 total; 1 pre-existing env test). No ANSI codes in piped/agent output.
 
 ---
 
@@ -259,6 +260,54 @@ Replace `force_terminal=True` with `sys.stdout.isatty()` — Rich emits ANSI onl
 |------|--------|
 | `src/wb/core/output.py` | `force_terminal=True` → `force_terminal=sys.stdout.isatty()` on both `_stdout_console` and `_stderr_console`; added `import sys` |
 | `src/wb/cli/assess.py` | Removed local `Console(force_terminal=True)` import; use shared `_stdout_console` |
+
+### Test results
+
+- **988 unit tests passed** (0 failures) — no regressions
+
+---
+
+## Fix 13 — campaign list --fields projection ignored (F-7, v0.20.5)
+
+**Status:** DONE (2026-04-19)
+**Version:** 0.20.5
+
+### Problem
+
+`wb --fields id,name,status campaign list` rendered the full 6-column table instead of a projected view. In JSON mode, `--fields campaign_id,name` likewise returned complete campaign objects.
+
+### Root cause
+
+`campaign_list` in `cli/campaign.py` bypassed `renderer.display()` entirely:
+
+```python
+if renderer.is_json:
+    typer.echo(_json.dumps([asdict(c) for c in campaigns], ...))  # ignores --fields
+    return
+render_table(headers, rows, title='Campaigns')  # ignores --fields
+```
+
+`renderer.display()` already handles `--fields` correctly for both modes (`output.py:157-176`), but `campaign_list` never called it.
+
+### Fix
+
+Route both rendering paths through `renderer.display()`:
+
+```python
+if renderer.is_json:
+    renderer.display([asdict(c) for c in campaigns], fields=get_fields(ctx))
+    return
+renderer.display(rows, headers=headers, title='Campaigns', fields=get_fields(ctx))
+```
+
+- JSON path: `_filter_fields()` keeps only requested dict keys
+- Table path: columns filtered by case-insensitive header match (`id`→`ID`, `status`→`Status`)
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/wb/cli/campaign.py` | Replace manual `typer.echo` + `render_table` calls with `renderer.display(..., fields=get_fields(ctx))` |
 
 ### Test results
 

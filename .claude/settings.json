@@ -67,7 +67,10 @@
       "Bash(.venv/Scripts/python -m pytest tests/unit/ -v --tb=line)",
       "Read(//d/d/teocci/code/python/py-wb-cli/**)",
       "Read(//d/d/teocci/code/python/py-wb-cli/src/wb/**)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(.venv/Scripts/pytest tests/unit/ -v -q)",
+      "Bash(wc:*)",
+      "Bash(git log *)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

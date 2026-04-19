@@ -4,13 +4,13 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.20.4 | ✅ Latest |
+| **Current Version** | 0.20.5 | ✅ Latest |
 | **Phases Complete** | 20/20 | 100% |
 | **Tests Passing** | 988/989 | ✅ 99.9% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
 | **Core Files** | 55+ | ✅ Stable |
-| **Latest Feature** | F-6 — TTY-aware ANSI output — no escape codes when piped | ✅ 2026-04-19 |
+| **Latest Feature** | F-7 — campaign list --fields projection — column/key filtering now honored | ✅ 2026-04-19 |
 | **Agent-Ready** | YES | ✅ JSON mode, --compact, --sort-by/--top N, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available
@@ -62,8 +62,9 @@
 | 0.20.2 | F-4 | 2026-04-17 | UTF-8 pipe fix — sys.stdout.reconfigure at startup + centralized _stdout_console across all CLI modules |
 | 0.20.3 | F-5 | 2026-04-19 | Budget unit fix (rubles not kopecks) + unified bid_type omits placement_types |
 | 0.20.4 | F-6 | 2026-04-19 | TTY-aware ANSI output — force_terminal=sys.stdout.isatty(); plain text when piped |
+| 0.20.5 | F-7 | 2026-04-19 | campaign list --fields projection — route through renderer.display(); column/key filtering now honored |
 
-## Current Version: 0.20.4
+## Current Version: 0.20.5
 
 ## Phase Status
 

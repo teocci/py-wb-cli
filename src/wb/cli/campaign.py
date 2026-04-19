@@ -142,11 +142,9 @@ def campaign_list(
         for c in campaigns
     ]
     if renderer.is_json:
-        import json as _json
-        data = [asdict(c) for c in campaigns]
-        typer.echo(_json.dumps(data, indent=2, ensure_ascii=False, default=str))
+        renderer.display([asdict(c) for c in campaigns], fields=get_fields(ctx))
         return
-    render_table(headers, rows, title='Campaigns')
+    renderer.display(rows, headers=headers, title='Campaigns', fields=get_fields(ctx))
 
 
 @campaign_app.command('get')

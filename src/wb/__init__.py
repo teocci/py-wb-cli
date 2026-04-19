@@ -1,3 +1,3 @@
 """WB CLI - Wildberries Advertising Operations Framework."""
 
-__version__ = '0.20.4'
+__version__ = '0.20.5'
