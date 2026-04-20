@@ -5,13 +5,17 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from wb.client.promotion import PromotionClient
 from wb.core.batching import chunk
 from wb.core.constants import FULLSTATS_BATCH_SIZE
 from wb.core.exceptions import ValidationError
 from wb.domain.enums import CampaignStatus
-from wb.domain.models import CampaignStats, NmStats
+from wb.domain.models import CampaignStats, DailyReportRow, NmStats
+
+if TYPE_CHECKING:
+    from wb.services.analytics import AnalyticsService
 
 __all__ = ['StatsService']
 
@@ -177,6 +181,51 @@ class StatsService:
         result = [totals.get(nm, NmStats(nm_id=nm)) for nm in nm_ids]
         return sorted(result, key=lambda x: x.spend, reverse=True)
 
+    def get_daily_report(
+            self,
+            date: str,
+            *,
+            statuses: list[int] | None = None,
+            analytics_svc: AnalyticsService | None = None,
+    ) -> list[DailyReportRow]:
+        """Build a per-product daily report combining ad spend and total orders.
+
+        Discovers products automatically from campaigns matching the given
+        statuses, retrieves ad spend via the Promotion API, and enriches with
+        total platform orders from the Analytics funnel API when available.
+
+        Args:
+            date: Report date in YYYY-MM-DD format.
+            statuses: CampaignStatus integer values to include (default: active
+                = [9, 11]).
+            analytics_svc: Optional AnalyticsService for total order counts.
+                If None or if the call fails (e.g. 403 missing scope), total
+                orders default to 0 for all rows.
+
+        Returns:
+            List of DailyReportRow sorted by ad_spend descending.
+
+        Raises:
+            ValidationError: If date format is invalid.
+        """
+        _validate_date(date, '--date')
+        resolved_statuses = statuses if statuses is not None else [9, 11]
+        nm_ids = self._collect_nm_ids_by_status(resolved_statuses)
+        if not nm_ids:
+            return []
+        spend_rows = self.get_product_spend(nm_ids, date, date)
+        funnel_by_nm = self._fetch_funnel_orders(nm_ids, date, analytics_svc)
+        rows = [
+            DailyReportRow(
+                nm_id=s.nm_id,
+                name=s.name,
+                ad_spend=s.spend,
+                total_orders=funnel_by_nm.get(s.nm_id, 0),
+            )
+            for s in spend_rows
+        ]
+        return sorted(rows, key=lambda r: r.ad_spend, reverse=True)
+
     # ── Private helpers ────────────────────────────────────────────────
 
     def _find_campaign_ids_for_nms(self, nm_set: set[int]) -> list[int]:
@@ -238,6 +287,52 @@ class StatsService:
                         avg_position=nm.avg_position,
                     )
         return totals
+
+    def _collect_nm_ids_by_status(self, statuses: list[int]) -> list[int]:
+        """Return unique NM IDs across all campaigns matching the given statuses.
+
+        Args:
+            statuses: CampaignStatus integer codes to include.
+
+        Returns:
+            Deduplicated list of NM IDs.
+        """
+        raw_campaigns = self._client.list_campaigns(status=statuses)
+        nm_set: set[int] = set()
+        for c in raw_campaigns:
+            for item in (c.get('nm_settings') or []):
+                if 'nm_id' in item:
+                    nm_set.add(item['nm_id'])
+        return list(nm_set)
+
+    def _fetch_funnel_orders(
+            self,
+            nm_ids: list[int],
+            date: str,
+            analytics_svc: AnalyticsService | None,
+    ) -> dict[int, int]:
+        """Fetch total platform order counts from the analytics funnel.
+
+        Returns an empty dict if analytics_svc is None or the call fails
+        (e.g. missing analytics token → 403).
+
+        Args:
+            nm_ids: Product NM IDs to query.
+            date: Report date (YYYY-MM-DD).
+            analytics_svc: Analytics service instance, or None.
+
+        Returns:
+            Dict mapping nm_id → total order count (0 if unavailable).
+        """
+        if analytics_svc is None:
+            return {}
+        try:
+            funnel_rows = analytics_svc.get_product_funnel(
+                date, date, nm_ids=nm_ids,
+            )
+            return {r.nm_id: r.order_count for r in funnel_rows}
+        except Exception:
+            return {}
 
     def _maybe_cache_stats(self, stats: CampaignStats) -> None:
         """Write per-day stats to cache if a CacheStore is configured.

@@ -1,11 +1,13 @@
-"""Tests for --sort-by / --top N sorting in analytics sales-funnel products."""
+"""Tests for --sort-by / --top N / --min-orders / --all in analytics sales-funnel products."""
 
 from __future__ import annotations
+from unittest.mock import MagicMock, patch
 
 import pytest
 import typer
+from typer.testing import CliRunner
 
-from wb.cli.analytics import _sort_funnel
+from wb.cli.analytics import _sort_funnel, funnel_app
 from wb.domain.analytics_models import ProductFunnelStats
 
 
@@ -90,3 +92,92 @@ class TestSortFunnel:
         # All valid aliases should appear in the error
         for alias in ('orders', 'opens', 'cart', 'revenue', 'buyouts'):
             assert alias in msg
+
+
+# ── --min-orders filter ──────────────────────────────────────────────
+
+
+class TestMinOrdersFilter:
+    def test_excludes_below_threshold(self, sample_stats):
+        filtered = [s for s in sample_stats if s.order_count >= 20]
+        assert all(s.order_count >= 20 for s in filtered)
+        assert len(filtered) == 3  # orders: 50, 20, 35
+
+    def test_zero_threshold_keeps_all(self, sample_stats):
+        filtered = [s for s in sample_stats if s.order_count >= 0]
+        assert len(filtered) == len(sample_stats)
+
+    def test_high_threshold_returns_empty(self, sample_stats):
+        filtered = [s for s in sample_stats if s.order_count >= 999]
+        assert filtered == []
+
+    def test_min_orders_one_drops_zero_order_rows(self):
+        stats = [
+            _make_stats(1, orders=0),
+            _make_stats(2, orders=5),
+            _make_stats(3, orders=0),
+            _make_stats(4, orders=1),
+        ]
+        filtered = [s for s in stats if s.order_count >= 1]
+        assert [s.nm_id for s in filtered] == [2, 4]
+
+
+# ── --all auto-pagination (CLI integration) ──────────────────────────
+
+
+_runner = CliRunner()
+
+_PAGE_1 = [_make_stats(i, orders=i) for i in range(1, 4)]
+_PAGE_2 = [_make_stats(i, orders=i) for i in range(4, 6)]
+
+
+def _mock_svc(pages: list[list]) -> MagicMock:
+    """Return a mock AnalyticsService whose get_product_funnel returns pages in order."""
+    svc = MagicMock()
+    call_count = {'n': 0}
+
+    def _side_effect(*args, **kwargs):
+        idx = call_count['n']
+        call_count['n'] += 1
+        return pages[idx] if idx < len(pages) else []
+
+    svc.get_product_funnel.side_effect = _side_effect
+    return svc
+
+
+class TestAllFlag:
+    def test_all_flag_paginates_until_short_page(self):
+        """--all keeps fetching until a page shorter than page_size is returned."""
+        from wb.core.batching import paginate_all
+
+        call_log: list[tuple[int, int]] = []
+
+        def fetch(limit: int, offset: int) -> list:
+            call_log.append((limit, offset))
+            if offset == 0:
+                return list(range(limit))   # full page — more data exists
+            return list(range(3))           # short page — signals end
+
+        result = paginate_all(fetch, page_size=5)
+        assert call_log == [(5, 0), (5, 5)]
+        assert len(result) == 5 + 3
+
+    def test_all_flag_single_page_stops(self):
+        """When first page is shorter than page_size, no second call is made."""
+        from wb.core.batching import paginate_all
+
+        calls = []
+
+        def fetch(limit: int, offset: int) -> list:
+            calls.append(offset)
+            return list(range(3))   # always short
+
+        paginate_all(fetch, page_size=1000)
+        assert calls == [0]
+
+    def test_all_flag_empty_first_page(self):
+        """Empty first page returns empty list immediately."""
+        from wb.core.batching import paginate_all
+
+        result = paginate_all(fetch=lambda l, o: [], page_size=100)
+        assert result == []

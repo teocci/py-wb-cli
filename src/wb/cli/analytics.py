@@ -119,20 +119,51 @@ def funnel_products(
             None, '--top', '-n',
             help='Return only the top N results after sorting',
         ),
+        min_orders: int | None = typer.Option(
+            None, '--min-orders',
+            help='Exclude products with fewer orders than this value',
+        ),
+        fetch_all: bool = typer.Option(
+            False, '--all',
+            help='Fetch all pages automatically (page_size=1000); ignores --limit/--offset',
+        ),
 ) -> None:
     """Product cards statistics for a period."""
+    from wb.core.batching import paginate_all
     from wb.services._factory import create_analytics_service
 
     renderer = get_renderer(ctx)
     svc = create_analytics_service(get_profile(ctx))
-    stats = svc.get_product_funnel(
-        date_from, date_to,
-        nm_ids=_parse_int_list(nm_ids),
-        brand_names=_parse_str_list(brands),
-        subject_ids=_parse_int_list(subjects),
-        limit=limit,
-        offset=offset,
-    )
+
+    parsed_nm_ids = _parse_int_list(nm_ids)
+    parsed_brands = _parse_str_list(brands)
+    parsed_subjects = _parse_int_list(subjects)
+
+    if fetch_all:
+        stats = paginate_all(
+            fetch=lambda lim, off: svc.get_product_funnel(
+                date_from, date_to,
+                nm_ids=parsed_nm_ids,
+                brand_names=parsed_brands,
+                subject_ids=parsed_subjects,
+                limit=lim,
+                offset=off,
+            ),
+            page_size=1000,
+        )
+    else:
+        stats = svc.get_product_funnel(
+            date_from, date_to,
+            nm_ids=parsed_nm_ids,
+            brand_names=parsed_brands,
+            subject_ids=parsed_subjects,
+            limit=limit,
+            offset=offset,
+        )
+
+    if min_orders is not None:
+        stats = [s for s in stats if s.order_count >= min_orders]
+
     stats = _sort_funnel(stats, sort_by, top)
 
     if not stats:

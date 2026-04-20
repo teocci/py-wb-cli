@@ -71,11 +71,15 @@
       "Bash(.venv/Scripts/pytest tests/unit/ -v -q)",
       "Bash(wc:*)",
       "Bash(git log *)",
-      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(f'{len\\(data\\)} campaigns, first payment_type: {data[0][\\\\\"payment_type\\\\\"] if data else \\\\\"n/a\\\\\"}'\\)\")"
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(f'{len\\(data\\)} campaigns, first payment_type: {data[0][\\\\\"payment_type\\\\\"] if data else \\\\\"n/a\\\\\"}'\\)\")",
+      "Edit(/.claude/skills/wb-daily-report/**)",
+      "Edit(/.claude/skills/wb-rate-guide/**)",
+      "Edit(/.claude/skills/wb-rate-recover/**)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
-      "d:\\d\\teocci\\code\\python\\py-wb-cli"
+      "d:\\d\\teocci\\code\\python\\py-wb-cli",
+      "D:\\teocci\\code\\python\\py-wb-cli\\src\\wb\\domain"
     ]
   }
 }

@@ -40,10 +40,10 @@ The CLI enforces per-endpoint sliding-window limiters (stop and delete each allo
 Warnings appeared in CLI output?
 ├── YES, but final result shows Success → transient spike, no action needed
 └── YES, and result row shows False / "Rate limited by WB API"
-    ├── campaign stop / delete / pause / start → wait 10s, retry once
-    ├── wb stats campaign (fullstats)          → wait 20s, retry once
-    ├── wb bid recommend                       → wait 15s, retry once
-    └── wb analytics funnel / history          → wait 20s, retry once
+    ├── campaign stop / delete / pause / start  → wait 10s, retry once
+    ├── wb stats campaign / daily-report        → wait 20s, retry once
+    ├── wb bid recommend                        → wait 15s, retry once
+    └── wb analytics sales-funnel products/history → wait 20s, retry once
         └── Still failing after retry?
             └── wait 60s (full window reset), then retry
 ```
@@ -54,7 +54,7 @@ Warnings appeared in CLI output?
 
 ```bash
 # Verify campaign state first
-wb campaigns list --json --compact
+wb campaign list --json --compact
 
 # Wait, then retry
 sleep 10
@@ -96,9 +96,9 @@ wb campaign delete <id2> --yes
 | Operation | Min wait | Reason |
 |---|---|---|
 | campaign write (stop/delete/start/pause) | 10s | server-side campaign aggregate window |
-| `wb stats campaign` | 20s | burst=1, 1/20s enforced |
+| `wb stats campaign` / `wb stats daily-report` | 20s | burst=1, 1/20s enforced |
 | `wb bid recommend` | 15s | 5/min → 12s between calls |
-| analytics (funnel/history) | 20s | 3/min |
+| analytics (sales-funnel products/history) | 20s | 3/min |
 | any — after repeated failure | 60s | full rate-limit window reset |
 
 ## Notes

@@ -35,6 +35,7 @@ __all__ = [
     'ProductPrice',
     'ProductSummary',
     'CampaignOverview',
+    'DailyReportRow',
 ]
 
 
@@ -1015,3 +1016,20 @@ class CampaignOverview:
     cluster_count: int = 0
     active_cluster_count: int = 0
     currency: str = 'RUB'
+
+
+@dataclass(slots=True)
+class DailyReportRow:
+    """Combined ad spend + platform orders row for a single product on a given date.
+
+    Attributes:
+        nm_id: WB nomenclature ID.
+        name: Product display name.
+        ad_spend: Total advertising spend in rubles (from Promotion API).
+        total_orders: Total platform orders from all channels (from Analytics funnel).
+    """
+
+    nm_id: int
+    name: str = ''
+    ad_spend: float = 0.0
+    total_orders: int = 0

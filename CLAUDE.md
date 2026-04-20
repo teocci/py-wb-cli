@@ -61,6 +61,8 @@ Phase naming: `N` = core implementation · `NA` = sub-phase of N · `F-N` = fix 
 | 0.20.0 | I-7 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills |
 | 0.20.2 | F-4 | UTF-8 pipe fix — stdout reconfigure + centralized console |
 | 0.21.0 | I-8 | stats campaigns --status filter — running/paused/active |
+| 0.22.0 | I-9 | stats daily-report — per-product ad spend + total orders; wb-daily-report skill |
+| 0.23.0 | I-10 | sales-funnel products: --min-orders filter + --all auto-pagination |
 
 ## Project Layout
 

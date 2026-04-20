@@ -27,22 +27,25 @@ The CLI acquires a rate-limit slot **before** each HTTP request (sliding window,
 | `wb campaign delete` | 5/s | 5/s | server aggregates write ops on same campaign |
 | `wb campaign create` | 5/min | 1/12 s | — |
 | `wb stats campaign` | 3/min, burst=1 | **1/20 s** | slowest; fullstats bottleneck |
+| `wb stats daily-report` | composite | **1/20 s** | bottleneck = fullstats leg |
 | `wb budget get` | 4/s | 4/s | — |
 | `wb budget topup` | 1/s | 1/s | — |
 | `wb budget balance` | 1/s | 1/s | — |
 | `wb bid set-items` | 5/s | 5/s | — |
 | `wb bid recommend` | 5/min | 1/12 s | — |
-| `wb analytics funnel` | 3/min | 1/20 s | — |
-| `wb analytics history` | 3/min, burst=3 | 1/20 s avg | batch ≤20 NM IDs |
-| `wb clusters set-minus` | 5/s | 5/s | — |
+| `wb analytics sales-funnel products` | 3/min | 1/20 s | `--all` triggers pagination → multiple calls |
+| `wb analytics sales-funnel history` | 3/min, burst=3 | 1/20 s avg | batch ≤20 NM IDs |
+| `wb cluster minus set` | 5/s | 5/s | — |
 
 ## Critical bottlenecks
 
 | Command | Why it's slow | Mitigation |
 |---|---|---|
 | `wb stats campaign` | burst=1 → must space 20s apart | batch up to 50 campaign IDs per call |
+| `wb stats daily-report` | calls fullstats + funnel; fullstats=1/20s | runs as one composite call; no extra sleep needed |
 | `wb bid recommend` | 5/min → 12s between calls | 7 campaigns = ~84s in wb-pulse |
-| `wb analytics funnel/history` | 3/min, burst=3 | batch NM IDs; max 20/call |
+| `wb analytics sales-funnel products` | 3/min; `--all` paginates at 1000/page | each pagination page = one EP_FUNNEL_PRODUCTS call |
+| `wb analytics sales-funnel history` | 3/min, burst=3 | batch NM IDs; max 20/call |
 | `wb campaign create` | 5/min | one creation per 12s minimum |
 
 ## Composite command timing

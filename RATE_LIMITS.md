@@ -10,43 +10,44 @@
 
 | CLI Command | Endpoint Constant | Path | Limit | Period | Burst | Safe Call Rate | Source |
 |---|---|---|---|---|---|---|---|
-| `wb campaigns list` | `EP_CAMPAIGN_INFO` | `/api/advert/v2/adverts` | 5 | 1 s | 5 | 5/s | swagger 08 |
-| `wb campaigns start` | `EP_CAMPAIGN_START` | `/adv/v0/start` | 5 | 1 s | 5 | 5/s | swagger 08 |
-| `wb campaigns pause` | `EP_CAMPAIGN_PAUSE` | `/adv/v0/pause` | 5 | 1 s | 5 | 5/s | swagger 08 |
-| `wb campaigns stop` | `EP_CAMPAIGN_STOP` | `/adv/v0/stop` | 5 | 1 s | 5 | 5/s | swagger 08 |
-| `wb campaigns delete` | `EP_CAMPAIGN_DELETE` | `/adv/v0/delete` | 5 | 1 s | 5 | 5/s | swagger 08 |
-| `wb campaigns rename` | `EP_CAMPAIGN_RENAME` | `/adv/v0/rename` | 5 | 1 s | 5 | 5/s | swagger 08 |
-| `wb campaigns create` | `EP_CAMPAIGN_CREATE` | `/adv/v2/seacat/save-ad` | 5 | 1 min | 5 | 1/12 s | swagger 08 |
+| `wb campaign list` | `EP_CAMPAIGN_INFO` | `/api/advert/v2/adverts` | 5 | 1 s | 5 | 5/s | swagger 08 |
+| `wb campaign start` | `EP_CAMPAIGN_START` | `/adv/v0/start` | 5 | 1 s | 5 | 5/s | swagger 08 |
+| `wb campaign pause` | `EP_CAMPAIGN_PAUSE` | `/adv/v0/pause` | 5 | 1 s | 5 | 5/s | swagger 08 |
+| `wb campaign stop` | `EP_CAMPAIGN_STOP` | `/adv/v0/stop` | 5 | 1 s | 5 | 5/s | swagger 08 |
+| `wb campaign delete` | `EP_CAMPAIGN_DELETE` | `/adv/v0/delete` | 5 | 1 s | 5 | 5/s | swagger 08 |
+| `wb campaign rename` | `EP_CAMPAIGN_RENAME` | `/adv/v0/rename` | 5 | 1 s | 5 | 5/s | swagger 08 |
+| `wb campaign create` | `EP_CAMPAIGN_CREATE` | `/adv/v2/seacat/save-ad` | 5 | 1 min | 5 | 1/12 s | swagger 08 |
 | `wb stats campaign` | `EP_CAMPAIGN_FULLSTATS` | `/adv/v3/fullstats` | 3 | 1 min | **1** | **1/20 s** | swagger 08 |
+| `wb stats daily-report` | `EP_CAMPAIGN_FULLSTATS` + `EP_FUNNEL_PRODUCTS` | composite | — | — | — | slowest leg = **1/20 s** | composite |
 | `wb budget get` | `EP_CAMPAIGN_BUDGET` | `/adv/v1/budget` | 4 | 1 s | 4 | 4/s | swagger 08 |
-| `wb budget deposit` | `EP_BUDGET_DEPOSIT` | `/adv/v1/budget/deposit` | 1 | 1 s | 5 | 1/s | swagger 08 |
+| `wb budget topup` | `EP_BUDGET_DEPOSIT` | `/adv/v1/budget/deposit` | 1 | 1 s | 5 | 1/s | swagger 08 |
 | `wb budget balance` | `EP_ACCOUNT_BALANCE` | `/adv/v1/balance` | 1 | 1 s | 5 | 1/s | swagger 08 |
-| `wb bids set` | `EP_BID_SET` | `/api/advert/v1/bids` | 5 | 1 s | 5 | 5/s | swagger 08 |
-| `wb bids recommended` | `EP_RECOMMENDED_BID` | `/api/advert/v0/bids/recommendations` | 5 | 1 min | 5 | 1/12 s | swagger 08 |
-| `wb clusters list` | `EP_NQ_LIST` | `/adv/v0/normquery/list` | 5 | 1 s | 10 | 5/s | swagger 08 |
-| `wb clusters get-bids` | `EP_NQ_GET_BIDS` | `/adv/v0/normquery/get-bids` | 5 | 1 s | 10 | 5/s | swagger 08 |
-| `wb clusters set-bids` | `EP_NQ_SET_BIDS` | `/adv/v0/normquery/bids` | 2 | 1 s | 4 | 2/s | swagger 08 |
-| `wb clusters del-bids` | `EP_NQ_DEL_BIDS` | `/adv/v0/normquery/bids` | 2 | 1 s | 4 | 2/s | swagger 08 |
-| `wb clusters get-minus` | `EP_NQ_GET_MINUS` | `/adv/v0/normquery/get-minus` | 5 | 1 s | 10 | 5/s | swagger 08 |
-| `wb clusters set-minus` | `EP_NQ_SET_MINUS` | `/adv/v0/normquery/set-minus` | 5 | 1 s | 10 | 5/s | swagger 08 |
-| `wb clusters stats` | `EP_NQ_STATS` | `/adv/v0/normquery/stats` | 10 | 1 min | 20 | 1/6 s | swagger 08 |
-| `wb clusters stats-daily` | `EP_NQ_STATS_DAILY` | `/adv/v1/normquery/stats` | 10 | 1 min | 20 | 1/6 s | swagger 08 |
-| `wb campaigns eligible` | `EP_ELIGIBLE_SUBJECTS` | `/adv/v1/supplier/subjects` | 1 | 12 s | 5 | **1/12 s** | swagger 08 |
-| `wb analytics funnel` | `EP_FUNNEL_PRODUCTS` | `/api/analytics/v3/sales-funnel/products` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb analytics history` | `EP_FUNNEL_HISTORY` | `/api/analytics/v3/sales-funnel/products/history` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb analytics grouped` | `EP_FUNNEL_GROUPED` | `/api/analytics/v3/sales-funnel/grouped/history` | 3 | 1 min | 3 | 1/20 s | assumed same group |
-| `wb analytics search` | `EP_SEARCH_REPORT` | `/api/v2/search-report/report` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb analytics search-groups` | `EP_SEARCH_GROUPS` | `/api/v2/search-report/table/groups` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb analytics search-details` | `EP_SEARCH_DETAILS` | `/api/v2/search-report/table/details` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb analytics search-texts` | `EP_SEARCH_TEXTS` | `/api/v2/search-report/product/search-texts` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb analytics search-orders` | `EP_SEARCH_ORDERS` | `/api/v2/search-report/product/orders` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb reports create` | `EP_CSV_CREATE` | `/api/v2/nm-report/downloads` (POST) | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb reports list` | `EP_CSV_LIST` | `/api/v2/nm-report/downloads` (GET) | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb reports retry` | `EP_CSV_RETRY` | `/api/v2/nm-report/downloads/retry` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
-| `wb reports stocks` | `EP_STOCKS_WB_WAREHOUSES` | `/api/analytics/v1/stocks-report/wb-warehouses` | 3 | 1 min | **1** | **1/20 s** | swagger 11 |
-| `wb reports warehouse create` | `EP_WAREHOUSE_REMAINS_CREATE` | `/api/v1/warehouse_remains` (POST) | 1 | 1 min | 5 | **1/min** | swagger 12 |
-| `wb reports warehouse status` | `EP_WAREHOUSE_REMAINS_STATUS` | `/api/v1/warehouse_remains/tasks` (GET) | 1 | 5 s | 5 | 1/5 s | swagger 12 |
-| `wb reports warehouse download` | `EP_WAREHOUSE_REMAINS_DOWNLOAD` | `/api/v1/warehouse_remains/tasks` (GET) | 1 | 1 min | 1 | **1/min** | swagger 12 |
+| `wb bid set-items` | `EP_BID_SET` | `/api/advert/v1/bids` | 5 | 1 s | 5 | 5/s | swagger 08 |
+| `wb bid recommend` | `EP_RECOMMENDED_BID` | `/api/advert/v0/bids/recommendations` | 5 | 1 min | 5 | 1/12 s | swagger 08 |
+| `wb cluster list` | `EP_NQ_LIST` | `/adv/v0/normquery/list` | 5 | 1 s | 10 | 5/s | swagger 08 |
+| `wb cluster bids` | `EP_NQ_GET_BIDS` | `/adv/v0/normquery/get-bids` | 5 | 1 s | 10 | 5/s | swagger 08 |
+| `wb cluster set-bids` | `EP_NQ_SET_BIDS` | `/adv/v0/normquery/bids` | 2 | 1 s | 4 | 2/s | swagger 08 |
+| `wb cluster delete-bids` | `EP_NQ_DEL_BIDS` | `/adv/v0/normquery/bids` | 2 | 1 s | 4 | 2/s | swagger 08 |
+| `wb cluster minus list` | `EP_NQ_GET_MINUS` | `/adv/v0/normquery/get-minus` | 5 | 1 s | 10 | 5/s | swagger 08 |
+| `wb cluster minus set` | `EP_NQ_SET_MINUS` | `/adv/v0/normquery/set-minus` | 5 | 1 s | 10 | 5/s | swagger 08 |
+| `wb cluster stats` | `EP_NQ_STATS` | `/adv/v0/normquery/stats` | 10 | 1 min | 20 | 1/6 s | swagger 08 |
+| `wb cluster stats-daily` | `EP_NQ_STATS_DAILY` | `/adv/v1/normquery/stats` | 10 | 1 min | 20 | 1/6 s | swagger 08 |
+| `wb campaign eligible-subjects` | `EP_ELIGIBLE_SUBJECTS` | `/adv/v1/supplier/subjects` | 1 | 12 s | 5 | **1/12 s** | swagger 08 |
+| `wb analytics sales-funnel products` | `EP_FUNNEL_PRODUCTS` | `/api/analytics/v3/sales-funnel/products` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics sales-funnel history` | `EP_FUNNEL_HISTORY` | `/api/analytics/v3/sales-funnel/products/history` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics sales-funnel grouped` | `EP_FUNNEL_GROUPED` | `/api/analytics/v3/sales-funnel/grouped/history` | 3 | 1 min | 3 | 1/20 s | assumed same group |
+| `wb analytics search-report main` | `EP_SEARCH_REPORT` | `/api/v2/search-report/report` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics search-report groups` | `EP_SEARCH_GROUPS` | `/api/v2/search-report/table/groups` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics search-report details` | `EP_SEARCH_DETAILS` | `/api/v2/search-report/table/details` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics search-report search-texts` | `EP_SEARCH_TEXTS` | `/api/v2/search-report/product/search-texts` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics search-report orders` | `EP_SEARCH_ORDERS` | `/api/v2/search-report/product/orders` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics csv create` | `EP_CSV_CREATE` | `/api/v2/nm-report/downloads` (POST) | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics csv list` | `EP_CSV_LIST` | `/api/v2/nm-report/downloads` (GET) | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| `wb analytics csv retry` | `EP_CSV_RETRY` | `/api/v2/nm-report/downloads/retry` | 3 | 1 min | 3 | 1/20 s | swagger 11 |
+| *(not yet implemented)* | `EP_STOCKS_WB_WAREHOUSES` | `/api/analytics/v1/stocks-report/wb-warehouses` | 3 | 1 min | **1** | **1/20 s** | swagger 11 |
+| `wb report warehouse create` | `EP_WAREHOUSE_REMAINS_CREATE` | `/api/v1/warehouse_remains` (POST) | 1 | 1 min | 5 | **1/min** | swagger 12 |
+| `wb report warehouse status` | `EP_WAREHOUSE_REMAINS_STATUS` | `/api/v1/warehouse_remains/tasks` (GET) | 1 | 5 s | 5 | 1/5 s | swagger 12 |
+| `wb report warehouse download` | `EP_WAREHOUSE_REMAINS_DOWNLOAD` | `/api/v1/warehouse_remains/tasks` (GET) | 1 | 1 min | 1 | **1/min** | swagger 12 |
 | `wb prices list` | `EP_PRICES_GOODS_FILTER` | `/api/v2/list/goods/filter` | unknown | — | — | use default retry | not in swagger |
 | `wb assess` (full) | composite: `EP_ACCOUNT_BALANCE` + `EP_CAMPAIGN_INFO` + `EP_CAMPAIGN_FULLSTATS` + `EP_RECOMMENDED_BID` | multiple | see each endpoint | — | — | ~20-25s total (fullstats bottleneck) | composite |
 | `wb assess --quick` | composite: `EP_ACCOUNT_BALANCE` + `EP_CAMPAIGN_INFO` | multiple | fast | — | — | <5s | composite |
@@ -74,12 +75,12 @@ These endpoints are most likely to cause 429 errors in automated workflows:
 - **CLI enforcement:** `RateLimiter(1, 20.0)` — one call every 20 s
 - **Agent guidance:** Batch campaign IDs (max 50 per call, `FULLSTATS_BATCH_SIZE`). A 100-campaign account needs 2 calls → 40 s minimum.
 
-### `EP_FUNNEL_HISTORY` — `wb analytics history`
+### `EP_FUNNEL_HISTORY` — `wb analytics sales-funnel history`
 - **Limit:** 3/min, burst 3 (can fire 3 back-to-back, then wait 60 s)
 - **CLI enforcement:** `RateLimiter(3, 60.0)`
 - **Agent guidance:** Max NM IDs per call is 20 (`HISTORY_CHUNK_SIZE`). Batch large NM lists.
 
-### `EP_WAREHOUSE_REMAINS_CREATE` — `wb reports warehouse`
+### `EP_WAREHOUSE_REMAINS_CREATE` — `wb report warehouse`
 - **Limit:** 1/min
 - **Agent guidance:** The CLI caches results for 6 h (`REPORT_CACHE_TTL_HOURS`). Always use cached results; only create a new report if the cache is stale.
 

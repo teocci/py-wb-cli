@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import date as _date, timedelta
 
 import typer
 
@@ -173,3 +174,70 @@ def stats_campaigns(
         for s in stats_list
     ]
     render_table(headers, rows, title=title)
+
+
+@stats_app.command('daily-report')
+def stats_daily_report(
+        ctx: typer.Context,
+        report_date: str | None = typer.Option(
+            None, '--date', help='Report date YYYY-MM-DD (default: yesterday)',
+        ),
+        status: str = typer.Option(
+            'active', '--status',
+            help='Campaign status filter: running, paused, active (running+paused)',
+        ),
+) -> None:
+    """Show per-product ad spend and total orders for a single date.
+
+    Combines Promotion API spend data with Analytics funnel order counts.
+    Requires an analytics token for total orders; falls back to 0 if unavailable.
+    """
+    from wb.services._factory import create_analytics_service, create_stats_service
+
+    if status not in _STATUS_MAP:
+        valid = ', '.join(_STATUS_MAP)
+        raise typer.BadParameter(f'--status must be one of: {valid}')
+
+    resolved_date = report_date or str(_date.today() - timedelta(days=1))
+    profile = get_profile(ctx)
+    renderer = get_renderer(ctx)
+    svc = create_stats_service(profile)
+
+    analytics_svc = None
+    analytics_note = ''
+    try:
+        analytics_svc = create_analytics_service(profile)
+    except Exception:
+        analytics_note = ' (analytics token unavailable — total orders set to 0)'
+
+    rows = svc.get_daily_report(
+        resolved_date,
+        statuses=_STATUS_MAP[status],
+        analytics_svc=analytics_svc,
+    )
+
+    if not rows:
+        renderer.success(f'No active campaigns found for {resolved_date}.')
+        return
+
+    if renderer.is_json:
+        typer.echo(json.dumps(
+            [asdict(r) for r in rows],
+            indent=2,
+            ensure_ascii=False,
+        ))
+        return
+
+    from wb.core.output import render_table
+    headers = ['SKU', 'Product Name', 'Ad Spend ₽', 'Total Orders']
+    table_rows = [
+        [
+            str(r.nm_id),
+            r.name or '—',
+            f'{r.ad_spend:.2f}',
+            str(r.total_orders),
+        ]
+        for r in rows
+    ]
+    title = f'Daily Report — {resolved_date}{analytics_note}'
+    render_table(headers, table_rows, title=title)

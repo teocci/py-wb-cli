@@ -4,13 +4,13 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.20.6 | ✅ Latest |
+| **Current Version** | 0.23.0 | ✅ Latest |
 | **Phases Complete** | 20/20 | 100% |
 | **Tests Passing** | 990/991 | ✅ 99.9% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
 | **Core Files** | 55+ | ✅ Stable |
-| **Latest Feature** | F-8 — empty PaymentType crash fix — `or 'cpm'` guard in Campaign.from_api() | ✅ 2026-04-20 |
+| **Latest Feature** | I-10 — sales-funnel products: --min-orders filter + --all auto-pagination | ✅ 2026-04-21 |
 | **Agent-Ready** | YES | ✅ JSON mode, --compact, --sort-by/--top N, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available
@@ -65,8 +65,10 @@
 | 0.20.5 | F-7 | 2026-04-19 | campaign list --fields projection — route through renderer.display(); column/key filtering now honored |
 | 0.20.6 | F-8 | 2026-04-20 | Empty PaymentType crash fix — guard null payment_type in campaign list |
 | 0.21.0 | I-8 | 2026-04-21 | stats campaigns --status filter — running/paused/active virtual alias, get_stats_by_status() service method |
+| 0.22.0 | I-9 | 2026-04-21 | stats daily-report — per-product ad spend + total platform orders joined from Analytics funnel; wb-daily-report skill |
+| 0.23.0 | I-10 | 2026-04-21 | sales-funnel products: --min-orders filter + --all auto-pagination (paginate_all, page_size=1000) |
 
-## Current Version: 0.21.0
+## Current Version: 0.22.0
 
 ## Phase Status
 
@@ -100,6 +102,8 @@
 | F-7 | campaign list --fields projection fix | COMPLETED | 0.20.5 |
 | F-8 | Empty PaymentType crash fix | COMPLETED | 0.20.6 |
 | I-8 | stats campaigns --status filter (running / paused / active) | COMPLETED | 0.21.0 |
+| I-9 | stats daily-report — ad spend + total orders joined; wb-daily-report skill | COMPLETED | 0.22.0 |
+| I-10 | sales-funnel products: --min-orders filter + --all auto-pagination | COMPLETED | 0.23.0 |
 
 ---
 

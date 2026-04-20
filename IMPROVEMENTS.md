@@ -35,8 +35,36 @@ Phase legend: `N` = core phase · `NA` = sub-phase · `F-N` = fix · `I-N` = imp
 | 0.20.2 | F-4 | ✅ DONE | UTF-8 pipe fix — stdout reconfigure + centralized console | cli/app.py, all CLI modules | 2026-04-17 |
 | 0.20.3 | F-5 | ✅ DONE | Budget unit fix (rubles) + unified bid_type omits placement_types | services/budgets.py, cli/budget.py, domain/models.py, skills | 2026-04-19 |
 | 0.20.4 | F-6 | ✅ DONE | TTY-aware ANSI output — no escape codes when piped | core/output.py, cli/assess.py | 2026-04-19 |
+| 0.20.5 | F-7 | ✅ DONE | campaign list --fields projection fix | cli/campaign.py, core/output.py | 2026-04-19 |
+| 0.20.6 | F-8 | ✅ DONE | Empty PaymentType crash fix — guard null payment_type in campaign list | domain/models.py | 2026-04-20 |
+| 0.21.0 | I-8 | ✅ DONE | stats campaigns --status filter — running/paused/active alias | cli/stats.py, services/stats.py | 2026-04-21 |
+| 0.22.0 | I-9 | ✅ DONE | stats daily-report — per-product ad spend + total platform orders; wb-daily-report skill | cli/stats.py, services/stats.py | 2026-04-21 |
+| 0.23.0 | I-10 | ✅ DONE | sales-funnel products: --min-orders filter + --all auto-pagination | cli/analytics.py | 2026-04-21 |
 
-**Current:** v0.20.4 — **21 phases complete**, 0 planned. **988 tests passing**.
+**Current:** v0.23.0 — **23 phases complete**, 0 in progress. **1021 tests passing**.
+
+---
+
+### I-10 — Sales-funnel --min-orders filter + --all auto-pagination (v0.23.0)
+
+**Theme:** Let agents get all products with non-zero orders for a date in a single CLI call — no manual pagination or client-side filtering needed.
+
+**Context:** `wb analytics sales-funnel products` already handles per-product order data but defaults to `--limit 20` and has no zero-order filter. Agents fetching all SKUs (including organic) need auto-pagination and a noise filter.
+
+| Task | Files | Status | Description |
+|------|-------|--------|-------------|
+| `--min-orders N` option | `cli/analytics.py` | ✅ | Client-side post-filter: drop rows where `order_count < N` |
+| `--all` flag | `cli/analytics.py` | ✅ | Auto-paginate with `page_size=1000` using existing `paginate_all`; ignores `--limit`/`--offset` |
+| Tests | `tests/unit/test_analytics_sorting.py` | ✅ | 7 new tests: filter correctness, pagination loop, edge cases |
+
+**Agent usage after this improvement:**
+```bash
+wb --json analytics sales-funnel products \
+  --from 2026-04-20 --to 2026-04-20 \
+  --sort-by orders --min-orders 1 --all
+```
+
+**Rate limit:** `EP_FUNNEL_PRODUCTS` = 3/min; CLI rate limiter handles it. At 1000 rows/page most sellers complete in 1 call.
 
 ---
 
