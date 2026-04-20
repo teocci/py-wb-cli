@@ -4,13 +4,13 @@
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Current Version** | 0.20.5 | ✅ Latest |
+| **Current Version** | 0.20.6 | ✅ Latest |
 | **Phases Complete** | 20/20 | 100% |
-| **Tests Passing** | 988/989 | ✅ 99.9% |
+| **Tests Passing** | 990/991 | ✅ 99.9% |
 | **API Fixes** | 10/10 | ✅ Complete |
 | **Commands** | 22+ | ✅ Ready |
 | **Core Files** | 55+ | ✅ Stable |
-| **Latest Feature** | F-7 — campaign list --fields projection — column/key filtering now honored | ✅ 2026-04-19 |
+| **Latest Feature** | F-8 — empty PaymentType crash fix — `or 'cpm'` guard in Campaign.from_api() | ✅ 2026-04-20 |
 | **Agent-Ready** | YES | ✅ JSON mode, --compact, --sort-by/--top N, composite reads, idempotent mutations, --fields filtering, preemptive rate limiting |
 
 ### Command Groups Available

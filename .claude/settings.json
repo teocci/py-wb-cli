@@ -70,7 +70,8 @@
       "Bash(python -c ' *)",
       "Bash(.venv/Scripts/pytest tests/unit/ -v -q)",
       "Bash(wc:*)",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(f'{len\\(data\\)} campaigns, first payment_type: {data[0][\\\\\"payment_type\\\\\"] if data else \\\\\"n/a\\\\\"}'\\)\")"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

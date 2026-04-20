@@ -82,7 +82,7 @@ class Campaign:
             name=settings.get('name', ''),
             status=CampaignStatus(data['status']),
             campaign_type=CampaignType(data.get('type', 9)),
-            payment_type=PaymentType(settings.get('payment_type', 'cpm')),
+            payment_type=PaymentType(settings.get('payment_type') or 'cpm'),
             bid_type=data.get('bid_type', 'manual'),
             currency=data.get('currency', 'RUB'),
             nm_ids=nm_ids,

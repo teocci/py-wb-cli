@@ -20,8 +20,9 @@ Tracks bug fixes and non-feature improvements across all versions.
 | 11 | Budget unit + unified bid_type (F-5) | ✅ DONE | services/budgets.py, cli/budget.py, domain/models.py, skills | 2026-04-19 | Budget deposit expects rubles not kopecks; unified must omit placement_types |
 | 12 | TTY-aware ANSI output (F-6) | ✅ DONE | core/output.py, cli/assess.py | 2026-04-19 | force_terminal=True → sys.stdout.isatty(); plain text when piped |
 | 13 | campaign list --fields projection (F-7) | ✅ DONE | cli/campaign.py | 2026-04-19 | --fields silently ignored; route through renderer.display() |
+| 14 | Empty PaymentType crash (F-8) | ✅ DONE | domain/models.py | 2026-04-20 | `or 'cpm'` guard in from_api() |
 
-**Summary:** All 14 fixes complete. **988 tests passing** (989 total; 1 pre-existing env test). No ANSI codes in piped/agent output.
+**Summary:** All 15 fixes complete. **990 tests passing** (991 total; 1 pre-existing env test). No ANSI codes in piped/agent output.
 
 ---
 
@@ -366,3 +367,48 @@ Secondary: 10 bare `Console()` calls across CLI modules bypassed the centralized
 ### Test results
 
 - **987 unit tests passed** (0 failures) — no regressions
+
+---
+
+## Fix 14 — Empty PaymentType crash (F-8, v0.20.6)
+
+**Status:** DONE (2026-04-20)
+**Version:** 0.20.6
+
+### Problem
+
+`wb campaign list` crashes with `ValueError: '' is not a valid PaymentType` when the WB API
+returns an empty string `""` for `settings.payment_type`.
+
+### Root cause
+
+`Campaign.from_api()` in `src/wb/domain/models.py` line 85:
+
+```python
+payment_type=PaymentType(settings.get('payment_type', 'cpm')),
+```
+
+`.get(key, default)` only uses the default when the key is **absent**. When the API returns
+`{"payment_type": ""}`, the key is present so `''` is returned and passed to `PaymentType('')`,
+which raises `ValueError`.
+
+### Fix
+
+Apply the project's standard falsy-or-default pattern (same as line 78 `nm_settings`):
+
+```python
+payment_type=PaymentType(settings.get('payment_type') or 'cpm'),
+```
+
+Both `''` and `None` are falsy, so `'cpm'` is used as the fallback in both cases.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/wb/domain/models.py` | Line 85: `.get('payment_type', 'cpm')` → `.get('payment_type') or 'cpm'` |
+| `tests/unit/test_campaign_service.py` | Added parametrized regression test for `''` and `None` values |
+
+### Test results
+
+- **990 unit tests passed** (0 failures) — 2 new regression tests added

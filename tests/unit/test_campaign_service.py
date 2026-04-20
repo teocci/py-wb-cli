@@ -87,6 +87,21 @@ class TestListCampaigns:
 
         assert result == []
 
+    @pytest.mark.parametrize('payment_type_value', ['', None])
+    def test_empty_payment_type_defaults_to_cpm(
+        self,
+        service: CampaignService,
+        mock_client: MagicMock,
+        payment_type_value: str | None,
+    ) -> None:
+        """Empty or null payment_type from API defaults to CPM without crashing."""
+        raw = {**RAW_CAMPAIGN, 'settings': {**RAW_CAMPAIGN['settings'], 'payment_type': payment_type_value}}
+        mock_client.list_campaigns.return_value = [raw]
+
+        result = service.list_campaigns()
+
+        assert result[0].payment_type == PaymentType.CPM
+
 
 class TestGetCampaign:
     """Tests for CampaignService.get_campaign."""
