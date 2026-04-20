@@ -14,6 +14,12 @@ stats_app = typer.Typer(
     no_args_is_help=True,
 )
 
+_STATUS_MAP: dict[str, list[int]] = {
+    'running': [9],
+    'paused':  [11],
+    'active':  [9, 11],
+}
+
 
 def _parse_ids(ids_str: str) -> list[int]:
     """Parse comma-separated IDs to a list of integers.
@@ -114,17 +120,32 @@ def stats_product_spend(
 @stats_app.command('campaigns')
 def stats_campaigns(
         ctx: typer.Context,
-        ids: str = typer.Option(..., '--ids', help='Comma-separated campaign IDs'),
+        ids: str | None = typer.Option(None, '--ids', help='Comma-separated campaign IDs'),
+        status: str | None = typer.Option(
+            None, '--status',
+            help='Filter by status: running, paused, active (running+paused)',
+        ),
         date_from: str = typer.Option(..., '--from', help='Start date YYYY-MM-DD'),
         date_to: str = typer.Option(..., '--to', help='End date YYYY-MM-DD'),
 ) -> None:
-    """Show statistics for multiple campaigns."""
+    """Show statistics for multiple campaigns (by IDs or status filter)."""
     from wb.services._factory import create_stats_service
 
+    if bool(ids) == bool(status):
+        raise typer.BadParameter('Provide exactly one of --ids or --status.')
+    if status and status not in _STATUS_MAP:
+        valid = ', '.join(_STATUS_MAP)
+        raise typer.BadParameter(f'--status must be one of: {valid}')
+
     renderer = get_renderer(ctx)
-    campaign_ids = _parse_ids(ids)
     svc = create_stats_service(get_profile(ctx))
-    stats_list = svc.get_campaigns_stats(campaign_ids, date_from, date_to)
+
+    if ids:
+        stats_list = svc.get_campaigns_stats(_parse_ids(ids), date_from, date_to)
+        title = 'Campaign Statistics'
+    else:
+        stats_list = svc.get_stats_by_status(_STATUS_MAP[status], date_from, date_to)
+        title = f'Campaign Statistics ({status})'
 
     if not stats_list:
         renderer.success('No statistics data available.')
@@ -151,4 +172,4 @@ def stats_campaigns(
         ]
         for s in stats_list
     ]
-    render_table(headers, rows, title='Campaign Statistics')
+    render_table(headers, rows, title=title)

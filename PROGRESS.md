@@ -63,8 +63,10 @@
 | 0.20.3 | F-5 | 2026-04-19 | Budget unit fix (rubles not kopecks) + unified bid_type omits placement_types |
 | 0.20.4 | F-6 | 2026-04-19 | TTY-aware ANSI output — force_terminal=sys.stdout.isatty(); plain text when piped |
 | 0.20.5 | F-7 | 2026-04-19 | campaign list --fields projection — route through renderer.display(); column/key filtering now honored |
+| 0.20.6 | F-8 | 2026-04-20 | Empty PaymentType crash fix — guard null payment_type in campaign list |
+| 0.21.0 | I-8 | 2026-04-21 | stats campaigns --status filter — running/paused/active virtual alias, get_stats_by_status() service method |
 
-## Current Version: 0.20.5
+## Current Version: 0.21.0
 
 ## Phase Status
 
@@ -95,6 +97,9 @@
 | F-4 | UTF-8 pipe fix — stdout reconfigure + centralized console | COMPLETED | 0.20.2 |
 | F-5 | Budget unit fix (rubles) + unified bid_type omits placement_types | COMPLETED | 0.20.3 |
 | F-6 | TTY-aware ANSI output — no escape codes when piped | COMPLETED | 0.20.4 |
+| F-7 | campaign list --fields projection fix | COMPLETED | 0.20.5 |
+| F-8 | Empty PaymentType crash fix | COMPLETED | 0.20.6 |
+| I-8 | stats campaigns --status filter (running / paused / active) | COMPLETED | 0.21.0 |
 
 ---
 

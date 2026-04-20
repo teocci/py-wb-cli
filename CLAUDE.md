@@ -60,6 +60,7 @@ Phase naming: `N` = core implementation · `NA` = sub-phase of N · `F-N` = fix 
 | 0.19.0 | I-6 | Full token category support |
 | 0.20.0 | I-7 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills |
 | 0.20.2 | F-4 | UTF-8 pipe fix — stdout reconfigure + centralized console |
+| 0.21.0 | I-8 | stats campaigns --status filter — running/paused/active |
 
 ## Project Layout
 

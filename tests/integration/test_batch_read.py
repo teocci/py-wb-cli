@@ -153,3 +153,70 @@ class TestMultiCampaignDryRunLive:
         assert isinstance(data, list)
         assert len(data) == 3
         assert all(r['dry_run'] for r in data)
+
+
+class TestStatsByStatusLive:
+    """Verify wb stats campaigns --status works end-to-end with a real API token.
+
+    EP_CAMPAIGN_FULLSTATS has a 1/20s rate limit. Run this class in isolation
+    or space it >=20s from other fullstats calls.
+    """
+
+    _FROM = '2026-04-14'
+    _TO = '2026-04-21'
+
+    def test_status_running_exit_0(self):
+        result = runner.invoke(app, [
+            '--json', 'stats', 'campaigns',
+            '--status', 'running',
+            '--from', self._FROM, '--to', self._TO,
+        ])
+        assert result.exit_code == 0, result.output
+
+    def test_status_running_returns_list(self):
+        result = runner.invoke(app, [
+            '--json', 'stats', 'campaigns',
+            '--status', 'running',
+            '--from', self._FROM, '--to', self._TO,
+        ])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+
+    def test_status_running_fields_present(self):
+        result = runner.invoke(app, [
+            '--json', 'stats', 'campaigns',
+            '--status', 'running',
+            '--from', self._FROM, '--to', self._TO,
+        ])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        if data:
+            assert 'campaign_id' in data[0]
+            assert 'views' in data[0]
+            assert 'clicks' in data[0]
+            assert 'ctr' in data[0]
+
+    def test_status_active_exit_0(self):
+        result = runner.invoke(app, [
+            '--json', 'stats', 'campaigns',
+            '--status', 'active',
+            '--from', self._FROM, '--to', self._TO,
+        ])
+        assert result.exit_code == 0, result.output
+
+    def test_ids_and_status_mutually_exclusive(self):
+        result = runner.invoke(app, [
+            '--json', 'stats', 'campaigns',
+            '--ids', '1,2',
+            '--status', 'running',
+            '--from', self._FROM, '--to', self._TO,
+        ])
+        assert result.exit_code == 2, result.output
+
+    def test_neither_ids_nor_status_fails(self):
+        result = runner.invoke(app, [
+            '--json', 'stats', 'campaigns',
+            '--from', self._FROM, '--to', self._TO,
+        ])
+        assert result.exit_code == 2, result.output

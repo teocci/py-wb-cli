@@ -10,6 +10,7 @@ from wb.client.promotion import PromotionClient
 from wb.core.batching import chunk
 from wb.core.constants import FULLSTATS_BATCH_SIZE
 from wb.core.exceptions import ValidationError
+from wb.domain.enums import CampaignStatus
 from wb.domain.models import CampaignStats, NmStats
 
 __all__ = ['StatsService']
@@ -113,6 +114,33 @@ class StatsService:
         for stats in result:
             self._maybe_cache_stats(stats)
         return result
+
+    def get_stats_by_status(
+            self,
+            statuses: list[int],
+            date_from: str,
+            date_to: str,
+    ) -> list[CampaignStats]:
+        """Retrieve stats for all campaigns matching the given status codes.
+
+        Args:
+            statuses: CampaignStatus integer values to include.
+            date_from: Start date (YYYY-MM-DD).
+            date_to: End date (YYYY-MM-DD).
+
+        Returns:
+            List of CampaignStats, empty if no matching campaigns exist.
+
+        Raises:
+            ValidationError: If date format is invalid.
+        """
+        _validate_date(date_from, '--from')
+        _validate_date(date_to, '--to')
+        matching = self._client.list_campaigns(status=statuses)
+        ids = [c['id'] for c in matching if 'id' in c]
+        if not ids:
+            return []
+        return self.get_campaigns_stats(ids, date_from, date_to)
 
     def get_product_spend(
             self,

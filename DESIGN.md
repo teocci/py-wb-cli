@@ -69,7 +69,7 @@ wb cluster minus list / set / clear
 wb budget balance / get / topup / history
 
 # Statistics
-wb stats campaign / campaigns / cluster / cluster-daily
+wb stats campaign / campaigns [--ids ... | --status running|paused|active] / product-spend
 
 # Analytics (Phase 4, separate token)
 wb analytics search-report main / groups
