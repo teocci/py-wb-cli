@@ -2,16 +2,15 @@
 
 ## How to Resume Implementation
 
-1. Read `PROGRESS.md` — it shows which phase is complete and what comes next.
-2. Read `DESIGN.md` — for architecture decisions and command taxonomy.
+1. Read `docs/PROGRESS.md` — current version, phase status, and what comes next.
+2. Read `docs/DESIGN.md` — architecture decisions and command taxonomy.
 3. Say **NEXT** to implement the next pending phase.
 
 Each phase follows this pattern:
-- Implement in `src/wb/` following the file layout in DESIGN.md
+- Implement in `src/wb/` following the file layout in `docs/DESIGN.md`
 - Write tests in `tests/unit/`
 - Run `pytest tests/unit/ -v` — all must pass
-- Bump version in `src/wb/__init__.py` and `pyproject.toml`
-- Update `PROGRESS.md` with what was built and test results
+- Run the `phase-complete` skill to finalize (version bump, CHANGELOG, commit)
 
 ## Quick Commands
 
@@ -31,39 +30,6 @@ python -m wb version
 python -m wb auth --help
 ```
 
-## Version Scheme
-
-Phase naming: `N` = core implementation · `NA` = sub-phase of N · `F-N` = fix · `I-N` = improvement
-
-| Version | Phase | Milestone |
-|---------|-------|-----------|
-| 0.1.0 | 0 | Foundation |
-| 0.2.0 | 1 | Read-only visibility |
-| 0.3.0 | 2 | Core write controls |
-| 0.3.1 | F-1 | Auth fix — dual auth, portal session, env var fallback |
-| 0.3.2 | F-2 | API fix — full endpoint migration to current WB API |
-| 0.4.0 | 3 | Search-cluster control |
-| 0.5.0 | 4 | Analytics bridge |
-| 0.6.0 | 5 | Optimization workflows |
-| 0.7.0 | 6 | Agent platform support (SDK) |
-| 0.8.0 | 7 | Local SQLite cache |
-| 0.9.0 | F-3 | Agent-critical fixes — JSON errors, per-NM stats, shared helpers |
-| 0.10.0 | 8A | Warehouse inventory reports |
-| 0.11.0 | 8B | Stock runway (days-until-stockout) |
-| 0.12.0 | 8C | Report caching & multi-seller storage |
-| 0.13.0 | 8D | Prices & Discounts command |
-| 0.14.0 | I-1 | Batch operations — multi-ID, auto-chunking, --fields |
-| 0.15.0 | I-2 | Per-product cost tracking — product-spend, booster stats |
-| 0.16.0 | I-3 | Composite commands (stable release) |
-| 0.17.0 | I-4 | Rate limiting & resilience |
-| 0.18.0 | I-5 | Polish & agent ergonomics |
-| 0.19.0 | I-6 | Full token category support |
-| 0.20.0 | I-7 | Agent skills — wb assess/pulse native commands + 7 Claude Code skills |
-| 0.20.2 | F-4 | UTF-8 pipe fix — stdout reconfigure + centralized console |
-| 0.21.0 | I-8 | stats campaigns --status filter — running/paused/active |
-| 0.22.0 | I-9 | stats daily-report — per-product ad spend + total orders; wb-daily-report skill |
-| 0.23.0 | I-10 | sales-funnel products: --min-orders filter + --all auto-pagination |
-
 ## Project Layout
 
 ```
@@ -79,6 +45,13 @@ tests/
   unit/         # pure unit tests (no real HTTP, no real FS beyond tmp_path)
   integration/  # tests against real WB API (requires token)
   fixtures/     # shared test data
+docs/
+  PROGRESS.md   # phase status index
+  DESIGN.md     # architecture reference
+  FIXES.md      # fix index
+  IMPROVEMENTS.md  # improvement index
+  RELEASE.md    # release procedure
+  phases/       # per-phase detail files
 ```
 
 ## Coding Rules
@@ -140,8 +113,6 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 > A single `WB_API_TOKEN` with full-scope permissions is sufficient to run all CLI commands
 > (promotion + analytics). No profile registration needed when env vars are set.
 
-Full design: `wb_cli_authorization_plan.md`
-
 ## API Documentation
 
 - **Authoritative source**: `dev-wb-adv.md` (extracted from `https://dev.wildberries.ru/en`)
@@ -154,32 +125,30 @@ Full design: `wb_cli_authorization_plan.md`
 - **Authoritative reference**: `RATE_LIMITS.md` — maps every CLI command → endpoint → limit → source
 - **Machine-enforced**: `src/wb/core/rate_limits.py` — endpoint→(calls, period) map consumed by `_factory.py`
 - **Implementation**: `src/wb/core/rate_limiter.py` — sliding-window `RateLimiter` injected into `WbHttpClient` via `path_limiters`
-- **Source**: Limits are sourced from `docs/swagger/08-promotion.yaml`, `11-analytics.yaml`, `12-reports.yaml` (authoritative), and empirical observation (noted inline in `rate_limits.py`)
 - The CLI throttles **preemptively** — agents do not need to add sleeps between calls
 - Most critical: `EP_CAMPAIGN_FULLSTATS` → 1 call/20 s (burst=1), analytics funnel/history → 3 calls/min
 
-### Known WB API quirks
+### Known WB API Quirks
 
 | API | Field/Behavior | Wrong assumption | Correct behavior |
 |-----|----------------|-----------------|-----------------|
 | Analytics v3 `sales-funnel/*` | `selectedPeriod` start key | `begin` | `start` |
-| Analytics v3 `sales-funnel/products/history` | Date range limit | Any 30-day window accepted | Max ~7-day lookback; farther dates → 400 "invalid start day: excess limit on days" |
-| Analytics v3 `sales-funnel/products/history` | Rate limit | Same as other analytics endpoints | 3/min, 20 s interval — CLI enforces preemptively. Space calls or accept exit 5 in integration tests |
-| Analytics v3 `sales-funnel/products/history` | Unknown NM IDs | Returns empty list | Returns 400 — only use real seller NM IDs in integration tests |
+| Analytics v3 `sales-funnel/products/history` | Date range limit | Any 30-day window | Max ~7-day lookback; farther dates → 400 |
+| Analytics v3 `sales-funnel/products/history` | Rate limit | Same as other endpoints | 3/min, 20s interval — CLI enforces preemptively |
+| Analytics v3 `sales-funnel/products/history` | Unknown NM IDs | Returns empty list | Returns 400 — only use real seller NM IDs |
 | Promotion `/adv/v3/fullstats` | Campaigns with no data | Returns empty list | Returns HTTP 400 — don't call for never-started campaigns |
-| Promotion `/adv/v3/fullstats` | Rate limit | Relaxed | 3/min, burst=1 → CLI enforces 1 call/20 s. Space calls ≥ 20 s apart in integration tests |
-| Normquery `/adv/v0/normquery/list` | `items` field | Always a list | Can be `null` when campaign has no clusters — use `(raw.get('items') or [])` |
-| Analytics v3 `sales-funnel/products/history` | `dt` field | ISO date string | Returns empty string `""` — date is not reliably parsed from this endpoint |
-| Promotion `/api/advert/v0/bids/recommendations` | Paused campaigns | Returns bid data | Returns HTTP 400 for campaigns not currently running |
-| Analytics `search-report` | Any API token | Works with standard token | Requires `Analytics/Advanced` scope — returns HTTP 403 otherwise |
-| Promotion `/adv/v1/budget/deposit` | `sum` field unit | Kopecks | Rubles — minimum 1000, must be a multiple of 50 |
+| Promotion `/adv/v3/fullstats` | Rate limit | Relaxed | 3/min, burst=1 → CLI enforces 1 call/20 s |
+| Normquery `/adv/v0/normquery/list` | `items` field | Always a list | Can be `null` — use `(raw.get('items') or [])` |
+| Analytics v3 `sales-funnel/products/history` | `dt` field | ISO date string | Returns empty string `""` |
+| Promotion `/api/advert/v0/bids/recommendations` | Paused campaigns | Returns bid data | Returns HTTP 400 for non-running campaigns |
+| Analytics `search-report` | Any API token | Works with standard token | Requires `Analytics/Advanced` scope — returns HTTP 403 |
+| Promotion `/adv/v1/budget/deposit` | `sum` field unit | Kopecks | Rubles — minimum 1000, must be multiple of 50 |
 
 ## CLI Output Rendering Pattern
 
 `OutputRenderer.display()` is **JSON-only**. For table mode it passes `data` straight to
 `render_table()` which calls `table.add_row(*row)` — this only works when `data` is a
-**list of lists** (strings). Passing a list of dicts produces the dict *keys* as cell
-values, not the values.
+**list of lists** (strings). Passing a list of dicts produces the dict *keys* as cell values.
 
 **Rule:** Every command must branch on `renderer.is_json`:
 
@@ -193,14 +162,9 @@ rows = [[str(s.field_a), str(s.field_b), ...] for s in results]
 render_table(['Col A', 'Col B', ...], rows, title='My Table')
 ```
 
-Never pass `[asdict(s) for s in results]` directly to `renderer.display()` for table output.
-The `--fields` filtering provided by `renderer.display()` only works in JSON mode. For table
-field filtering, filter `headers`/`rows` manually or omit columns.
+The `--fields` filtering from `renderer.display()` only works in JSON mode.
 
 ## Null-Safety Pattern for WB API Responses
-
-WB API sometimes returns `null` where a list is expected (e.g. `normquery/list` returns
-`{"items": null}` for campaigns with no clusters). Always guard list fields:
 
 ```python
 # Wrong — crashes on null
@@ -210,8 +174,6 @@ for item in raw.get('items', []):
 for item in (raw.get('items') or []):
 ```
 
-Apply this to any `raw.get(key, [])` call that processes API responses.
-
 ## Key Design Decisions
 
 - Promotion = execution core; Analytics = discovery extension (separate tokens)
@@ -219,8 +181,8 @@ Apply this to any `raw.get(key, [])` call that processes API responses.
 - `--json` flag on every command for agent/script compatibility
 - Multi-profile from day one — no single-account shortcuts
 - Optimizer is recommendation-first; mutations only with `--apply`
-- Full spec in `wb_cli_implementation_plan.md`
 
 ## Commit Style
 
 - Never add `Co-Authored-By` trailers to commit messages.
+- Release commits: `git commit -am 'release: vX.Y.Z — <theme>'`

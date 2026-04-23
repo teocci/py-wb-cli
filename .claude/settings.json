@@ -74,7 +74,8 @@
       "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(f'{len\\(data\\)} campaigns, first payment_type: {data[0][\\\\\"payment_type\\\\\"] if data else \\\\\"n/a\\\\\"}'\\)\")",
       "Edit(/.claude/skills/wb-daily-report/**)",
       "Edit(/.claude/skills/wb-rate-guide/**)",
-      "Edit(/.claude/skills/wb-rate-recover/**)"
+      "Edit(/.claude/skills/wb-rate-recover/**)",
+      "Edit(/.claude/skills/phase-complete/**)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

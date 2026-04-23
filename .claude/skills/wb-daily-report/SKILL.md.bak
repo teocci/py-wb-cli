@@ -13,14 +13,6 @@ triggers:
 
 Per-product advertising cost vs. total orders for a given date. Combines Promotion API spend data with Analytics funnel order counts.
 
-## Source contract
-
-- `ad_spend` / `advertising_costs` come from `wb stats product-spend` and are aggregated by NM ID for the requested date.
-- `total_orders` / `orders` come from `wb analytics sales-funnel products` and specifically use `order_count`.
-- These `orders` are not the same metric as a WB sales report export (`отчет по продажам`).
-- If the user asks for sales report orders, references `отчет по продажам`, or brings a reconciliation sheet against a sales report export, state that the standard daily-report output is a funnel-orders report unless a sales-report-specific source is used.
-- Always label the output as `sales-funnel orders` unless the user explicitly asked for another orders source.
-
 ## Usage
 
 ```bash

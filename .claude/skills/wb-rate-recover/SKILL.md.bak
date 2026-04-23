@@ -16,7 +16,7 @@ Recovery guide for 429 / rate-limit failures. Invoke when CLI output contains `R
 
 ## Reading warning messages
 
-```text
+```cmd
 [WARNING] wb.client.http: Rate limited (attempt 1/4), retrying in 1.0s
 [WARNING] wb.client.http: Rate limited (attempt 2/4), retrying in 2.2s
 [WARNING] wb.client.http: Rate limited (attempt 3/4), retrying in 5.5s

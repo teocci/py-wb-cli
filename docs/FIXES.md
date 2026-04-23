@@ -1,0 +1,26 @@
+# WB CLI — Fix Index
+
+Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases/) · Release history: [CHANGELOG.md](../CHANGELOG.md)
+
+## Fix Index
+
+| Fix | Name | Status | Scope | Version | Notes |
+|-----|------|--------|-------|---------|-------|
+| F-1 | Auth fix — dual auth, portal session | ✅ DONE | auth, profiles | 0.3.1 | [detail](phases/F-1-auth-fix.md) |
+| F-2 | API fix — endpoint migration | ✅ DONE | constants, clients | 0.3.2 | [detail](phases/F-2-api-migration.md) |
+| F-3 | Agent-critical fixes | ✅ DONE | JSON errors, per-NM stats | 0.9.0 | [detail](phases/F-3-agent-fixes.md) |
+| F-4 | UTF-8 pipe fix | ✅ DONE | cli/app.py + 7 CLI modules | 0.20.2 | [detail](phases/F-4-utf8-pipe.md) |
+| F-5 | Budget unit + unified bid_type | ✅ DONE | services/budgets.py, models | 0.20.3 | [detail](phases/F-5-budget-unit.md) |
+| F-6 | TTY-aware ANSI output | ✅ DONE | core/output.py | 0.20.4 | [detail](phases/F-6-tty-ansi.md) |
+| F-7 | campaign list --fields projection | ✅ DONE | cli/campaign.py | 0.20.5 | [detail](phases/F-7-fields-projection.md) |
+| F-8 | Empty PaymentType crash | ✅ DONE | domain/models.py | 0.20.6 | [detail](phases/F-8-payment-type.md) |
+
+_No fixes currently in progress. Add new entries here when a fix is planned._
+
+## How to Add a Fix
+
+1. Add a row to the table above (status = 🔲 PLANNED)
+2. Create a stub in [docs/phases/](phases/) with goal + steps
+3. Update [docs/PROGRESS.md](PROGRESS.md) phase index
+4. Implement (say **NEXT**)
+5. When done: run `phase-complete` skill to finalize

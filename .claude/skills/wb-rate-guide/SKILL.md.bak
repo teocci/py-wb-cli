@@ -15,7 +15,7 @@ Pre-flight reference. Consult before writing any sequence of wb CLI calls. Sourc
 
 ## How the preemptive limiter works
 
-The CLI acquires a rate-limit slot **before** each HTTP request (sliding window, per-endpoint, per-process). You do not need to add sleeps; unless you are chaining write operations on the same resource in rapid succession (see safe patterns below).
+The CLI acquires a rate-limit slot **before** each HTTP request (sliding window, per-endpoint, per-process). You do not need to add sleeps — unless you are chaining write operations on the same resource in rapid succession (see safe patterns below).
 
 ## Command → limit table
 
