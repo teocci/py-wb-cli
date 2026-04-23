@@ -75,12 +75,19 @@
       "Edit(/.claude/skills/wb-daily-report/**)",
       "Edit(/.claude/skills/wb-rate-guide/**)",
       "Edit(/.claude/skills/wb-rate-recover/**)",
-      "Edit(/.claude/skills/phase-complete/**)"
+      "Edit(/.claude/skills/phase-complete/**)",
+      "Bash(.venv/Scripts/python -c \"from wb.storage.response_cache import ResponseCache, is_past_day_range, make_cache_key; print\\('ok'\\)\")",
+      "Bash(.venv/Scripts/python -c \"from wb.core.exceptions import UpstreamError, ApiError; print\\(issubclass\\(UpstreamError, ApiError\\)\\)\")",
+      "Bash(.venv/Scripts/python -c \"from wb.services.stats import StatsService; from wb.services.analytics import AnalyticsService; print\\('ok'\\)\")",
+      "Bash(.venv/Scripts/python -c ' *)",
+      "Read(//c/Users/teocci/.claude/plans/**)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
       "d:\\d\\teocci\\code\\python\\py-wb-cli",
-      "D:\\teocci\\code\\python\\py-wb-cli\\src\\wb\\domain"
+      "D:\\teocci\\code\\python\\py-wb-cli\\src\\wb\\domain",
+      "C:\\Users\\teocci\\.wb-cli",
+      "\\tmp"
     ]
   }
 }
