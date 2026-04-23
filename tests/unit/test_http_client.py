@@ -5,7 +5,12 @@ import pytest
 import respx
 
 from wb.client.http import WbHttpClient
-from wb.core.exceptions import ApiError, AuthenticationError, RateLimitError
+from wb.core.exceptions import (
+    ApiError,
+    AuthenticationError,
+    RateLimitError,
+    UpstreamError,
+)
 
 BASE_URL = 'https://test-api.example.com'
 
@@ -136,7 +141,7 @@ class TestWbHttpClient:
                 assert route.call_count == 1
 
     def test_server_error_raises(self):
-        """500 raises ApiError with status code and body."""
+        """500 raises ApiError (UpstreamError subclass) with status code and body."""
         with respx.mock:
             respx.get(f'{BASE_URL}/test').mock(
                 return_value=httpx.Response(500, text='server error')
@@ -145,6 +150,116 @@ class TestWbHttpClient:
                 with pytest.raises(ApiError) as exc_info:
                     client.get('/test')
                 assert exc_info.value.status_code == 500
+
+    # ── Retry classification: 5xx → UpstreamError, 429 → RateLimitError ──
+
+    @pytest.mark.parametrize('status', [500, 502, 503, 504])
+    def test_5xx_retries_exhausted_raise_upstream_error(
+            self, status, monkeypatch,
+    ):
+        """5xx after all retries surfaces as UpstreamError (exit 6), not RATE_LIMITED."""
+        import wb.client.http as http_mod
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        with respx.mock:
+            route = respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(status, text='boom')
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=2) as client:
+                with pytest.raises(UpstreamError) as exc_info:
+                    client.get('/test')
+                assert exc_info.value.status_code == status
+                assert exc_info.value.error_code == 'UPSTREAM_ERROR'
+                # 3 attempts total = 1 initial + 2 retries.
+                assert route.call_count == 3
+
+    def test_429_retries_exhausted_still_raise_rate_limit_error(
+            self, monkeypatch,
+    ):
+        """429 retry exhaustion keeps the original RATE_LIMITED surface."""
+        import wb.client.http as http_mod
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(429, headers={'Retry-After': '0'}),
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=1) as client:
+                with pytest.raises(RateLimitError):
+                    client.get('/test')
+
+    def test_mixed_5xx_then_final_429_raises_rate_limit(self, monkeypatch):
+        """User's reported pattern: several 5xx retries, final attempt returns 429."""
+        import wb.client.http as http_mod
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(502),
+                    httpx.Response(502),
+                    httpx.Response(502),
+                    httpx.Response(429, headers={'Retry-After': '0'}),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=3) as client:
+                with pytest.raises(RateLimitError):
+                    client.get('/test')
+
+    def test_mixed_5xx_with_final_5xx_raises_upstream(self, monkeypatch):
+        """Pure 5xx storm surfaces as UpstreamError, not RATE_LIMITED."""
+        import wb.client.http as http_mod
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(502),
+                    httpx.Response(503),
+                    httpx.Response(502),
+                    httpx.Response(504, text='gateway timeout'),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=3) as client:
+                with pytest.raises(UpstreamError) as exc_info:
+                    client.get('/test')
+                assert exc_info.value.status_code == 504
+
+    def test_5xx_recovers_on_retry(self, monkeypatch):
+        """Transient 5xx followed by 200 succeeds without raising."""
+        import wb.client.http as http_mod
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(502),
+                    httpx.Response(200, json={'ok': True}),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=2) as client:
+                assert client.get('/test') == {'ok': True}
+
+    def test_5xx_uses_upstream_delay_schedule(self, monkeypatch):
+        """5xx backoff uses longer UPSTREAM delay (>= 5s base), not 1s base."""
+        import wb.client.http as http_mod
+
+        sleeps: list[float] = []
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda s: sleeps.append(s))
+        # Freeze jitter so lower bound is predictable.
+        monkeypatch.setattr(http_mod.random, 'uniform', lambda a, b: 0.0)
+
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(502),
+                    httpx.Response(502),
+                    httpx.Response(200, json={}),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=2) as client:
+                client.get('/test')
+
+        # First 5xx retry delay should be ~5s (UPSTREAM_RETRY_BASE_DELAY).
+        # Second should be ~15s (base * multiplier).
+        assert len(sleeps) == 2
+        assert sleeps[0] >= 5.0
+        assert sleeps[1] >= 15.0
 
     # ── Context manager ───────────────────────────────────────────────
 

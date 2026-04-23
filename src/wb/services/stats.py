@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from wb.client.promotion import PromotionClient
 from wb.core.batching import chunk
@@ -13,6 +14,11 @@ from wb.core.constants import FULLSTATS_BATCH_SIZE
 from wb.core.exceptions import ValidationError
 from wb.domain.enums import CampaignStatus
 from wb.domain.models import CampaignStats, DailyReportRow, NmStats
+from wb.storage.response_cache import (
+    ResponseCache,
+    is_past_day_range,
+    make_cache_key,
+)
 
 if TYPE_CHECKING:
     from wb.services.analytics import AnalyticsService
@@ -45,6 +51,10 @@ class StatsService:
         client: Promotion API client.
         cache_store: Optional SQLite cache for write-through.
         profile_name: Profile name used as cache isolation key.
+        response_cache: Optional read-through cache for idempotent
+            past-day queries.
+        cache_token: Token value used to fingerprint the response cache
+            key; required whenever ``response_cache`` is set.
     """
 
     def __init__(
@@ -52,10 +62,15 @@ class StatsService:
             client: PromotionClient,
             cache_store=None,
             profile_name: str = 'default',
+            *,
+            response_cache: ResponseCache | None = None,
+            cache_token: str | None = None,
     ) -> None:
         self._client = client
         self._cache = cache_store
         self._profile = profile_name
+        self._response_cache = response_cache
+        self._cache_token = cache_token or ''
 
     def get_campaign_stats(
             self,
@@ -159,6 +174,9 @@ class StatsService:
         other metrics) per product. NMs not found in any campaign are
         included with zero values.
 
+        When a response cache is configured and the date range is
+        strictly in the past, results are cached across invocations.
+
         Args:
             nm_ids: List of product NM IDs to summarise.
             date_from: Start date (YYYY-MM-DD).
@@ -172,6 +190,29 @@ class StatsService:
         """
         _validate_date(date_from, '--from')
         _validate_date(date_to, '--to')
+        return self._cached_or_fetch(
+            method_name='stats.get_product_spend',
+            cache_params={
+                'nm_ids': list(nm_ids),
+                'date_from': date_from,
+                'date_to': date_to,
+            },
+            date_from=date_from,
+            date_to=date_to,
+            fetcher=lambda: self._get_product_spend_fresh(
+                nm_ids, date_from, date_to,
+            ),
+            serialize=lambda result: [asdict(row) for row in result],
+            deserialize=lambda raw: [NmStats(**row) for row in raw],
+        )
+
+    def _get_product_spend_fresh(
+            self,
+            nm_ids: list[int],
+            date_from: str,
+            date_to: str,
+    ) -> list[NmStats]:
+        """Fetch product spend from the API without cache lookup."""
         nm_set = set(nm_ids)
         campaign_ids = self._find_campaign_ids_for_nms(nm_set)
         if not campaign_ids:
@@ -194,6 +235,9 @@ class StatsService:
         statuses, retrieves ad spend via the Promotion API, and enriches with
         total platform orders from the Analytics funnel API when available.
 
+        When a response cache is configured and ``date`` is strictly in
+        the past, results are cached across invocations.
+
         Args:
             date: Report date in YYYY-MM-DD format.
             statuses: CampaignStatus integer values to include (default: active
@@ -210,7 +254,30 @@ class StatsService:
         """
         _validate_date(date, '--date')
         resolved_statuses = statuses if statuses is not None else [9, 11]
-        nm_ids = self._collect_nm_ids_by_status(resolved_statuses)
+        return self._cached_or_fetch(
+            method_name='stats.get_daily_report',
+            cache_params={
+                'date': date,
+                'statuses': list(resolved_statuses),
+                'with_analytics': analytics_svc is not None,
+            },
+            date_from=date,
+            date_to=date,
+            fetcher=lambda: self._get_daily_report_fresh(
+                date, resolved_statuses, analytics_svc,
+            ),
+            serialize=lambda result: [asdict(row) for row in result],
+            deserialize=lambda raw: [DailyReportRow(**row) for row in raw],
+        )
+
+    def _get_daily_report_fresh(
+            self,
+            date: str,
+            statuses: list[int],
+            analytics_svc: AnalyticsService | None,
+    ) -> list[DailyReportRow]:
+        """Fetch the daily report from the APIs without cache lookup."""
+        nm_ids = self._collect_nm_ids_by_status(statuses)
         if not nm_ids:
             return []
         spend_rows = self.get_product_spend(nm_ids, date, date)
@@ -333,6 +400,41 @@ class StatsService:
             return {r.nm_id: r.order_count for r in funnel_rows}
         except Exception:
             return {}
+
+    def _cached_or_fetch(
+            self,
+            *,
+            method_name: str,
+            cache_params: dict,
+            date_from: str,
+            date_to: str,
+            fetcher: Callable,
+            serialize: Callable,
+            deserialize: Callable,
+    ):
+        """Look up past-day queries in the response cache; else fetch.
+
+        Args:
+            method_name: Logical method identifier (cache key component).
+            cache_params: Args hashed into the cache key.
+            date_from: Start date (YYYY-MM-DD) — determines cacheability.
+            date_to: End date (YYYY-MM-DD) — determines cacheability.
+            fetcher: Zero-arg callable returning a fresh result.
+            serialize: Callable to convert the fresh result to JSON-ish.
+            deserialize: Callable to rebuild the result from cached data.
+
+        Returns:
+            The fresh or cached result.
+        """
+        if self._response_cache is None or not is_past_day_range(date_from, date_to):
+            return fetcher()
+        key = make_cache_key(method_name, self._cache_token, cache_params)
+        cached = self._response_cache.get(key)
+        if cached is not None:
+            return deserialize(cached)
+        result = fetcher()
+        self._response_cache.put(key, serialize(result))
+        return result
 
     def _maybe_cache_stats(self, stats: CampaignStats) -> None:
         """Write per-day stats to cache if a CacheStore is configured.

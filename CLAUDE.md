@@ -67,15 +67,25 @@ docs/
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | success |
-| 2 | validation error |
-| 3 | authentication failure |
-| 4 | authorization / missing scope |
-| 5 | rate-limited |
-| 6 | WB API error |
-| 7 | config/profile error |
+| Code | Error code | Meaning |
+|------|------------|---------|
+| 0 | — | success |
+| 2 | `VALIDATION_ERROR` | input validation failure |
+| 3 | `AUTH_FAILURE` | authentication failed (bad/expired token) |
+| 4 | `AUTH_MISSING_SCOPE` | token lacks required scope |
+| 5 | `RATE_LIMITED` | 429 after retries exhausted |
+| 6 | `API_ERROR` / `UPSTREAM_ERROR` | WB API error — `UPSTREAM_ERROR` is raised specifically after 5xx (500/502/503/504) retries exhaust, so agents can distinguish WB infra stress from a true rate-limit event |
+| 7 | `CONFIG_ERROR` | config/profile error |
+
+5xx retries use a longer backoff schedule (5 s → 15 s → 45 s + jitter) than 429 retries, because WB gateway failures rarely clear in a couple of seconds and aggressive retry just amplifies the storm.
+
+## Response Cache
+
+Idempotent past-day responses from `stats product-spend`, `stats daily-report`, and `analytics sales-funnel products/history/grouped` are cached on disk at `~/.wb-cli/response_cache.db` (SQLite WAL). Same-day or future-dated queries bypass the cache entirely — so live data is never served stale.
+
+- Cache is keyed by endpoint + token fingerprint + params (tokens themselves are never stored, only a SHA-256 prefix).
+- Cross-process safe: a second `wb` invocation running the same past-day query gets a hit without touching WB.
+- Retention: 90 days; old rows are pruned on access.
 
 ## Authentication
 

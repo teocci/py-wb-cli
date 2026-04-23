@@ -8,6 +8,7 @@ from wb.core.exceptions import (
     AuthenticationError,
     ConfigError,
     RateLimitError,
+    UpstreamError,
     ValidationError,
     WbCliError,
 )
@@ -89,6 +90,27 @@ class TestApiError:
         err = ApiError('fail')
         assert err.status_code is None
         assert err.response_body is None
+
+
+class TestUpstreamError:
+    """Tests for UpstreamError (retried 5xx exhaustion)."""
+
+    def test_is_api_error_subclass(self) -> None:
+        assert issubclass(UpstreamError, ApiError)
+
+    def test_exit_code_matches_api_error(self) -> None:
+        err = UpstreamError('bad gateway', status_code=502)
+        assert err.exit_code == ExitCode.API_ERROR
+
+    def test_error_code_is_upstream(self) -> None:
+        err = UpstreamError('bad gateway', status_code=502)
+        assert err.error_code == 'UPSTREAM_ERROR'
+        assert err.to_dict()['error']['code'] == 'UPSTREAM_ERROR'
+
+    def test_stores_status_code(self) -> None:
+        err = UpstreamError('timeout', status_code=504, response_body='<html/>')
+        assert err.status_code == 504
+        assert err.response_body == '<html/>'
 
 
 class TestConfigError:

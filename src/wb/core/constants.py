@@ -14,10 +14,14 @@ __all__ = [
     'CONFIG_DIR_NAME',
     'AUDIT_LOG_FILE',
     'CACHE_DB_FILE',
+    'RESPONSE_CACHE_DB_FILE',
+    'RESPONSE_CACHE_RETENTION_DAYS',
     'PROFILES_FILE',
     'DEFAULT_TIMEOUT',
     'DEFAULT_MAX_RETRIES',
     'DEFAULT_RETRY_BASE_DELAY',
+    'UPSTREAM_RETRY_BASE_DELAY',
+    'UPSTREAM_RETRY_MULTIPLIER',
     'DEFAULT_BATCH_SIZE',
     'BID_BATCH_SIZE',
     'FULLSTATS_BATCH_SIZE',
@@ -109,12 +113,20 @@ DEFAULT_PROFILE_NAME = 'default'
 CONFIG_DIR_NAME = '.wb-cli'
 AUDIT_LOG_FILE = 'audit.jsonl'
 CACHE_DB_FILE = 'cache.db'
+RESPONSE_CACHE_DB_FILE = 'response_cache.db'
+RESPONSE_CACHE_RETENTION_DAYS = 90
 PROFILES_FILE = 'profiles.json'
 
 # ── HTTP / retry defaults ─────────────────────────────────────────────
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_BASE_DELAY = 1.0
+
+# Upstream (5xx) retries use longer, more patient backoff than 429.
+# Rationale: 5xx signals WB infra stress — burning attempts in ~12 s
+# rarely clears the wave. 5 s → 15 s → 45 s with jitter rides it out.
+UPSTREAM_RETRY_BASE_DELAY = 5.0
+UPSTREAM_RETRY_MULTIPLIER = 3.0
 
 # ── Batch processing ──────────────────────────────────────────────────
 DEFAULT_BATCH_SIZE = 1000

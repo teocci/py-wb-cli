@@ -13,11 +13,14 @@ from wb.core.constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BASE_DELAY,
     DEFAULT_TIMEOUT,
+    UPSTREAM_RETRY_BASE_DELAY,
+    UPSTREAM_RETRY_MULTIPLIER,
 )
 from wb.core.exceptions import (
     ApiError,
     AuthenticationError,
     RateLimitError,
+    UpstreamError,
 )
 
 if TYPE_CHECKING:
@@ -27,11 +30,20 @@ __all__ = ['WbHttpClient']
 
 logger = logging.getLogger(__name__)
 
-# Status codes that trigger retry
-_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+# Status codes that trigger retry (429 handled as RateLimitError separately).
+_RETRYABLE_UPSTREAM_STATUS_CODES = frozenset({500, 502, 503, 504})
+_RETRYABLE_STATUS_CODES = _RETRYABLE_UPSTREAM_STATUS_CODES | {429}
 
 # Jitter fraction applied to exponential backoff delay
 _JITTER_FRACTION = 0.5
+
+
+def _is_upstream_error(exc: Exception | None) -> bool:
+    """True when ``exc`` is a retryable 5xx :class:`ApiError`."""
+    return (
+        isinstance(exc, ApiError)
+        and exc.status_code in _RETRYABLE_UPSTREAM_STATUS_CODES
+    )
 
 
 class WbHttpClient:
@@ -334,6 +346,10 @@ class WbHttpClient:
     ) -> None:
         """Sleep-and-retry if attempts remain, otherwise re-raise.
 
+        On exhaustion, a retried 5xx ``ApiError`` is converted to
+        :class:`UpstreamError` (exit 6) so callers can distinguish WB
+        infrastructure stress from a 429 rate-limit event (exit 5).
+
         Args:
             attempt: Zero-based attempt index.
             exc: The exception that triggered the retry.
@@ -342,8 +358,9 @@ class WbHttpClient:
 
         Raises:
             ApiError: When all retries are exhausted on a timeout.
+            UpstreamError: On exhausted retries of a 5xx response.
             Exception: Re-raises the original exception when retries
-                are exhausted.
+                are exhausted for non-5xx cases (e.g. 429).
         """
         if attempt >= self._max_retries:
             if isinstance(exc, httpx.TimeoutException):
@@ -352,9 +369,16 @@ class WbHttpClient:
                     status_code=None,
                     response_body=None,
                 ) from exc
+            if _is_upstream_error(exc):
+                raise UpstreamError(
+                    f'WB API upstream error after '
+                    f'{self._max_retries + 1} attempts: HTTP {exc.status_code}',
+                    status_code=exc.status_code,
+                    response_body=exc.response_body,
+                ) from exc
             raise
 
-        delay = retry_after or self._calculate_delay(attempt)
+        delay = retry_after or self._calculate_delay(attempt, exc)
         logger.warning(
             '%s (attempt %d/%d), retrying in %.1fs',
             label,
@@ -385,15 +409,31 @@ class WbHttpClient:
 
         return response.json()
 
-    def _calculate_delay(self, attempt: int) -> float:
-        """Calculate exponential backoff delay with jitter.
+    def _calculate_delay(
+            self,
+            attempt: int,
+            exc: Exception | None = None,
+    ) -> float:
+        """Calculate backoff delay with jitter, scaled by error class.
+
+        429 and non-server-error retries use the standard exponential
+        schedule (``retry_base_delay * 2^attempt``). 5xx upstream errors
+        use a longer schedule (``UPSTREAM_RETRY_BASE_DELAY *
+        UPSTREAM_RETRY_MULTIPLIER^attempt``) because gateway stress
+        rarely clears in a couple of seconds and burning retries early
+        just amplifies the storm.
 
         Args:
             attempt: Zero-based attempt index.
+            exc: The exception that triggered the retry, used to pick
+                the schedule. Defaults to the exponential schedule.
 
         Returns:
             Delay in seconds.
         """
-        base = self._retry_base_delay * (2 ** attempt)
+        if _is_upstream_error(exc):
+            base = UPSTREAM_RETRY_BASE_DELAY * (UPSTREAM_RETRY_MULTIPLIER ** attempt)
+        else:
+            base = self._retry_base_delay * (2 ** attempt)
         jitter = random.uniform(0, base * _JITTER_FRACTION)  # noqa: S311
         return base + jitter

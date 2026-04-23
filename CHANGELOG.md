@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.24.0 (2026-04-24)
+- I-11: response cache for past-day stats/analytics + 5xx/429 retry split — read-through SQLite cache at `~/.wb-cli/response_cache.db` for past-day `stats product-spend`, `stats daily-report`, and `analytics sales-funnel` queries; 5xx retries now raise `UpstreamError` (exit 6) with longer backoff (5/15/45s), keeping `RATE_LIMITED` (exit 5) reserved for true 429 events
+
 ## v0.23.0 (2026-04-21)
 - I-10: `analytics sales-funnel products` — `--min-orders` filter + `--all` auto-pagination (`paginate_all`, page_size=1000)
 

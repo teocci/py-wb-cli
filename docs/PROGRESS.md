@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.23.0 |
-| **Tests Passing** | 1021/1022 (1 pre-existing env test) |
-| **Phases Complete** | 30 |
+| **Current Version** | 0.24.0 |
+| **Tests Passing** | 1098/1099 (1 pre-existing env test) |
+| **Phases Complete** | 31 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -45,6 +45,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | I-8 | stats campaigns --status filter (running / paused / active) | ✅ DONE | 0.21.0 |
 | I-9 | stats daily-report — ad spend + total orders; wb-daily-report skill | ✅ DONE | 0.22.0 |
 | I-10 | sales-funnel products: --min-orders filter + --all auto-pagination | ✅ DONE | 0.23.0 |
+| I-11 | Response cache for past-day stats/analytics + 5xx/429 retry split | ✅ DONE | 0.24.0 |
 
 Phase detail files: [docs/phases/](phases/)
 

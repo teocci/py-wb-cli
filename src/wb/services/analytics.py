@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from pathlib import Path
+from typing import Callable
 
 from wb.client.analytics import AnalyticsClient
 from wb.core.batching import chunk
@@ -18,6 +20,11 @@ from wb.domain.analytics_models import (
     SearchReportProduct,
     SearchTextEntry,
 )
+from wb.storage.response_cache import (
+    ResponseCache,
+    is_past_day_range,
+    make_cache_key,
+)
 
 __all__ = ['AnalyticsService']
 
@@ -30,10 +37,22 @@ class AnalyticsService:
 
     Attributes:
         client: Analytics API client.
+        response_cache: Optional read-through cache for idempotent
+            past-day queries.
+        cache_token: Token value used to fingerprint the response cache
+            key; required whenever ``response_cache`` is set.
     """
 
-    def __init__(self, client: AnalyticsClient) -> None:
+    def __init__(
+            self,
+            client: AnalyticsClient,
+            *,
+            response_cache: ResponseCache | None = None,
+            cache_token: str | None = None,
+    ) -> None:
         self._client = client
+        self._response_cache = response_cache
+        self._cache_token = cache_token or ''
 
     # ── Sales Funnel ─────────────────────────────────────────────────
 
@@ -78,6 +97,18 @@ class AnalyticsService:
         if tag_ids:
             body['tagIds'] = tag_ids
 
+        return self._cached_or_fetch(
+            method_name='analytics.get_product_funnel',
+            cache_params=body,
+            date_from=begin,
+            date_to=end,
+            fetcher=lambda: self._fetch_product_funnel(body),
+            serialize=lambda result: [asdict(row) for row in result],
+            deserialize=lambda raw: [ProductFunnelStats(**row) for row in raw],
+        )
+
+    def _fetch_product_funnel(self, body: dict) -> list[ProductFunnelStats]:
+        """Fetch funnel products directly from the API (no cache)."""
         raw = self._client.get_funnel_products(body)
         data = raw.get('data', {})
         currency = data.get('currency', 'RUB')
@@ -114,6 +145,31 @@ class AnalyticsService:
         """
         if not nm_ids:
             raise ValidationError('At least one nm_id is required')
+        return self._cached_or_fetch(
+            method_name='analytics.get_product_history',
+            cache_params={
+                'begin': begin,
+                'end': end,
+                'nm_ids': list(nm_ids),
+                'aggregation': aggregation,
+            },
+            date_from=begin,
+            date_to=end,
+            fetcher=lambda: self._fetch_product_history(
+                begin, end, nm_ids, aggregation,
+            ),
+            serialize=_serialize_funnel_history,
+            deserialize=_deserialize_funnel_history,
+        )
+
+    def _fetch_product_history(
+            self,
+            begin: str,
+            end: str,
+            nm_ids: list[int],
+            aggregation: str,
+    ) -> list[ProductFunnelHistory]:
+        """Fetch funnel history directly from the API (no cache)."""
         results: list[ProductFunnelHistory] = []
         for batch in chunk(nm_ids, HISTORY_CHUNK_SIZE):
             body = {
@@ -159,6 +215,18 @@ class AnalyticsService:
         if tag_ids:
             body['tagIds'] = tag_ids
 
+        return self._cached_or_fetch(
+            method_name='analytics.get_grouped_history',
+            cache_params=body,
+            date_from=begin,
+            date_to=end,
+            fetcher=lambda: self._fetch_grouped_history(body),
+            serialize=_serialize_funnel_history,
+            deserialize=_deserialize_funnel_history,
+        )
+
+    def _fetch_grouped_history(self, body: dict) -> list[ProductFunnelHistory]:
+        """Fetch grouped funnel history directly from the API (no cache)."""
         raw = self._client.get_funnel_grouped(body)
         data = raw.get('data', [])
         if isinstance(data, list):
@@ -458,3 +526,60 @@ class AnalyticsService:
         if brand_names:
             body['brandNames'] = brand_names
         return body
+
+    def _cached_or_fetch(
+            self,
+            *,
+            method_name: str,
+            cache_params: dict,
+            date_from: str,
+            date_to: str,
+            fetcher: Callable,
+            serialize: Callable,
+            deserialize: Callable,
+    ):
+        """Look up past-day queries in the response cache; else fetch.
+
+        Args:
+            method_name: Logical method identifier (cache key component).
+            cache_params: Args hashed into the cache key.
+            date_from: Start date (YYYY-MM-DD) — determines cacheability.
+            date_to: End date (YYYY-MM-DD) — determines cacheability.
+            fetcher: Zero-arg callable returning a fresh result.
+            serialize: Callable to convert the fresh result to JSON-ish.
+            deserialize: Callable to rebuild the result from cached data.
+
+        Returns:
+            The fresh or cached result.
+        """
+        if self._response_cache is None or not is_past_day_range(date_from, date_to):
+            return fetcher()
+        key = make_cache_key(method_name, self._cache_token, cache_params)
+        cached = self._response_cache.get(key)
+        if cached is not None:
+            return deserialize(cached)
+        result = fetcher()
+        self._response_cache.put(key, serialize(result))
+        return result
+
+
+def _serialize_funnel_history(
+        result: list[ProductFunnelHistory],
+) -> list[dict]:
+    """Convert nested history objects to JSON-serialisable dicts."""
+    return [asdict(row) for row in result]
+
+
+def _deserialize_funnel_history(
+        raw: list[dict],
+) -> list[ProductFunnelHistory]:
+    """Rebuild ProductFunnelHistory with nested FunnelHistoryDay objects."""
+    return [
+        ProductFunnelHistory(
+            nm_id=row.get('nm_id', 0),
+            title=row.get('title', ''),
+            history=[FunnelHistoryDay(**day) for day in row.get('history', [])],
+            currency=row.get('currency', 'RUB'),
+        )
+        for row in raw
+    ]

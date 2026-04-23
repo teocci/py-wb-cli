@@ -11,9 +11,12 @@ from wb.core.constants import (
     CACHE_DB_FILE,
     PRICES_BASE_URL,
     PROMOTION_BASE_URL,
+    RESPONSE_CACHE_DB_FILE,
+    RESPONSE_CACHE_RETENTION_DAYS,
     STATISTICS_BASE_URL,
 )
 from wb.storage.audit import AuditLogger
+from wb.storage.response_cache import ResponseCache
 
 __all__ = [
     'ServiceContainer',
@@ -59,6 +62,7 @@ class _Container:
 
     _settings: Settings | None = None
     _http_clients: dict[tuple[str, str], WbHttpClient] = {}
+    _response_cache: ResponseCache | None = None
 
     @classmethod
     def settings(cls) -> Settings:
@@ -104,6 +108,23 @@ class _Container:
         return cls._http_clients[key]
 
     @classmethod
+    def response_cache(cls) -> ResponseCache:
+        """Return the shared ResponseCache, creating it on first call.
+
+        The cache lives at ``<config_dir>/response_cache.db`` and is
+        shared across every service created in this process. SQLite WAL
+        mode makes the underlying file safely shared across processes
+        too — a second ``wb`` invocation gets the same cache entries.
+        """
+        if cls._response_cache is None:
+            settings = cls.settings()
+            cls._response_cache = ResponseCache(
+                db_path=settings.config_dir / RESPONSE_CACHE_DB_FILE,
+                retention_days=RESPONSE_CACHE_RETENTION_DAYS,
+            )
+        return cls._response_cache
+
+    @classmethod
     def reset(cls) -> None:
         """Clear all cached state.
 
@@ -116,6 +137,7 @@ class _Container:
         """
         cls._settings = None
         cls._http_clients.clear()
+        cls._response_cache = None
 
 
 #: Public alias for ``_Container`` — use in tests and SDK code.
@@ -276,8 +298,8 @@ def create_budget_service(profile_name: str | None = None):
 def create_stats_service(profile_name: str | None = None):
     """Create a StatsService from profile credentials.
 
-    Wires in the shared CacheStore so API results are persisted
-    per-day to the campaign_stats SQLite table automatically.
+    Wires in the shared CacheStore (per-day stats snapshots) and the
+    shared ResponseCache (past-day read-through cache for API results).
 
     Args:
         profile_name: Profile name, or None for active profile.
@@ -292,6 +314,8 @@ def create_stats_service(profile_name: str | None = None):
         client=create_promotion_client(profile_name),
         cache_store=store,
         profile_name=resolved,
+        response_cache=_Container.response_cache(),
+        cache_token=_get_promotion_token(profile_name),
     )
 
 
@@ -365,11 +389,18 @@ def create_analytics_client(
 def create_analytics_service(profile_name: str | None = None):
     """Create an AnalyticsService from profile credentials.
 
+    Wires in the shared ResponseCache so past-day funnel queries are
+    read-through cached across CLI invocations.
+
     Args:
         profile_name: Profile name, or None for active profile.
     """
     from wb.services.analytics import AnalyticsService
-    return AnalyticsService(create_analytics_client(profile_name))
+    return AnalyticsService(
+        create_analytics_client(profile_name),
+        response_cache=_Container.response_cache(),
+        cache_token=_get_analytics_token(profile_name),
+    )
 
 
 def create_optimizer_service(profile_name: str | None = None):

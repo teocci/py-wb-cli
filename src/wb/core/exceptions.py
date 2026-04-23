@@ -11,6 +11,7 @@ __all__ = [
     'AuthenticationError',
     'AuthorizationError',
     'RateLimitError',
+    'UpstreamError',
     'ApiError',
     'ConfigError',
 ]
@@ -128,6 +129,17 @@ class ApiError(WbCliError):
         if self.status_code is not None:
             result['error']['status_code'] = self.status_code
         return result
+
+
+class UpstreamError(ApiError):
+    """Raised when WB returns 5xx after all retries are exhausted.
+
+    Distinct from :class:`RateLimitError` (429) and bare :class:`ApiError`
+    (non-retryable 4xx): surfaces transient upstream gateway failures so
+    callers stop blaming rate limits for infrastructure hiccups.
+    """
+
+    error_code: str = 'UPSTREAM_ERROR'
 
 
 class ConfigError(WbCliError):
