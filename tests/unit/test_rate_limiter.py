@@ -1,13 +1,21 @@
-"""Tests for wb.core.rate_limiter.RateLimiter."""
+"""Tests for wb.core.rate_limiter.RateLimiter and SharedRateLimiter."""
 
 from __future__ import annotations
 
+import sqlite3
+import threading
 import time
-from unittest.mock import call, patch
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from wb.core.rate_limiter import RateLimiter
+from wb.core.rate_limiter import (
+    RateLimiter,
+    SharedRateLimiter,
+    compute_token_fingerprint,
+)
+import wb.core.rate_limiter as rate_limiter_module
 
 
 class TestRateLimiterInit:
@@ -147,3 +155,274 @@ class TestRateLimiterThreadSafety:
             t.join()
 
         assert len(results) == 100
+
+
+# ── Shared / SQLite-backed rate limiter ────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _reset_fallback_warning_flag():
+    """Ensure each test sees a fresh process-warning flag."""
+    rate_limiter_module._FALLBACK_WARNED = False
+    yield
+    rate_limiter_module._FALLBACK_WARNED = False
+
+
+def _make_shared(
+        db_path: Path,
+        *,
+        calls: int,
+        period: float,
+        endpoint: str = '/adv/v3/fullstats',
+        fingerprint: str = 'abcdef0123456789',
+) -> SharedRateLimiter:
+    return SharedRateLimiter(
+        calls, period,
+        token_fingerprint=fingerprint,
+        endpoint=endpoint,
+        db_path=db_path,
+    )
+
+
+class TestComputeTokenFingerprint:
+    """Fingerprint helper round-trip and determinism."""
+
+    def test_returns_16_hex_chars(self):
+        fp = compute_token_fingerprint('abc')
+        assert len(fp) == 16
+        assert all(c in '0123456789abcdef' for c in fp)
+
+    def test_deterministic(self):
+        assert compute_token_fingerprint('x') == compute_token_fingerprint('x')
+
+    def test_distinct_tokens_differ(self):
+        assert compute_token_fingerprint('a') != compute_token_fingerprint('b')
+
+
+class TestSharedRateLimiterInit:
+    """Construction, validation, schema creation."""
+
+    def test_invalid_calls_raises(self, tmp_path):
+        with pytest.raises(ValueError, match='calls must be >= 1'):
+            _make_shared(tmp_path / 'rl.db', calls=0, period=1.0)
+
+    def test_invalid_period_raises(self, tmp_path):
+        with pytest.raises(ValueError, match='period must be > 0'):
+            _make_shared(tmp_path / 'rl.db', calls=1, period=0.0)
+
+    def test_creates_db_and_table(self, tmp_path):
+        db = tmp_path / 'rl.db'
+        _make_shared(db, calls=1, period=1.0)
+        assert db.exists()
+        with sqlite3.connect(str(db)) as conn:
+            tables = [
+                r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            ]
+        assert 'rate_limit_log' in tables
+
+    def test_creates_parent_directory(self, tmp_path):
+        db = tmp_path / 'nested' / 'deeper' / 'rl.db'
+        _make_shared(db, calls=1, period=1.0)
+        assert db.exists()
+
+
+class TestSharedRateLimiterAcquire:
+    """Behaviour of acquire() on a fresh / populated DB."""
+
+    def test_under_limit_does_not_sleep(self, tmp_path):
+        lim = _make_shared(tmp_path / 'rl.db', calls=5, period=60.0)
+        with patch('wb.core.rate_limiter.time.sleep') as mock_sleep:
+            for _ in range(5):
+                lim.acquire()
+        mock_sleep.assert_not_called()
+
+    def test_records_row_per_acquire(self, tmp_path):
+        db = tmp_path / 'rl.db'
+        lim = _make_shared(db, calls=10, period=60.0)
+        for _ in range(3):
+            lim.acquire()
+        with sqlite3.connect(str(db)) as conn:
+            count = conn.execute(
+                'SELECT COUNT(*) FROM rate_limit_log'
+            ).fetchone()[0]
+        assert count == 3
+
+    def test_prunes_stale_rows_on_acquire(self, tmp_path):
+        db = tmp_path / 'rl.db'
+        lim = _make_shared(db, calls=5, period=1.0)
+        old_ts = time.time() - 3600.0  # 1h ago, well outside period=1
+        with sqlite3.connect(str(db)) as conn:
+            for _ in range(100):
+                conn.execute(
+                    'INSERT INTO rate_limit_log (token, endpoint, ts) '
+                    'VALUES (?, ?, ?)',
+                    (lim._token_fingerprint, lim._endpoint, old_ts),
+                )
+            conn.commit()
+        lim.acquire()
+        with sqlite3.connect(str(db)) as conn:
+            count = conn.execute(
+                'SELECT COUNT(*) FROM rate_limit_log'
+            ).fetchone()[0]
+        # All 100 stale rows pruned; only the fresh insert remains
+        assert count == 1
+
+    def test_over_limit_sleeps(self, tmp_path):
+        """When the window is full, acquire should sleep until oldest expires."""
+        db = tmp_path / 'rl.db'
+        lim = _make_shared(db, calls=1, period=60.0)
+        now = time.time()
+        with sqlite3.connect(str(db)) as conn:
+            conn.execute(
+                'INSERT INTO rate_limit_log (token, endpoint, ts) '
+                'VALUES (?, ?, ?)',
+                (lim._token_fingerprint, lim._endpoint, now - 10.0),
+            )
+            conn.commit()
+        sleeps: list[float] = []
+
+        def fake_sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            # advance the DB state so the retry finds the window clear
+            with sqlite3.connect(str(db)) as c:
+                c.execute(
+                    'DELETE FROM rate_limit_log WHERE token = ?',
+                    (lim._token_fingerprint,),
+                )
+                c.commit()
+
+        with patch('wb.core.rate_limiter.time.sleep', side_effect=fake_sleep):
+            lim.acquire()
+
+        assert len(sleeps) == 1
+        # oldest is 10s ago, period 60 → sleep ~= 50
+        assert 45.0 <= sleeps[0] <= 55.0
+
+    def test_isolated_by_endpoint(self, tmp_path):
+        """Two endpoints share the DB but not the budget."""
+        db = tmp_path / 'rl.db'
+        a = _make_shared(db, calls=1, period=60.0, endpoint='/a')
+        b = _make_shared(db, calls=1, period=60.0, endpoint='/b')
+        with patch('wb.core.rate_limiter.time.sleep') as mock_sleep:
+            a.acquire()
+            b.acquire()
+        mock_sleep.assert_not_called()
+
+    def test_isolated_by_token(self, tmp_path):
+        """Two tokens share the DB but not the budget."""
+        db = tmp_path / 'rl.db'
+        t1 = _make_shared(db, calls=1, period=60.0, fingerprint='0' * 16)
+        t2 = _make_shared(db, calls=1, period=60.0, fingerprint='1' * 16)
+        with patch('wb.core.rate_limiter.time.sleep') as mock_sleep:
+            t1.acquire()
+            t2.acquire()
+        mock_sleep.assert_not_called()
+
+
+class TestSharedRateLimiterCrossProcess:
+    """Cross-process serialisation via threads (threads share the SQLite file)."""
+
+    def test_two_threads_serialise(self, tmp_path):
+        """Two acquires on (1, period) can't both complete within `period`."""
+        db = tmp_path / 'rl.db'
+        period = 0.3
+        lim_a = _make_shared(db, calls=1, period=period)
+        lim_b = _make_shared(db, calls=1, period=period)
+
+        start_barrier = threading.Barrier(2)
+        finish_times: list[float] = []
+        lock = threading.Lock()
+
+        def worker(lim: SharedRateLimiter) -> None:
+            start_barrier.wait()
+            lim.acquire()
+            with lock:
+                finish_times.append(time.monotonic())
+
+        t_start = time.monotonic()
+        threads = [
+            threading.Thread(target=worker, args=(lim_a,)),
+            threading.Thread(target=worker, args=(lim_b,)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(finish_times) == 2
+        spread = max(finish_times) - min(finish_times)
+        total = max(finish_times) - t_start
+        # Second acquire must wait ~period for first row to age out
+        assert spread >= period * 0.9
+        assert total >= period * 0.9
+
+
+class TestSharedRateLimiterFallback:
+    """Graceful degradation when the DB is unusable."""
+
+    def test_env_var_opt_out_picks_memory_limiter(self, monkeypatch, tmp_path):
+        """WB_RATE_LIMITER=memory via the factory yields in-memory limiters only."""
+        from wb.core.constants import RATE_LIMITER_ENV_VAR
+        from wb.services._factory import _build_limiters, ServiceContainer
+
+        monkeypatch.setenv(RATE_LIMITER_ENV_VAR, 'memory')
+        ServiceContainer.reset()
+        limiters = _build_limiters('some-token')
+        assert limiters  # at least one endpoint
+        assert all(isinstance(l, RateLimiter) for l in limiters.values())
+        ServiceContainer.reset()
+
+    def test_factory_default_picks_shared_limiter(self, monkeypatch, tmp_path):
+        """Without the env var, the factory wires SharedRateLimiter."""
+        from wb.core.constants import RATE_LIMITER_ENV_VAR
+        from wb.services._factory import _build_limiters, ServiceContainer
+
+        monkeypatch.delenv(RATE_LIMITER_ENV_VAR, raising=False)
+        # Redirect the config dir so the test doesn't touch ~/.wb-cli
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        ServiceContainer.reset()
+        limiters = _build_limiters('some-token')
+        assert limiters
+        assert all(isinstance(l, SharedRateLimiter) for l in limiters.values())
+        ServiceContainer.reset()
+
+    def test_corrupt_db_triggers_fallback(self, tmp_path, caplog):
+        """A corrupt DB file at acquire time switches to the in-memory limiter."""
+        db = tmp_path / 'rl.db'
+        lim = _make_shared(db, calls=1, period=60.0)
+        # Corrupt the file after schema init but before acquire
+        db.write_bytes(b'not a sqlite db at all')
+
+        with caplog.at_level('WARNING', logger='wb.core.rate_limiter'):
+            lim.acquire()
+
+        assert lim._fallback is not None
+        assert isinstance(lim._fallback, RateLimiter)
+        assert any('Shared rate limiter DB unavailable' in r.message
+                   for r in caplog.records)
+
+    def test_corrupt_db_at_init_triggers_fallback(self, tmp_path):
+        """Pre-existing corrupt DB file falls back in the constructor."""
+        db = tmp_path / 'rl.db'
+        db.write_bytes(b'garbage')
+        lim = _make_shared(db, calls=1, period=60.0)
+        assert lim._fallback is not None
+        # subsequent acquires go through the fallback cleanly
+        lim.acquire()
+
+    def test_fallback_warning_emitted_once_per_process(self, tmp_path, caplog):
+        """Module-level flag ensures a single log per process."""
+        db1 = tmp_path / 'a.db'
+        db2 = tmp_path / 'b.db'
+        db1.write_bytes(b'garbage')
+        db2.write_bytes(b'garbage')
+        with caplog.at_level('WARNING', logger='wb.core.rate_limiter'):
+            lim1 = _make_shared(db1, calls=1, period=60.0)
+            lim2 = _make_shared(db2, calls=1, period=60.0)
+            lim1.acquire()
+            lim2.acquire()
+        warnings = [r for r in caplog.records
+                    if 'Shared rate limiter DB unavailable' in r.message]
+        assert len(warnings) == 1

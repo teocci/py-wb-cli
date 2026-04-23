@@ -119,6 +119,7 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 | `WB_PORTAL_COOKIE` | Portal browser cookie (fallback for portal session) |
 | `WB_USER_ID` | Seller user ID |
 | `WB_TOKEN_EXPIRATION` | Token expiration timestamp |
+| `WB_RATE_LIMITER` | Set to `memory` to force the in-process limiter and skip the shared SQLite coordinator (diagnostic only) |
 
 > A single `WB_API_TOKEN` with full-scope permissions is sufficient to run all CLI commands
 > (promotion + analytics). No profile registration needed when env vars are set.
@@ -134,7 +135,7 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 
 - **Authoritative reference**: `RATE_LIMITS.md` — maps every CLI command → endpoint → limit → source
 - **Machine-enforced**: `src/wb/core/rate_limits.py` — endpoint→(calls, period) map consumed by `_factory.py`
-- **Implementation**: `src/wb/core/rate_limiter.py` — sliding-window `RateLimiter` injected into `WbHttpClient` via `path_limiters`
+- **Implementation**: `src/wb/core/rate_limiter.py` — `SharedRateLimiter` (SQLite WAL at `~/.wb-cli/rate_limits.db`) by default, `RateLimiter` (in-process) as the fallback. The shared limiter serialises parallel `wb` processes so WB sees a combined call rate that respects the per-token budget. Set `WB_RATE_LIMITER=memory` to force the in-process limiter.
 - The CLI throttles **preemptively** — agents do not need to add sleeps between calls
 - Most critical: `EP_CAMPAIGN_FULLSTATS` → 1 call/20 s (burst=1), analytics funnel/history → 3 calls/min
 

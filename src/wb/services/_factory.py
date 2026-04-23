@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from wb.auth.profiles import ProfileStore
 from wb.client.http import WbHttpClient
 from wb.client.promotion import PromotionClient
@@ -11,6 +13,9 @@ from wb.core.constants import (
     CACHE_DB_FILE,
     PRICES_BASE_URL,
     PROMOTION_BASE_URL,
+    RATE_LIMIT_DB_FILE,
+    RATE_LIMITER_ENV_VAR,
+    RATE_LIMITER_MEMORY_VALUE,
     RESPONSE_CACHE_DB_FILE,
     RESPONSE_CACHE_RETENTION_DAYS,
     STATISTICS_BASE_URL,
@@ -99,7 +104,7 @@ class _Container:
         """
         key = (base_url, token)
         if key not in cls._http_clients:
-            limiters = _build_limiters() if with_rate_limits else None
+            limiters = _build_limiters(token) if with_rate_limits else None
             cls._http_clients[key] = WbHttpClient(
                 base_url=base_url,
                 token=token,
@@ -144,16 +149,43 @@ class _Container:
 ServiceContainer = _Container
 
 
-def _build_limiters():
-    """Build per-path RateLimiter instances from ENDPOINT_LIMITS.
+def _build_limiters(token: str):
+    """Build per-path rate limiters from ENDPOINT_LIMITS.
+
+    By default each endpoint gets a :class:`SharedRateLimiter` backed by
+    ``~/.wb-cli/rate_limits.db`` so parallel ``wb`` processes coordinate.
+    The in-memory :class:`RateLimiter` is used as the fallback when the
+    user opts out via ``WB_RATE_LIMITER=memory``; individual shared
+    limiters that fail to open the DB transparently self-downgrade in
+    their ``acquire()`` path.
+
+    Args:
+        token: Bearer token; only its fingerprint enters the DB as a key.
 
     Returns:
-        Dict mapping endpoint path → RateLimiter.
+        Dict mapping endpoint path → limiter (either class is interchangeable
+        since both expose a zero-arg ``acquire()`` method).
     """
-    from wb.core.rate_limiter import RateLimiter
+    from wb.core.rate_limiter import RateLimiter, SharedRateLimiter, compute_token_fingerprint
     from wb.core.rate_limits import ENDPOINT_LIMITS
-    return {path: RateLimiter(calls, period)
-            for path, (calls, period) in ENDPOINT_LIMITS.items()}
+
+    env_value = (os.environ.get(RATE_LIMITER_ENV_VAR) or '').lower()
+    if env_value == RATE_LIMITER_MEMORY_VALUE:
+        return {path: RateLimiter(calls, period)
+                for path, (calls, period) in ENDPOINT_LIMITS.items()}
+
+    settings = _Container.settings()
+    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
+    fingerprint = compute_token_fingerprint(token)
+    return {
+        path: SharedRateLimiter(
+            calls, period,
+            token_fingerprint=fingerprint,
+            endpoint=path,
+            db_path=db_path,
+        )
+        for path, (calls, period) in ENDPOINT_LIMITS.items()
+    }
 
 
 # ── Token resolution ──────────────────────────────────────────────────────────

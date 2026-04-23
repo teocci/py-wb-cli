@@ -16,6 +16,9 @@ __all__ = [
     'CACHE_DB_FILE',
     'RESPONSE_CACHE_DB_FILE',
     'RESPONSE_CACHE_RETENTION_DAYS',
+    'RATE_LIMIT_DB_FILE',
+    'RATE_LIMITER_ENV_VAR',
+    'RATE_LIMITER_MEMORY_VALUE',
     'PROFILES_FILE',
     'DEFAULT_TIMEOUT',
     'DEFAULT_MAX_RETRIES',
@@ -115,6 +118,9 @@ AUDIT_LOG_FILE = 'audit.jsonl'
 CACHE_DB_FILE = 'cache.db'
 RESPONSE_CACHE_DB_FILE = 'response_cache.db'
 RESPONSE_CACHE_RETENTION_DAYS = 90
+RATE_LIMIT_DB_FILE = 'rate_limits.db'
+RATE_LIMITER_ENV_VAR = 'WB_RATE_LIMITER'
+RATE_LIMITER_MEMORY_VALUE = 'memory'
 PROFILES_FILE = 'profiles.json'
 
 # ── HTTP / retry defaults ─────────────────────────────────────────────

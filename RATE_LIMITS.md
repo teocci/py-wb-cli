@@ -2,7 +2,12 @@
 
 > **For AI agents:** Use this file to plan call sequences. Exceeding a limit returns
 > HTTP 429 (exit code 5). The CLI enforces these limits preemptively — you do not need
-> to add sleeps between calls. Limits are enforced per-process per-token.
+> to add sleeps between calls. Limits are coordinated **per-token across all concurrent
+> `wb` processes** through a shared SQLite file at `~/.wb-cli/rate_limits.db` (WAL mode),
+> so parallel invocations serialise cleanly. Set `WB_RATE_LIMITER=memory` to opt out and
+> use an in-process limiter instead; the shared coordinator also auto-falls-back to
+> in-process if the DB is unavailable (permissions, corruption, locked), logging a
+> single warning per process.
 
 ---
 
@@ -90,7 +95,7 @@ These endpoints are most likely to cause 429 errors in automated workflows:
 
 `wb pulse` calls `EP_RECOMMENDED_BID` (5/60s) once per campaign — sequential, rate-limiter spaced. For 7 campaigns: 7 bid-recommend calls at ~12s intervals = ~84s maximum. In practice campaigns with no active bids return 400 immediately (no wait), so pulse is typically fast.
 
-> Both commands are native CLI (not external scripts) specifically because the rate limiter is process-local — external subprocesses cannot share the limiter and would cause 429 errors.
+> Both commands are implemented as native CLI composites because a single in-process flow is the simplest way to batch them. Since v0.25.0 the limiter is also shared across CLI processes via SQLite WAL — external subprocesses using the same token coordinate through `~/.wb-cli/rate_limits.db` and no longer blow the budget. External callers that want to stay in-process (e.g. isolated test runs) can set `WB_RATE_LIMITER=memory`.
 
 ### Analytics endpoints (funnel, search-report)
 - **Limit:** 3/min across all funnel/search variants
@@ -101,9 +106,22 @@ These endpoints are most likely to cause 429 errors in automated workflows:
 ## Implementation Details
 
 Rate limits are enforced preemptively in `src/wb/core/rate_limiter.py` using a
-sliding-window algorithm. The `ENDPOINT_LIMITS` map in `src/wb/core/rate_limits.py`
-maps each endpoint path to `(calls, period_seconds)`. The HTTP client acquires a slot
-before sending — no sleep after 429 (the reactive retry in `http.py` remains as backup).
+sliding-window algorithm. Two interchangeable classes implement the same
+`acquire()` contract:
+
+- **`SharedRateLimiter` (default)** — SQLite WAL at `~/.wb-cli/rate_limits.db`.
+  Each `acquire()` runs a `BEGIN IMMEDIATE` transaction that prunes expired
+  rows, counts in-window rows for `(token_fingerprint, endpoint)`, and either
+  inserts a new row or sleeps until the oldest row ages out (sleep happens
+  outside the transaction so other processes aren't starved).
+- **`RateLimiter` (fallback)** — in-process `threading.Lock` + deque. Used
+  when `WB_RATE_LIMITER=memory` is set, or transparently when the shared DB
+  cannot be used (missing parent dir, locked, corrupt).
+
+The `ENDPOINT_LIMITS` map in `src/wb/core/rate_limits.py` maps each endpoint
+path to `(calls, period_seconds)`. The HTTP client acquires a slot before
+sending — no sleep after 429 (the reactive retry in `http.py` remains as
+backup).
 
 **Sliding window interpretation of burst:**
 - `burst = 1` → all calls must be spaced by `period / limit` → stored as `(1, interval)`

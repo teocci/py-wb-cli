@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.25.0 (2026-04-24)
+- I-12: SQLite-backed cross-process rate limiter — new `SharedRateLimiter` coordinates preemptive throttling across parallel `wb` invocations via `~/.wb-cli/rate_limits.db` (WAL mode, per-`(token_fingerprint, endpoint)` rows, `BEGIN IMMEDIATE` serialisation). Transparent fallback to in-memory `RateLimiter` on DB errors with a single warning per process; `WB_RATE_LIMITER=memory` forces the legacy in-process behaviour
+
 ## v0.24.0 (2026-04-24)
 - I-11: response cache for past-day stats/analytics + 5xx/429 retry split — read-through SQLite cache at `~/.wb-cli/response_cache.db` for past-day `stats product-spend`, `stats daily-report`, and `analytics sales-funnel` queries; 5xx retries now raise `UpstreamError` (exit 6) with longer backoff (5/15/45s), keeping `RATE_LIMITED` (exit 5) reserved for true 429 events
 

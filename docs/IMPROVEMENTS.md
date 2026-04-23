@@ -29,8 +29,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.22.0 | I-9 | ✅ DONE | stats daily-report — [detail](phases/I-9-daily-report.md) |
 | 0.23.0 | I-10 | ✅ DONE | sales-funnel --min-orders + --all — [detail](phases/I-10-sales-funnel.md) |
 | 0.24.0 | I-11 | ✅ DONE | Response cache + retry split — [detail](phases/I-11-response-cache.md) |
-
-_No improvements currently in progress. Add new entries here when an improvement is planned._
+| 0.25.0 | I-12 | ✅ DONE | SQLite-backed cross-process rate limiter — [detail](phases/I-12-shared-rate-limiter.md) |
 
 ---
 
