@@ -80,7 +80,9 @@
       "Bash(.venv/Scripts/python -c \"from wb.core.exceptions import UpstreamError, ApiError; print\\(issubclass\\(UpstreamError, ApiError\\)\\)\")",
       "Bash(.venv/Scripts/python -c \"from wb.services.stats import StatsService; from wb.services.analytics import AnalyticsService; print\\('ok'\\)\")",
       "Bash(.venv/Scripts/python -c ' *)",
-      "Read(//c/Users/teocci/.claude/plans/**)"
+      "Read(//c/Users/teocci/.claude/plans/**)",
+      "Bash(.venv/Scripts/python scripts/probe_daily_report.py)",
+      "Bash(.venv/Scripts/python scripts/probe_poc1_recovery.py)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
