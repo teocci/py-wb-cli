@@ -178,6 +178,55 @@ class TestWbHttpClient:
         assert sleeps[0] < 5.0
         assert sleeps[1] < 10.0
 
+    def test_seller_limiter_acquired_before_path_limiter(self):
+        """F-10: seller-scope limiter is acquired before the per-path one on each request."""
+        from unittest.mock import MagicMock
+
+        seller = MagicMock()
+        path_limiter = MagicMock()
+        acquire_order: list[str] = []
+        seller.acquire.side_effect = lambda: acquire_order.append('seller')
+        path_limiter.acquire.side_effect = lambda: acquire_order.append('path')
+
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(200, json={'ok': True})
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                path_limiters={'/test': path_limiter},
+                seller_limiter=seller,
+            )
+            client.get('/test')
+            client.close()
+
+        assert acquire_order == ['seller', 'path']
+
+    def test_seller_limiter_fires_even_without_path_limiter(self):
+        """Paths with no per-endpoint limiter still go through the seller limiter."""
+        from unittest.mock import MagicMock
+
+        seller = MagicMock()
+
+        with respx.mock:
+            respx.get(f'{BASE_URL}/unlisted').mock(
+                return_value=httpx.Response(200, json={})
+            )
+            client = WbHttpClient(BASE_URL, 'token', seller_limiter=seller)
+            client.get('/unlisted')
+            client.close()
+
+        assert seller.acquire.call_count == 1
+
+    def test_no_seller_limiter_is_no_op(self):
+        """When seller_limiter is None (default), nothing extra happens."""
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(200, json={})
+            )
+            with WbHttpClient(BASE_URL, 'token') as client:
+                assert client.get('/test') == {}
+
     def test_retry_after_header_overrides_patient_schedule(self, monkeypatch):
         """Explicit Retry-After always wins, even on a seller-global 429."""
         import wb.client.http as http_mod

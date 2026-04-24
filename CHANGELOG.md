@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.25.2 (2026-04-24)
+- F-10: seller-scope global rate limiter — new `compute_seller_fingerprint` extracts the JWT `sid` claim so tokens of the same seller share a single budget; `_build_seller_limiter` wires a `SharedRateLimiter` (30 calls / 60 s) at the `_seller_global` scope key in `~/.wb-cli/rate_limits.db`; `WbHttpClient` acquires the seller limiter before the per-path limiter on every request. Falls back to per-token scope for non-JWT tokens; honours `WB_RATE_LIMITER=memory` opt-out
+
 ## v0.25.1 (2026-04-24)
 - F-9: patient 429 backoff on seller-global throttle — `RateLimitError` now carries `response_body`; `_calculate_delay` switches to the UPSTREAM schedule (5/15/45 s + jitter) when the body contains `"global limiter"`, matching how WB's gateway surfaces seller-wide throttles. Per-endpoint 429s and explicit `Retry-After` headers keep existing semantics
 

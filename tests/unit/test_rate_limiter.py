@@ -13,9 +13,23 @@ import pytest
 from wb.core.rate_limiter import (
     RateLimiter,
     SharedRateLimiter,
+    compute_seller_fingerprint,
     compute_token_fingerprint,
 )
 import wb.core.rate_limiter as rate_limiter_module
+
+
+def _make_jwt(payload: dict) -> str:
+    """Minimal JWT builder for tests: header.payload.sig (signature unverified)."""
+    import base64
+    import json
+
+    def _b64(obj: dict) -> str:
+        return base64.urlsafe_b64encode(
+            json.dumps(obj, separators=(',', ':')).encode('utf-8')
+        ).rstrip(b'=').decode('ascii')
+
+    return f'{_b64({"alg": "HS256", "typ": "JWT"})}.{_b64(payload)}.sig'
 
 
 class TestRateLimiterInit:
@@ -197,6 +211,60 @@ class TestComputeTokenFingerprint:
 
     def test_distinct_tokens_differ(self):
         assert compute_token_fingerprint('a') != compute_token_fingerprint('b')
+
+
+class TestComputeSellerFingerprint:
+    """Seller-scope fingerprint extracted from JWT ``sid`` claim."""
+
+    def test_returns_16_hex_chars(self):
+        token = _make_jwt({'sid': '173f8646-dc21-58c0-892e-ba069dc0a9cb'})
+        fp = compute_seller_fingerprint(token)
+        assert len(fp) == 16
+        assert all(c in '0123456789abcdef' for c in fp)
+
+    def test_deterministic_for_same_sid(self):
+        token_a = _make_jwt({'sid': 'seller-uuid-1', 'iid': 1})
+        token_b = _make_jwt({'sid': 'seller-uuid-1', 'iid': 1})
+        assert compute_seller_fingerprint(token_a) == compute_seller_fingerprint(token_b)
+
+    def test_same_sid_different_tokens_share_fingerprint(self):
+        """Two tokens of the same seller (different iid/exp) collide — the point of F-10."""
+        token_a = _make_jwt({'sid': 'seller-uuid-1', 'iid': 111, 'exp': 1000})
+        token_b = _make_jwt({'sid': 'seller-uuid-1', 'iid': 222, 'exp': 9000})
+        assert compute_seller_fingerprint(token_a) == compute_seller_fingerprint(token_b)
+
+    def test_distinct_sid_differ(self):
+        token_a = _make_jwt({'sid': 'seller-uuid-1'})
+        token_b = _make_jwt({'sid': 'seller-uuid-2'})
+        assert compute_seller_fingerprint(token_a) != compute_seller_fingerprint(token_b)
+
+    def test_seller_fingerprint_differs_from_token_fingerprint(self):
+        """sid-keyed fingerprint must NOT collide with plain token fingerprint."""
+        token = _make_jwt({'sid': 'abc'})
+        assert compute_seller_fingerprint(token) != compute_token_fingerprint(token)
+
+    def test_malformed_jwt_falls_back_to_token_fingerprint(self):
+        """Non-JWT string → fallback to token fingerprint (degrade gracefully)."""
+        not_a_jwt = 'just-some-opaque-token-string'
+        assert (
+            compute_seller_fingerprint(not_a_jwt)
+            == compute_token_fingerprint(not_a_jwt)
+        )
+
+    def test_jwt_missing_sid_falls_back(self):
+        """JWT without `sid` claim falls back to token fingerprint."""
+        token = _make_jwt({'iid': 1, 'uid': 2})  # no sid
+        assert compute_seller_fingerprint(token) == compute_token_fingerprint(token)
+
+    def test_jwt_sid_non_string_falls_back(self):
+        """JWT with non-string sid falls back."""
+        token = _make_jwt({'sid': 123})
+        assert compute_seller_fingerprint(token) == compute_token_fingerprint(token)
+
+    def test_jwt_malformed_payload_falls_back(self):
+        """JWT with unparseable middle segment falls back without raising."""
+        token = 'header.!!notbase64!!.sig'
+        assert compute_seller_fingerprint(token) == compute_token_fingerprint(token)
 
 
 class TestSharedRateLimiterInit:
@@ -386,6 +454,50 @@ class TestSharedRateLimiterFallback:
         limiters = _build_limiters('some-token')
         assert limiters
         assert all(isinstance(l, SharedRateLimiter) for l in limiters.values())
+        ServiceContainer.reset()
+
+
+class TestSellerLimiterFactory:
+    """F-10: `_build_seller_limiter` selection matches the env-var policy."""
+
+    def test_default_returns_shared_limiter(self, monkeypatch, tmp_path):
+        from wb.core.constants import RATE_LIMITER_ENV_VAR, SELLER_GLOBAL_SCOPE_KEY
+        from wb.services._factory import _build_seller_limiter, ServiceContainer
+
+        monkeypatch.delenv(RATE_LIMITER_ENV_VAR, raising=False)
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        ServiceContainer.reset()
+        limiter = _build_seller_limiter(_make_jwt({'sid': 'seller-x'}))
+        try:
+            assert isinstance(limiter, SharedRateLimiter)
+            assert limiter._endpoint == SELLER_GLOBAL_SCOPE_KEY
+            expected_fp = compute_seller_fingerprint(_make_jwt({'sid': 'seller-x'}))
+            assert limiter._token_fingerprint == expected_fp
+        finally:
+            ServiceContainer.reset()
+
+    def test_env_opt_out_returns_memory_limiter(self, monkeypatch, tmp_path):
+        from wb.core.constants import RATE_LIMITER_ENV_VAR
+        from wb.services._factory import _build_seller_limiter, ServiceContainer
+
+        monkeypatch.setenv(RATE_LIMITER_ENV_VAR, 'memory')
+        ServiceContainer.reset()
+        limiter = _build_seller_limiter(_make_jwt({'sid': 'seller-x'}))
+        assert isinstance(limiter, RateLimiter) and not isinstance(limiter, SharedRateLimiter)
+        ServiceContainer.reset()
+
+    def test_uses_configured_budget(self, monkeypatch, tmp_path):
+        """Seller limiter honours SELLER_GLOBAL_BUDGET (30/60s default)."""
+        from wb.core.constants import (
+            RATE_LIMITER_ENV_VAR, SELLER_GLOBAL_BUDGET,
+        )
+        from wb.services._factory import _build_seller_limiter, ServiceContainer
+
+        monkeypatch.setenv(RATE_LIMITER_ENV_VAR, 'memory')  # avoid DB
+        ServiceContainer.reset()
+        limiter = _build_seller_limiter(_make_jwt({'sid': 'seller-x'}))
+        calls, period = SELLER_GLOBAL_BUDGET
+        assert limiter._calls == calls and limiter._period == period
         ServiceContainer.reset()
 
     def test_corrupt_db_triggers_fallback(self, tmp_path, caplog):

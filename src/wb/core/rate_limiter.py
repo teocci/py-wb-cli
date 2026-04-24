@@ -17,7 +17,10 @@ user sets ``WB_RATE_LIMITER=memory``.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
+import json
 import logging
 import sqlite3
 import threading
@@ -29,6 +32,7 @@ __all__ = [
     'RateLimiter',
     'SharedRateLimiter',
     'compute_token_fingerprint',
+    'compute_seller_fingerprint',
 ]
 
 logger = logging.getLogger(__name__)
@@ -52,6 +56,46 @@ def compute_token_fingerprint(token: str) -> str:
         First 16 hex chars of the SHA-256 digest.
     """
     digest = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    return digest[:_TOKEN_FINGERPRINT_LEN]
+
+
+def compute_seller_fingerprint(token: str) -> str:
+    """Return a fingerprint derived from the JWT ``sid`` (seller UUID) claim.
+
+    WB's gateway throttles per seller across *all* endpoints and *all*
+    tokens issued to the same seller. Keying the seller-scope limiter by
+    the ``sid`` claim (extracted from the JWT payload) lets the
+    promotion, analytics, and statistics tokens of the same seller
+    coordinate their call rate through a single SQLite row family.
+
+    If the token is not a standard three-part JWT, the payload cannot be
+    base64url-decoded, the JSON is malformed, or the ``sid`` claim is
+    missing / non-string, the function falls back to
+    :func:`compute_token_fingerprint` — scoping silently degrades to
+    per-token, which is still better than no global limiter at all.
+
+    Args:
+        token: Bearer token (never stored on disk, only its fingerprint).
+
+    Returns:
+        First 16 hex chars of the SHA-256 digest of the seller key
+        (``'sid:<uuid>'``) when extractable; otherwise the token
+        fingerprint as a fallback.
+    """
+    parts = token.split('.')
+    if len(parts) != 3:
+        return compute_token_fingerprint(token)
+    payload_b64 = parts[1]
+    padding = '=' * (-len(payload_b64) % 4)
+    try:
+        payload_bytes = base64.urlsafe_b64decode(payload_b64 + padding)
+        payload = json.loads(payload_bytes)
+    except (ValueError, binascii.Error, json.JSONDecodeError):
+        return compute_token_fingerprint(token)
+    sid = payload.get('sid') if isinstance(payload, dict) else None
+    if not isinstance(sid, str) or not sid:
+        return compute_token_fingerprint(token)
+    digest = hashlib.sha256(f'sid:{sid}'.encode('utf-8')).hexdigest()
     return digest[:_TOKEN_FINGERPRINT_LEN]
 
 

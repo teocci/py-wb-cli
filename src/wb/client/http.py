@@ -65,9 +65,15 @@ def _is_seller_global_throttle(exc: Exception | None) -> bool:
 class WbHttpClient:
     """Low-level HTTP client for WB API with retry and rate-limit support.
 
-    Supports optional per-path preemptive rate limiting via ``path_limiters``.
-    When a limiter is registered for a path, :meth:`acquire` is called before
-    the first attempt — preventing 429 responses rather than reacting to them.
+    Supports two layers of preemptive rate limiting, both acquired before
+    the first attempt to prevent 429 responses rather than react to them:
+
+    1. ``seller_limiter`` — acquired first, for every request. Coordinates
+       against WB's gateway-enforced per-seller global budget across all
+       advert + analytics endpoints for the seller, keyed by the JWT
+       ``sid`` claim so tokens of the same seller share one window.
+    2. ``path_limiters`` — acquired second, per endpoint path. Enforces
+       the per-endpoint budgets documented in WB's swagger.
 
     Attributes:
         base_url: API base URL.
@@ -82,6 +88,7 @@ class WbHttpClient:
             max_retries: int = DEFAULT_MAX_RETRIES,
             retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY,
             path_limiters: dict[str, 'RateLimiter'] | None = None,
+            seller_limiter: 'RateLimiter | None' = None,
     ) -> None:
         self._base_url = base_url.rstrip('/')
         self._token = token
@@ -89,6 +96,7 @@ class WbHttpClient:
         self._max_retries = max_retries
         self._retry_base_delay = retry_base_delay
         self._path_limiters: dict[str, RateLimiter] = path_limiters or {}
+        self._seller_limiter: RateLimiter | None = seller_limiter
         self._client = httpx.Client(
             base_url=self._base_url,
             headers={
@@ -135,6 +143,8 @@ class WbHttpClient:
         """
         last_exception: Exception | None = None
 
+        if self._seller_limiter is not None:
+            self._seller_limiter.acquire()
         if limiter := self._path_limiters.get(path):
             limiter.acquire()
 
@@ -288,6 +298,8 @@ class WbHttpClient:
         """
         last_exception: Exception | None = None
 
+        if self._seller_limiter is not None:
+            self._seller_limiter.acquire()
         if limiter := self._path_limiters.get(path):
             limiter.acquire()
 

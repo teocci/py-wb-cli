@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.25.1 |
-| **Tests Passing** | 1089/1090 (1 pre-existing env test) |
-| **Phases Complete** | 33 |
+| **Current Version** | 0.25.2 |
+| **Tests Passing** | 1104/1105 (1 pre-existing env test) |
+| **Phases Complete** | 34 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -48,7 +48,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | I-11 | Response cache for past-day stats/analytics + 5xx/429 retry split | ✅ DONE | 0.24.0 |
 | I-12 | SQLite-backed cross-process rate limiter | ✅ DONE | 0.25.0 |
 | F-9 | Patient 429 backoff on seller-global throttle | ✅ DONE | 0.25.1 |
-| F-10 | Seller-scope global rate limiter (JWT `sid`-keyed) | 🔲 PLANNED | 0.25.2 |
+| F-10 | Seller-scope global rate limiter (JWT `sid`-keyed) | ✅ DONE | 0.25.2 |
 | F-11 | Dedup `list_campaigns` in `stats daily-report` | 🔲 PLANNED | 0.25.3 |
 
 Phase detail files: [docs/phases/](phases/)

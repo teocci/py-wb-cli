@@ -18,6 +18,8 @@ from wb.core.constants import (
     RATE_LIMITER_MEMORY_VALUE,
     RESPONSE_CACHE_DB_FILE,
     RESPONSE_CACHE_RETENTION_DAYS,
+    SELLER_GLOBAL_BUDGET,
+    SELLER_GLOBAL_SCOPE_KEY,
     STATISTICS_BASE_URL,
 )
 from wb.storage.audit import AuditLogger
@@ -95,20 +97,29 @@ class _Container:
             base_url: API base URL.
             token: Authorization token.
             with_rate_limits: When True, inject per-path rate limiters from
-                :data:`wb.core.rate_limits.ENDPOINT_LIMITS`. Only the
-                promotion client needs this; analytics/statistics clients use
-                different base URLs with no shared limiter state.
+                :data:`wb.core.rate_limits.ENDPOINT_LIMITS` **and** the
+                seller-scope global limiter (WB gateway enforces a
+                per-seller budget across all endpoints). Only advert +
+                analytics clients need this; statistics/prices clients
+                skip it since they use different base URLs with no
+                shared limiter state.
 
         Returns:
             Existing or newly created WbHttpClient.
         """
         key = (base_url, token)
         if key not in cls._http_clients:
-            limiters = _build_limiters(token) if with_rate_limits else None
+            if with_rate_limits:
+                path_limiters = _build_limiters(token)
+                seller_limiter = _build_seller_limiter(token)
+            else:
+                path_limiters = None
+                seller_limiter = None
             cls._http_clients[key] = WbHttpClient(
                 base_url=base_url,
                 token=token,
-                path_limiters=limiters,
+                path_limiters=path_limiters,
+                seller_limiter=seller_limiter,
             )
         return cls._http_clients[key]
 
@@ -186,6 +197,43 @@ def _build_limiters(token: str):
         )
         for path, (calls, period) in ENDPOINT_LIMITS.items()
     }
+
+
+def _build_seller_limiter(token: str):
+    """Build the seller-scope global rate limiter for the given token.
+
+    Keyed by the JWT ``sid`` claim (seller UUID) — see
+    :func:`wb.core.rate_limiter.compute_seller_fingerprint` — so the
+    promotion, analytics, and statistics tokens of the same seller share
+    a single budget in ``~/.wb-cli/rate_limits.db``, coordinating
+    against WB's gateway-enforced per-seller throttle.
+
+    Respects ``WB_RATE_LIMITER=memory`` the same way
+    :func:`_build_limiters` does: in-process :class:`RateLimiter` as
+    fallback when the SQLite DB is unavailable or the user opts out.
+
+    Args:
+        token: Bearer token; never stored, only its seller fingerprint.
+
+    Returns:
+        A :class:`SharedRateLimiter` (default) or :class:`RateLimiter`
+        (opt-out) configured with :data:`SELLER_GLOBAL_BUDGET`.
+    """
+    from wb.core.rate_limiter import RateLimiter, SharedRateLimiter, compute_seller_fingerprint
+
+    calls, period = SELLER_GLOBAL_BUDGET
+    env_value = (os.environ.get(RATE_LIMITER_ENV_VAR) or '').lower()
+    if env_value == RATE_LIMITER_MEMORY_VALUE:
+        return RateLimiter(calls, period)
+
+    settings = _Container.settings()
+    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
+    return SharedRateLimiter(
+        calls, period,
+        token_fingerprint=compute_seller_fingerprint(token),
+        endpoint=SELLER_GLOBAL_SCOPE_KEY,
+        db_path=db_path,
+    )
 
 
 # ── Token resolution ──────────────────────────────────────────────────────────
