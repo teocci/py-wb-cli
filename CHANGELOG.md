@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.25.4 (2026-04-24)
+- F-12: honor `x-ratelimit-reset` / `x-ratelimit-retry` on 429 — new `_parse_rate_limit_reset` helper reads WB's undocumented cooldown-timer headers (absent from swagger 429 schema), populates `RateLimitError.retry_after`; `_retry_or_raise` bails out without retrying when reset > 60 s to stop seller-scope penalties from extending under our own retries. Standard `Retry-After` still preferred when present
+
 ## v0.25.3 (2026-04-24)
 - F-11: dedup `list_campaigns` in `stats daily-report` — `_get_daily_report_fresh` now makes one unfiltered `list_campaigns` call and threads the raw list through `_get_product_spend_fresh` + `_find_campaign_ids_for_nms`, eliminating the duplicate full-scan request. Status filter moves to a new in-memory helper `_collect_nm_ids_from_campaigns`
 

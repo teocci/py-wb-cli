@@ -227,8 +227,96 @@ class TestWbHttpClient:
             with WbHttpClient(BASE_URL, 'token') as client:
                 assert client.get('/test') == {}
 
+    def test_x_ratelimit_reset_populates_retry_after(self):
+        """F-12: `x-ratelimit-reset` header sets RateLimitError.retry_after."""
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(
+                    429, text='{"detail":"Limited by global limiter"}',
+                    headers={'x-ratelimit-reset': '45'},
+                )
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=0) as client:
+                with pytest.raises(RateLimitError) as exc_info:
+                    client.get('/test')
+                assert exc_info.value.retry_after == 45.0
+
+    def test_x_ratelimit_retry_populates_retry_after(self):
+        """F-12: `x-ratelimit-retry` header (alias) also works."""
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(
+                    429, headers={'x-ratelimit-retry': '30'},
+                )
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=0) as client:
+                with pytest.raises(RateLimitError) as exc_info:
+                    client.get('/test')
+                assert exc_info.value.retry_after == 30.0
+
+    def test_retry_after_standard_header_still_preferred(self):
+        """F-12: standard `Retry-After` wins over `x-ratelimit-reset`."""
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(
+                    429, headers={
+                        'Retry-After': '10',
+                        'x-ratelimit-reset': '45',
+                    },
+                )
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=0) as client:
+                with pytest.raises(RateLimitError) as exc_info:
+                    client.get('/test')
+                assert exc_info.value.retry_after == 10.0
+
+    def test_large_retry_after_bails_out_without_retry(self, monkeypatch):
+        """F-12: reset > 60 s skips all retries to avoid extending the penalty."""
+        import wb.client.http as http_mod
+
+        sleeps: list[float] = []
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda s: sleeps.append(s))
+
+        with respx.mock:
+            route = respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(
+                    429, text='{"detail":"Limited by global limiter"}',
+                    headers={'x-ratelimit-reset': '564'},
+                )
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=3) as client:
+                with pytest.raises(RateLimitError) as exc_info:
+                    client.get('/test')
+
+        # Exactly one HTTP attempt — no retries, no sleeps.
+        assert route.call_count == 1
+        assert sleeps == []
+        assert exc_info.value.retry_after == 564.0
+
+    def test_small_retry_after_still_retries(self, monkeypatch):
+        """F-12: reset ≤ 60 s retries normally (per-endpoint windows recover)."""
+        import wb.client.http as http_mod
+
+        sleeps: list[float] = []
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda s: sleeps.append(s))
+
+        with respx.mock:
+            route = respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(
+                        429, headers={'x-ratelimit-reset': '20'},
+                    ),
+                    httpx.Response(200, json={'ok': True}),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=2) as client:
+                assert client.get('/test') == {'ok': True}
+
+        assert route.call_count == 2
+        assert sleeps == [20.0]
+
     def test_retry_after_header_overrides_patient_schedule(self, monkeypatch):
-        """Explicit Retry-After always wins, even on a seller-global 429."""
+        """Explicit Retry-After (≤ 60 s) wins over F-9's patient schedule."""
         import wb.client.http as http_mod
 
         sleeps: list[float] = []
@@ -239,14 +327,14 @@ class TestWbHttpClient:
         with respx.mock:
             respx.get(f'{BASE_URL}/test').mock(
                 side_effect=[
-                    httpx.Response(429, text=body, headers={'Retry-After': '120'}),
+                    httpx.Response(429, text=body, headers={'Retry-After': '45'}),
                     httpx.Response(200, json={}),
                 ]
             )
             with WbHttpClient(BASE_URL, 'token', max_retries=1) as client:
                 client.get('/test')
 
-        assert sleeps == [120.0]
+        assert sleeps == [45.0]
 
     # ── API errors ────────────────────────────────────────────────────
 

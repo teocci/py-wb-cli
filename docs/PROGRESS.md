@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.25.3 |
-| **Tests Passing** | 1106/1107 (1 pre-existing env test) |
-| **Phases Complete** | 35 |
+| **Current Version** | 0.25.4 |
+| **Tests Passing** | 1111/1112 (1 pre-existing env test) |
+| **Phases Complete** | 36 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -50,6 +50,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-9 | Patient 429 backoff on seller-global throttle | ✅ DONE | 0.25.1 |
 | F-10 | Seller-scope global rate limiter (JWT `sid`-keyed) | ✅ DONE | 0.25.2 |
 | F-11 | Dedup `list_campaigns` in `stats daily-report` | ✅ DONE | 0.25.3 |
+| F-12 | Honor `x-ratelimit-reset` header (60 s bail-out) | ✅ DONE | 0.25.4 |
+| F-13 | `SellerCooldownLock` short-circuit on known cooldown | 🔲 PLANNED | 0.25.5 |
+| I-13 | `wb rate-status` diagnostic command | 🔲 PLANNED | 0.26.0 |
 
 Phase detail files: [docs/phases/](phases/)
 

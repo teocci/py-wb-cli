@@ -45,6 +45,39 @@ _JITTER_FRACTION = 0.5
 # multiple seconds to clear — we switch to the UPSTREAM schedule instead.
 _SELLER_GLOBAL_THROTTLE_MARKER = 'global limiter'
 
+# Undocumented headers WB sends on 429 (not in swagger). When present, the
+# value is seconds until the cooldown window clears — authoritative, so we
+# prefer it over the standard `Retry-After` fallback. Both header names
+# carry the same value; we read whichever shows up.
+_RATELIMIT_RESET_HEADERS = ('Retry-After', 'x-ratelimit-reset', 'x-ratelimit-retry')
+
+# Threshold for F-12's bail-out vs. retry split. Any `retry_after` larger
+# than this is almost certainly a seller-scope penalty — retrying would
+# only extend WB's leaky-bucket cooldown. Values ≤ threshold represent
+# genuine per-endpoint windows (e.g. fullstats 20 s, funnel 60 s) that
+# retry successfully after one sleep.
+_RETRY_AFTER_BAIL_OUT_SECONDS = 60.0
+
+
+def _parse_rate_limit_reset(response: 'httpx.Response') -> float | None:
+    """Return the first header value that parses as a positive number.
+
+    Prefers ``Retry-After`` (the HTTP standard) but falls back to WB's
+    undocumented ``x-ratelimit-reset`` / ``x-ratelimit-retry`` headers,
+    which are what the gateway actually sends on seller-scope 429s.
+    """
+    for name in _RATELIMIT_RESET_HEADERS:
+        raw = response.headers.get(name)
+        if not raw:
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        if value > 0:
+            return value
+    return None
+
 
 def _is_upstream_error(exc: Exception | None) -> bool:
     """True when ``exc`` is a retryable 5xx :class:`ApiError`."""
@@ -352,8 +385,7 @@ class WbHttpClient:
                 'Authentication failed - check your API token'
             )
         if response.status_code == 429:
-            retry_after = response.headers.get('Retry-After')
-            retry_seconds = float(retry_after) if retry_after else None
+            retry_seconds = _parse_rate_limit_reset(response)
             raise RateLimitError(
                 'Rate limited by WB API',
                 retry_after=retry_seconds,
@@ -379,6 +411,13 @@ class WbHttpClient:
         :class:`UpstreamError` (exit 6) so callers can distinguish WB
         infrastructure stress from a 429 rate-limit event (exit 5).
 
+        F-12 bail-out: when ``retry_after`` exceeds
+        ``_RETRY_AFTER_BAIL_OUT_SECONDS`` (60 s), skip retries and
+        re-raise immediately. A reset that large almost always signals
+        a seller-scope penalty; retrying into it would only extend WB's
+        leaky-bucket cooldown, so we let the caller see the real
+        ``retry_after`` in the error JSON and move on.
+
         Args:
             attempt: Zero-based attempt index.
             exc: The exception that triggered the retry.
@@ -391,6 +430,17 @@ class WbHttpClient:
             Exception: Re-raises the original exception when retries
                 are exhausted for non-5xx cases (e.g. 429).
         """
+        if (
+            retry_after is not None
+            and retry_after > _RETRY_AFTER_BAIL_OUT_SECONDS
+        ):
+            logger.warning(
+                '%s; cooldown too large to retry (reset=%.0fs > %.0fs), '
+                'bailing out with retry_after=%.0f',
+                label, retry_after, _RETRY_AFTER_BAIL_OUT_SECONDS, retry_after,
+            )
+            raise exc
+
         if attempt >= self._max_retries:
             if isinstance(exc, httpx.TimeoutException):
                 raise ApiError(
