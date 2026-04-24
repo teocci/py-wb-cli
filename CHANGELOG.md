@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.26.0 (2026-04-24)
+- I-13: `wb rate status` diagnostic command — read-only subcommand prints seller cooldown remaining (from F-13 lock) plus 5-minute endpoint activity roll-up from `rate_limits.db`. JSON + table output, no-token no-crash. Lets agents check "am I locked?" without making a network call
+
 ## v0.25.5 (2026-04-24)
 - F-13: `SellerCooldownLock` short-circuit — new SQLite-backed TTL lock in `~/.wb-cli/rate_limits.db` (new `seller_cooldown` table) records WB-reported cooldown deadlines per seller; `WbHttpClient.request` / `request_raw` consult the lock before any HTTP call and raise `RateLimitError` immediately when active. Populated from F-12's `x-ratelimit-reset`. Cross-process coordination; in-memory fallback on DB errors. Eliminates penalty compounding across `wb` invocations
 

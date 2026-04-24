@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.25.5 |
-| **Tests Passing** | 1125/1126 (1 pre-existing env test) |
-| **Phases Complete** | 37 |
+| **Current Version** | 0.26.0 |
+| **Tests Passing** | 1133/1134 (1 pre-existing env test) |
+| **Phases Complete** | 38 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -52,7 +52,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-11 | Dedup `list_campaigns` in `stats daily-report` | ✅ DONE | 0.25.3 |
 | F-12 | Honor `x-ratelimit-reset` header (60 s bail-out) | ✅ DONE | 0.25.4 |
 | F-13 | `SellerCooldownLock` short-circuit on known cooldown | ✅ DONE | 0.25.5 |
-| I-13 | `wb rate-status` diagnostic command | 🔲 PLANNED | 0.26.0 |
+| I-13 | `wb rate-status` diagnostic command | ✅ DONE | 0.26.0 |
 
 Phase detail files: [docs/phases/](phases/)
 
