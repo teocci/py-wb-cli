@@ -1,4 +1,4 @@
-"""Tests for I-13: `wb rate-status` diagnostic command."""
+"""Tests for I-13 (`wb rate status`) and I-14 (`wb rate probe`)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 import pytest
+import respx
 from typer.testing import CliRunner
 
 from wb.cli.app import app
@@ -143,3 +145,142 @@ class TestRateStatus:
         payload = json.loads(result.output)
         assert payload['seller_cooldown_seconds'] == 0.0
         assert payload['locked'] is False
+
+
+class TestRateProbe:
+    """I-14: single-call probe that respects the F-13 cooldown lock."""
+
+    PROBE_URL = 'https://advert-api.wildberries.ru/adv/v1/balance'
+
+    def test_help(self, isolated_home):
+        result = runner.invoke(app, ['rate', 'probe', '--help'])
+        assert result.exit_code == 0
+        assert 'probe' in result.output.lower()
+
+    def test_skips_network_when_lock_active(self, isolated_home):
+        """Active lock → no HTTP call, outcome='lock-active', exit 5."""
+        from wb.core.rate_limiter import (
+            SellerCooldownLock, compute_seller_fingerprint,
+        )
+
+        db = isolated_home / '.wb-cli' / 'rate_limits.db'
+        db.parent.mkdir(parents=True, exist_ok=True)
+        lock = SellerCooldownLock(db_path=db)
+        fp = compute_seller_fingerprint(TOKEN)
+        lock.record(fp, cooldown_seconds=60.0)
+
+        with respx.mock:
+            route = respx.get(self.PROBE_URL).mock(
+                return_value=httpx.Response(200)
+            )
+            result = runner.invoke(app, ['--json', 'rate', 'probe'])
+
+        assert result.exit_code == 5
+        assert route.call_count == 0  # critical: no HTTP call
+        payload = json.loads(result.output)
+        assert payload['outcome'] == 'lock-active'
+        assert payload['locked'] is True
+        assert 59.0 < payload['cooldown_seconds'] <= 60.0
+
+    def test_200_reports_calls_remaining(self, isolated_home):
+        """Clear state + 200 with `x-ratelimit-remaining` → outcome='ok'."""
+        with respx.mock:
+            respx.get(self.PROBE_URL).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={'balance': 1000},
+                    headers={'x-ratelimit-remaining': '27'},
+                )
+            )
+            result = runner.invoke(app, ['--json', 'rate', 'probe'])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload['outcome'] == 'ok'
+        assert payload['locked'] is False
+        assert payload['calls_remaining'] == 27
+        assert payload['http_status'] == 200
+
+    def test_200_without_remaining_header(self, isolated_home):
+        """200 without the header → calls_remaining=null, still exit 0."""
+        with respx.mock:
+            respx.get(self.PROBE_URL).mock(
+                return_value=httpx.Response(200, json={'balance': 1000})
+            )
+            result = runner.invoke(app, ['--json', 'rate', 'probe'])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload['outcome'] == 'ok'
+        assert payload['calls_remaining'] is None
+
+    def test_429_updates_lock_and_exits(self, isolated_home):
+        """429 → reset written to lock, outcome='429', exit 5."""
+        from wb.core.rate_limiter import (
+            SellerCooldownLock, compute_seller_fingerprint,
+        )
+
+        with respx.mock:
+            respx.get(self.PROBE_URL).mock(
+                return_value=httpx.Response(
+                    429,
+                    headers={'x-ratelimit-reset': '120'},
+                    json={'detail': 'Limited by global limiter'},
+                )
+            )
+            result = runner.invoke(app, ['--json', 'rate', 'probe'])
+
+        assert result.exit_code == 5
+        payload = json.loads(result.output)
+        assert payload['outcome'] == '429'
+        assert payload['locked'] is True
+        assert payload['cooldown_seconds'] == 120.0
+
+        # Lock was persisted
+        db = isolated_home / '.wb-cli' / 'rate_limits.db'
+        lock = SellerCooldownLock(db_path=db)
+        fp = compute_seller_fingerprint(TOKEN)
+        remaining = lock.read_remaining(fp)
+        assert remaining is not None and 119.0 < remaining <= 120.0
+
+    def test_500_does_not_touch_lock(self, isolated_home):
+        """Non-429 error → lock not written, outcome='error', exit 6."""
+        from wb.core.rate_limiter import (
+            SellerCooldownLock, compute_seller_fingerprint,
+        )
+
+        with respx.mock:
+            respx.get(self.PROBE_URL).mock(
+                return_value=httpx.Response(500, text='boom')
+            )
+            result = runner.invoke(app, ['--json', 'rate', 'probe'])
+
+        assert result.exit_code == 6
+        payload = json.loads(result.output)
+        assert payload['outcome'] == 'error'
+        assert payload['locked'] is False
+
+        # Lock unchanged
+        db = isolated_home / '.wb-cli' / 'rate_limits.db'
+        if db.exists():
+            lock = SellerCooldownLock(db_path=db)
+            fp = compute_seller_fingerprint(TOKEN)
+            assert lock.read_remaining(fp) is None
+
+    def test_no_token_exits_config_error(self, tmp_path, monkeypatch):
+        """No token → outcome='no-token', exit 7 (CONFIG_ERROR)."""
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+        monkeypatch.delenv('WB_API_TOKEN', raising=False)
+        monkeypatch.delenv('WB_ANALYTICS_TOKEN', raising=False)
+        monkeypatch.chdir(tmp_path)
+
+        with respx.mock:
+            route = respx.get(self.PROBE_URL).mock(
+                return_value=httpx.Response(200)
+            )
+            result = runner.invoke(app, ['--json', 'rate', 'probe'])
+
+        assert result.exit_code == 7
+        assert route.call_count == 0
+        payload = json.loads(result.output)
+        assert payload['outcome'] == 'no-token'

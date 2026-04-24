@@ -14,14 +14,29 @@ import time
 import typer
 
 from wb.cli._helpers import get_profile, get_renderer
-from wb.core.constants import RATE_LIMIT_DB_FILE
+from wb.core.constants import (
+    EP_ACCOUNT_BALANCE,
+    PROMOTION_BASE_URL,
+    RATE_LIMIT_DB_FILE,
+)
+from wb.core.exceptions import RateLimitError
 
 __all__ = ['rate_app']
 
 rate_app = typer.Typer(
-    help='Local rate-limit diagnostic (read-only; no network calls)',
+    help='Local rate-limit diagnostic and safe single-call probe',
     no_args_is_help=True,
 )
+
+# Endpoint used by `wb rate probe`. Picked for:
+# - small response body (balance is a handful of numeric fields)
+# - per-seller scope (carries the x-ratelimit-* headers we care about)
+# - 1/s documented rate limit (generous, won't itself cause throttling)
+_PROBE_ENDPOINT = EP_ACCOUNT_BALANCE
+
+# Hard timeout for a single probe request — deliberately short so a stuck
+# probe never compounds a pending cooldown through connection hold time.
+_PROBE_TIMEOUT_SECONDS = 10.0
 
 
 @rate_app.command('status')
@@ -132,6 +147,197 @@ def _resolve_any_token(settings, profile_store_cls, profile_hint: str | None) ->
         return profile.get_token('promotion')
     except Exception:  # noqa: BLE001
         return ''
+
+
+@rate_app.command('probe')
+def rate_probe(ctx: typer.Context) -> None:
+    """Single-call probe to refresh cooldown visibility safely.
+
+    Makes exactly one GET to ``/adv/v1/balance`` (1/s documented limit,
+    lightweight response) and interprets the result:
+
+    - If the F-13 cooldown lock is already active, skip the network call
+      entirely and report the lock state. Same safety as ``rate status``.
+    - On HTTP 200, read ``x-ratelimit-remaining`` and display how many
+      calls are safe before throttling. No side-effects.
+    - On HTTP 429, read ``x-ratelimit-reset``, persist it to the lock,
+      and exit ``RATE_LIMITED``. Future ``wb`` calls short-circuit
+      through the lock until the deadline passes.
+    """
+    import httpx
+
+    from wb.auth.profiles import ProfileStore
+    from wb.core.config import Settings
+    from wb.core.rate_limiter import (
+        SellerCooldownLock,
+        compute_seller_fingerprint,
+        compute_token_fingerprint,
+    )
+
+    renderer = get_renderer(ctx)
+    settings = Settings()
+    settings.ensure_config_dir()
+
+    profile_hint = get_profile(ctx)
+    store = ProfileStore(settings.config_dir)
+    try:
+        active_profile = profile_hint or store.active_profile_name
+    except Exception:  # noqa: BLE001
+        active_profile = profile_hint or settings.active_profile
+
+    token = _resolve_any_token(settings, ProfileStore, profile_hint)
+    if not token:
+        _emit_probe_result(
+            renderer, ctx,
+            {
+                'profile': active_profile,
+                'seller_fingerprint': '',
+                'outcome': 'no-token',
+                'locked': False,
+                'cooldown_seconds': 0.0,
+                'calls_remaining': None,
+            },
+            exit_code=7,
+        )
+        return
+
+    seller_fp = compute_seller_fingerprint(token)
+    token_fp = compute_token_fingerprint(token)
+    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
+    lock = SellerCooldownLock(db_path=db_path)
+
+    # Pre-flight: respect the lock, skip the network entirely if locked.
+    existing = lock.read_remaining(seller_fp)
+    if existing is not None and existing > 0:
+        _emit_probe_result(
+            renderer, ctx,
+            {
+                'profile': active_profile,
+                'seller_fingerprint': seller_fp,
+                'token_fingerprint': token_fp,
+                'outcome': 'lock-active',
+                'locked': True,
+                'cooldown_seconds': round(existing, 1),
+                'calls_remaining': None,
+            },
+            exit_code=5,
+        )
+        return
+
+    # Make the one controlled request.
+    try:
+        with httpx.Client(timeout=_PROBE_TIMEOUT_SECONDS) as client:
+            response = client.get(
+                f'{PROMOTION_BASE_URL}{_PROBE_ENDPOINT}',
+                headers={
+                    'Authorization': token,
+                    'Accept': 'application/json',
+                },
+            )
+    except httpx.RequestError as exc:
+        _emit_probe_result(
+            renderer, ctx,
+            {
+                'profile': active_profile,
+                'seller_fingerprint': seller_fp,
+                'token_fingerprint': token_fp,
+                'outcome': 'network-error',
+                'locked': False,
+                'cooldown_seconds': 0.0,
+                'calls_remaining': None,
+                'error': str(exc),
+            },
+            exit_code=6,
+        )
+        return
+
+    payload = {
+        'profile': active_profile,
+        'seller_fingerprint': seller_fp,
+        'token_fingerprint': token_fp,
+        'http_status': response.status_code,
+    }
+
+    if response.status_code == 429:
+        from wb.client.http import _parse_rate_limit_reset
+        reset_seconds = _parse_rate_limit_reset(response) or 0.0
+        if reset_seconds > 0:
+            lock.record(seller_fp, reset_seconds)
+        payload.update({
+            'outcome': '429',
+            'locked': True,
+            'cooldown_seconds': round(reset_seconds, 1),
+            'calls_remaining': 0,
+        })
+        _emit_probe_result(renderer, ctx, payload, exit_code=5)
+        return
+
+    if response.status_code >= 400:
+        payload.update({
+            'outcome': 'error',
+            'locked': False,
+            'cooldown_seconds': 0.0,
+            'calls_remaining': None,
+            'error_body': response.text[:200],
+        })
+        _emit_probe_result(renderer, ctx, payload, exit_code=6)
+        return
+
+    # 2xx — happy path. `x-ratelimit-remaining` may or may not be present.
+    remaining_raw = response.headers.get('x-ratelimit-remaining')
+    calls_remaining: int | None = None
+    if remaining_raw is not None:
+        try:
+            calls_remaining = int(remaining_raw)
+        except ValueError:
+            calls_remaining = None
+
+    payload.update({
+        'outcome': 'ok',
+        'locked': False,
+        'cooldown_seconds': 0.0,
+        'calls_remaining': calls_remaining,
+    })
+    _emit_probe_result(renderer, ctx, payload, exit_code=0)
+
+
+def _emit_probe_result(
+        renderer,
+        ctx: typer.Context,
+        payload: dict,
+        *,
+        exit_code: int,
+) -> None:
+    """Render probe output then exit with the requested code."""
+    if renderer.is_json:
+        compact = (ctx.obj or {}).get('compact', False)
+        typer.echo(
+            json.dumps(
+                payload,
+                separators=(',', ':') if compact else (',', ': '),
+                indent=None if compact else 2,
+                ensure_ascii=False,
+            )
+        )
+    else:
+        typer.echo(f"Profile            : {payload.get('profile', '')}")
+        typer.echo(f"Seller fingerprint : {payload.get('seller_fingerprint', '(none)')}")
+        typer.echo(f"Outcome            : {payload.get('outcome', 'unknown')}")
+        if payload.get('locked'):
+            typer.echo(
+                f"Seller cooldown    : LOCKED — {payload['cooldown_seconds']:.0f}s remaining"
+            )
+        else:
+            typer.echo('Seller cooldown    : clear')
+        if payload.get('calls_remaining') is not None:
+            typer.echo(f"Calls remaining    : {payload['calls_remaining']}")
+        if 'error' in payload:
+            typer.echo(f"Error              : {payload['error']}")
+        if 'error_body' in payload:
+            typer.echo(f"Error body         : {payload['error_body']}")
+
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
 
 
 def _recent_activity(db_path) -> list[dict]:

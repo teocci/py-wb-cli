@@ -31,6 +31,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.24.0 | I-11 | ✅ DONE | Response cache + retry split — [detail](phases/I-11-response-cache.md) |
 | 0.25.0 | I-12 | ✅ DONE | SQLite-backed cross-process rate limiter — [detail](phases/I-12-shared-rate-limiter.md) |
 | 0.26.0 | I-13 | ✅ DONE | `wb rate-status` diagnostic command — [detail](phases/I-13-rate-status-command.md) |
+| 0.27.0 | I-14 | ✅ DONE | `wb rate probe` — single-call cooldown probe — [detail](phases/I-14-rate-probe-command.md) |
 
 ---
 

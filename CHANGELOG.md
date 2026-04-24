@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.27.0 (2026-04-24)
+- I-14: `wb rate probe` — single-call cooldown probe that respects the F-13 lock (no HTTP when already locked), reads WB's `x-ratelimit-remaining` header on 200 so agents can see how close we are to a trip, and writes `x-ratelimit-reset` into the lock on 429. Probes `/adv/v1/balance` (cheapest per-seller endpoint). JSON + table output, 10 s timeout, no retries — `calls_remaining: 0` is the signal agents should treat as "stop before next window resets"
+
 ## v0.26.0 (2026-04-24)
 - I-13: `wb rate status` diagnostic command — read-only subcommand prints seller cooldown remaining (from F-13 lock) plus 5-minute endpoint activity roll-up from `rate_limits.db`. JSON + table output, no-token no-crash. Lets agents check "am I locked?" without making a network call
 
