@@ -211,10 +211,19 @@ class StatsService:
             nm_ids: list[int],
             date_from: str,
             date_to: str,
+            *,
+            raw_campaigns: list[dict] | None = None,
     ) -> list[NmStats]:
-        """Fetch product spend from the API without cache lookup."""
+        """Fetch product spend from the API without cache lookup.
+
+        When ``raw_campaigns`` is provided, reuses the pre-fetched list and
+        skips the initial ``list_campaigns`` call — this is the path
+        :meth:`_get_daily_report_fresh` takes to avoid a duplicate API hit.
+        """
         nm_set = set(nm_ids)
-        campaign_ids = self._find_campaign_ids_for_nms(nm_set)
+        campaign_ids = self._find_campaign_ids_for_nms(
+            nm_set, raw_campaigns=raw_campaigns,
+        )
         if not campaign_ids:
             return [NmStats(nm_id=nm) for nm in nm_ids]
         stats_list = self.get_campaigns_stats(campaign_ids, date_from, date_to)
@@ -276,11 +285,19 @@ class StatsService:
             statuses: list[int],
             analytics_svc: AnalyticsService | None,
     ) -> list[DailyReportRow]:
-        """Fetch the daily report from the APIs without cache lookup."""
-        nm_ids = self._collect_nm_ids_by_status(statuses)
+        """Fetch the daily report from the APIs without cache lookup.
+
+        Calls ``list_campaigns`` exactly once and filters by status in
+        memory, then threads the pre-fetched list through to the spend
+        fetch so the second identical API call is eliminated (F-11).
+        """
+        raw_campaigns = self._client.list_campaigns()
+        nm_ids = self._collect_nm_ids_from_campaigns(raw_campaigns, set(statuses))
         if not nm_ids:
             return []
-        spend_rows = self.get_product_spend(nm_ids, date, date)
+        spend_rows = self._get_product_spend_fresh(
+            nm_ids, date, date, raw_campaigns=raw_campaigns,
+        )
         funnel_by_nm = self._fetch_funnel_orders(nm_ids, date, analytics_svc)
         rows = [
             DailyReportRow(
@@ -295,18 +312,27 @@ class StatsService:
 
     # ── Private helpers ────────────────────────────────────────────────
 
-    def _find_campaign_ids_for_nms(self, nm_set: set[int]) -> list[int]:
+    def _find_campaign_ids_for_nms(
+            self,
+            nm_set: set[int],
+            *,
+            raw_campaigns: list[dict] | None = None,
+    ) -> list[int]:
         """Return IDs of campaigns that contain at least one of the given NMs.
 
         Args:
             nm_set: Set of NM IDs to match against.
+            raw_campaigns: Pre-fetched list of campaign dicts. When ``None``
+                (default), fetches from the API; when provided, uses the
+                pre-fetched list to avoid a duplicate ``list_campaigns`` call.
 
         Returns:
             List of matching campaign IDs.
         """
-        all_raw = self._client.list_campaigns()
+        if raw_campaigns is None:
+            raw_campaigns = self._client.list_campaigns()
         result: list[int] = []
-        for c in all_raw:
+        for c in raw_campaigns:
             campaign_nms = {
                 item['nm_id']
                 for item in (c.get('nm_settings') or [])
@@ -355,18 +381,30 @@ class StatsService:
                     )
         return totals
 
-    def _collect_nm_ids_by_status(self, statuses: list[int]) -> list[int]:
-        """Return unique NM IDs across all campaigns matching the given statuses.
+    def _collect_nm_ids_from_campaigns(
+            self,
+            raw_campaigns: list[dict],
+            status_set: set[int],
+    ) -> list[int]:
+        """Return unique NM IDs from campaigns whose status is in ``status_set``.
+
+        Filters the pre-fetched campaign list in memory — the API call
+        that produced ``raw_campaigns`` was status-unfiltered because
+        :meth:`_get_daily_report_fresh` also needs the full list for the
+        spend fetch, and filtering twice on the server would waste a
+        second API call.
 
         Args:
-            statuses: CampaignStatus integer codes to include.
+            raw_campaigns: Pre-fetched list of campaign dicts.
+            status_set: CampaignStatus integer codes to include.
 
         Returns:
-            Deduplicated list of NM IDs.
+            Deduplicated list of NM IDs from matching-status campaigns.
         """
-        raw_campaigns = self._client.list_campaigns(status=statuses)
         nm_set: set[int] = set()
         for c in raw_campaigns:
+            if c.get('status') not in status_set:
+                continue
             for item in (c.get('nm_settings') or []):
                 if 'nm_id' in item:
                     nm_set.add(item['nm_id'])

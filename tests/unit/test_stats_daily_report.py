@@ -81,35 +81,45 @@ class TestDailyReportRow:
         assert d == {'nm_id': 100, 'name': 'P', 'ad_spend': 300.0, 'total_orders': 50}
 
 
-# ── StatsService._collect_nm_ids_by_status ────────────────────────────
+# ── StatsService._collect_nm_ids_from_campaigns ──────────────────────
 
 
-class TestCollectNmIdsByStatus:
-    def test_collects_nm_ids_from_campaigns(self) -> None:
-        client = _make_client(campaigns=[
-            {'id': 1, 'nm_settings': [{'nm_id': 100}, {'nm_id': 200}]},
-            {'id': 2, 'nm_settings': [{'nm_id': 200}, {'nm_id': 300}]},
-        ])
-        svc = StatsService(client)
-        result = svc._collect_nm_ids_by_status([9, 11])
+class TestCollectNmIdsFromCampaigns:
+    """F-11: in-memory status filter over a pre-fetched campaign list."""
+
+    def test_collects_nm_ids_across_matching_campaigns(self) -> None:
+        svc = StatsService(_make_client())
+        result = svc._collect_nm_ids_from_campaigns(
+            [
+                {'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}, {'nm_id': 200}]},
+                {'id': 2, 'status': 11, 'nm_settings': [{'nm_id': 200}, {'nm_id': 300}]},
+            ],
+            status_set={9, 11},
+        )
         assert set(result) == {100, 200, 300}
 
-    def test_passes_statuses_to_client(self) -> None:
-        client = _make_client(campaigns=[])
-        svc = StatsService(client)
-        svc._collect_nm_ids_by_status([9])
-        client.list_campaigns.assert_called_once_with(status=[9])
+    def test_excludes_campaigns_with_non_matching_status(self) -> None:
+        svc = StatsService(_make_client())
+        result = svc._collect_nm_ids_from_campaigns(
+            [
+                {'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]},
+                {'id': 2, 'status': 7, 'nm_settings': [{'nm_id': 200}]},  # stopped
+            ],
+            status_set={9, 11},
+        )
+        assert set(result) == {100}
 
     def test_handles_null_nm_settings(self) -> None:
-        client = _make_client(campaigns=[{'id': 1, 'nm_settings': None}])
-        svc = StatsService(client)
-        result = svc._collect_nm_ids_by_status([9])
+        svc = StatsService(_make_client())
+        result = svc._collect_nm_ids_from_campaigns(
+            [{'id': 1, 'status': 9, 'nm_settings': None}],
+            status_set={9},
+        )
         assert result == []
 
     def test_empty_campaigns_returns_empty(self) -> None:
-        client = _make_client(campaigns=[])
-        svc = StatsService(client)
-        assert svc._collect_nm_ids_by_status([9]) == []
+        svc = StatsService(_make_client())
+        assert svc._collect_nm_ids_from_campaigns([], status_set={9}) == []
 
 
 # ── StatsService._fetch_funnel_orders ────────────────────────────────
@@ -154,7 +164,7 @@ class TestGetDailyReport:
 
     def test_joins_spend_and_total_orders(self) -> None:
         client = _make_client(
-            campaigns=[{'id': 1, 'nm_settings': [{'nm_id': 100}]}],
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]}],
             fullstats=[_fullstats_payload(nm_id=100, spend=1250.0, orders=47)],
         )
         analytics = _make_analytics_svc(nm_id=100, order_count=223)
@@ -168,7 +178,7 @@ class TestGetDailyReport:
 
     def test_total_orders_zero_when_no_analytics(self) -> None:
         client = _make_client(
-            campaigns=[{'id': 1, 'nm_settings': [{'nm_id': 100}]}],
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]}],
             fullstats=[_fullstats_payload(nm_id=100, spend=500.0)],
         )
         svc = StatsService(client)
@@ -192,7 +202,7 @@ class TestGetDailyReport:
             }],
         }
         client = _make_client(
-            campaigns=[{'id': 1, 'nm_settings': [{'nm_id': 10}, {'nm_id': 20}]}],
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 10}, {'nm_id': 20}]}],
             fullstats=[raw],
         )
         svc = StatsService(client)
@@ -201,16 +211,56 @@ class TestGetDailyReport:
         assert result[1].nm_id == 10
 
     def test_uses_active_statuses_by_default(self) -> None:
-        client = _make_client(campaigns=[])
+        """Default statuses [9, 11] filter in-memory; paused-but-active excluded."""
+        client = _make_client(
+            campaigns=[
+                {'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]},
+                {'id': 2, 'status': 11, 'nm_settings': [{'nm_id': 200}]},
+                {'id': 3, 'status': 7, 'nm_settings': [{'nm_id': 300}]},  # stopped
+            ],
+            fullstats=[_fullstats_payload(advert_id=1, nm_id=100, spend=100.0)],
+        )
         svc = StatsService(client)
-        svc.get_daily_report('2026-04-19')
-        client.list_campaigns.assert_called_once_with(status=[9, 11])
+        result = svc.get_daily_report('2026-04-19')
+        result_nm_ids = {r.nm_id for r in result}
+        # Status 7 campaign must be excluded
+        assert 300 not in result_nm_ids
+        assert result_nm_ids <= {100, 200}
 
     def test_respects_custom_statuses(self) -> None:
-        client = _make_client(campaigns=[])
+        """Custom --status list also filters in-memory."""
+        client = _make_client(
+            campaigns=[
+                {'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]},
+                {'id': 2, 'status': 11, 'nm_settings': [{'nm_id': 200}]},
+            ],
+            fullstats=[_fullstats_payload(advert_id=1, nm_id=100, spend=100.0)],
+        )
+        svc = StatsService(client)
+        result = svc.get_daily_report('2026-04-19', statuses=[9])
+        result_nm_ids = {r.nm_id for r in result}
+        assert 200 not in result_nm_ids  # status 11 campaign excluded
+
+    def test_calls_list_campaigns_exactly_once(self) -> None:
+        """F-11: dedup — list_campaigns must fire once per daily-report, not twice."""
+        client = _make_client(
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]}],
+            fullstats=[_fullstats_payload(nm_id=100, spend=500.0)],
+        )
+        svc = StatsService(client)
+        svc.get_daily_report('2026-04-19')
+        assert client.list_campaigns.call_count == 1
+
+    def test_list_campaigns_called_without_status_filter(self) -> None:
+        """F-11: the single call is unfiltered — statuses applied client-side."""
+        client = _make_client(
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]}],
+            fullstats=[_fullstats_payload(nm_id=100, spend=500.0)],
+        )
         svc = StatsService(client)
         svc.get_daily_report('2026-04-19', statuses=[9])
-        client.list_campaigns.assert_called_once_with(status=[9])
+        # No kwargs → no server-side status filter
+        client.list_campaigns.assert_called_once_with()
 
     def test_validation_error_on_bad_date(self) -> None:
         from wb.core.exceptions import ValidationError
@@ -220,7 +270,7 @@ class TestGetDailyReport:
 
     def test_product_name_taken_from_spend_row(self) -> None:
         client = _make_client(
-            campaigns=[{'id': 1, 'nm_settings': [{'nm_id': 100}]}],
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]}],
             fullstats=[_fullstats_payload(nm_id=100, name='Test Perfume', spend=300.0)],
         )
         svc = StatsService(client)

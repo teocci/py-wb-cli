@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.25.3 (2026-04-24)
+- F-11: dedup `list_campaigns` in `stats daily-report` — `_get_daily_report_fresh` now makes one unfiltered `list_campaigns` call and threads the raw list through `_get_product_spend_fresh` + `_find_campaign_ids_for_nms`, eliminating the duplicate full-scan request. Status filter moves to a new in-memory helper `_collect_nm_ids_from_campaigns`
+
 ## v0.25.2 (2026-04-24)
 - F-10: seller-scope global rate limiter — new `compute_seller_fingerprint` extracts the JWT `sid` claim so tokens of the same seller share a single budget; `_build_seller_limiter` wires a `SharedRateLimiter` (30 calls / 60 s) at the `_seller_global` scope key in `~/.wb-cli/rate_limits.db`; `WbHttpClient` acquires the seller limiter before the per-path limiter on every request. Falls back to per-token scope for non-JWT tokens; honours `WB_RATE_LIMITER=memory` opt-out
 
