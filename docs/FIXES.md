@@ -18,9 +18,9 @@ Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases
 | F-10 | Seller-scope global rate limiter (JWT `sid`-keyed) | ✅ DONE | core/rate_limiter.py, services/_factory.py, client/http.py | 0.25.2 | [detail](phases/F-10-seller-global-limiter.md) |
 | F-11 | Dedup `list_campaigns` in daily-report | ✅ DONE | services/stats.py | 0.25.3 | [detail](phases/F-11-dedup-list-campaigns.md) |
 | F-12 | Honor `x-ratelimit-reset` header (60 s bail-out) | ✅ DONE | client/http.py | 0.25.4 | [detail](phases/F-12-ratelimit-reset-header.md) |
-| F-13 | `SellerCooldownLock` short-circuit on known cooldown | 🔲 PLANNED | core/rate_limiter.py, services/_factory.py, client/http.py | 0.25.5 | [detail](phases/F-13-seller-cooldown-lock.md) |
+| F-13 | `SellerCooldownLock` short-circuit on known cooldown | ✅ DONE | core/rate_limiter.py, services/_factory.py, client/http.py | 0.25.5 | [detail](phases/F-13-seller-cooldown-lock.md) |
 
-_F-12, F-13 in progress — WB `x-ratelimit-*` header integration._
+_No fixes currently in progress. Add new entries here when a fix is planned._
 
 ## How to Add a Fix
 

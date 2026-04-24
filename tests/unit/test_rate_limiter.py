@@ -12,6 +12,7 @@ import pytest
 
 from wb.core.rate_limiter import (
     RateLimiter,
+    SellerCooldownLock,
     SharedRateLimiter,
     compute_seller_fingerprint,
     compute_token_fingerprint,
@@ -538,3 +539,96 @@ class TestSellerLimiterFactory:
         warnings = [r for r in caplog.records
                     if 'Shared rate limiter DB unavailable' in r.message]
         assert len(warnings) == 1
+
+
+class TestSellerCooldownLock:
+    """F-13: TTL-based lock persisting WB-reported seller cooldowns."""
+
+    def _reset_fallback_flag(self):
+        rate_limiter_module._FALLBACK_WARNED = False
+
+    def test_read_empty_returns_none(self, tmp_path):
+        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
+        assert lock.read_remaining('seller-x') is None
+
+    def test_record_then_read(self, tmp_path):
+        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
+        lock.record('seller-x', cooldown_seconds=30.0)
+        remaining = lock.read_remaining('seller-x')
+        assert remaining is not None
+        # Allow small slippage for test execution
+        assert 29.0 < remaining <= 30.0
+
+    def test_expired_row_reads_none(self, tmp_path, monkeypatch):
+        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
+        import wb.core.rate_limiter as mod
+        now = mod.time.time()
+        # Fabricate an already-expired row via direct DB write
+        import sqlite3
+        conn = sqlite3.connect(str(tmp_path / 'rl.db'))
+        conn.execute(
+            'INSERT OR REPLACE INTO seller_cooldown VALUES (?, ?)',
+            ('seller-x', now - 10.0),
+        )
+        conn.commit()
+        conn.close()
+        assert lock.read_remaining('seller-x') is None
+
+    def test_record_upserts(self, tmp_path):
+        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
+        lock.record('seller-x', cooldown_seconds=60.0)
+        lock.record('seller-x', cooldown_seconds=5.0)  # shorter override
+        remaining = lock.read_remaining('seller-x')
+        assert remaining is not None and remaining <= 5.0
+
+    def test_per_seller_isolation(self, tmp_path):
+        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
+        lock.record('seller-a', cooldown_seconds=30.0)
+        assert lock.read_remaining('seller-b') is None
+
+    def test_record_zero_or_negative_ignored(self, tmp_path):
+        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
+        lock.record('seller-x', cooldown_seconds=0)
+        lock.record('seller-x', cooldown_seconds=-5)
+        assert lock.read_remaining('seller-x') is None
+
+    def test_corrupt_db_falls_back_at_init(self, tmp_path, caplog):
+        """Corrupt DB file → in-memory fallback dict at construction time."""
+        self._reset_fallback_flag()
+        db = tmp_path / 'rl.db'
+        db.write_bytes(b'not a sqlite db')
+        with caplog.at_level('WARNING', logger='wb.core.rate_limiter'):
+            lock = SellerCooldownLock(db_path=db)
+        assert lock._fallback is not None
+        # Record/read still works through the fallback
+        lock.record('seller-x', cooldown_seconds=15.0)
+        assert lock.read_remaining('seller-x') is not None
+
+    def test_cross_process_coordination(self, tmp_path):
+        """Two locks sharing the DB file see each other's records."""
+        db = tmp_path / 'rl.db'
+        writer = SellerCooldownLock(db_path=db)
+        reader = SellerCooldownLock(db_path=db)
+        writer.record('seller-x', cooldown_seconds=45.0)
+        assert reader.read_remaining('seller-x') is not None
+
+
+class TestCooldownLockFactory:
+    """F-13: factory wiring for SellerCooldownLock."""
+
+    def test_default_returns_lock_instance(self, monkeypatch, tmp_path):
+        from pathlib import Path as _Path
+        from wb.core.constants import RATE_LIMITER_ENV_VAR
+        from wb.services._factory import _build_cooldown_lock, ServiceContainer
+
+        monkeypatch.delenv(RATE_LIMITER_ENV_VAR, raising=False)
+        monkeypatch.setattr(_Path, 'home', lambda: tmp_path)
+        ServiceContainer.reset()
+        lock = _build_cooldown_lock()
+        try:
+            assert isinstance(lock, SellerCooldownLock)
+            # Round-trip actually works
+            lock.record('seller-x', cooldown_seconds=20.0)
+            assert lock.read_remaining('seller-x') is not None
+        finally:
+            ServiceContainer.reset()

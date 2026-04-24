@@ -97,12 +97,11 @@ class _Container:
             base_url: API base URL.
             token: Authorization token.
             with_rate_limits: When True, inject per-path rate limiters from
-                :data:`wb.core.rate_limits.ENDPOINT_LIMITS` **and** the
-                seller-scope global limiter (WB gateway enforces a
-                per-seller budget across all endpoints). Only advert +
-                analytics clients need this; statistics/prices clients
-                skip it since they use different base URLs with no
-                shared limiter state.
+                :data:`wb.core.rate_limits.ENDPOINT_LIMITS`, the
+                seller-scope global limiter (F-10), and the seller
+                cooldown lock (F-13). Only advert + analytics clients
+                need this; statistics/prices clients skip it since they
+                use different base URLs with no shared limiter state.
 
         Returns:
             Existing or newly created WbHttpClient.
@@ -110,16 +109,23 @@ class _Container:
         key = (base_url, token)
         if key not in cls._http_clients:
             if with_rate_limits:
+                from wb.core.rate_limiter import compute_seller_fingerprint
                 path_limiters = _build_limiters(token)
                 seller_limiter = _build_seller_limiter(token)
+                cooldown_lock = _build_cooldown_lock()
+                seller_fingerprint = compute_seller_fingerprint(token)
             else:
                 path_limiters = None
                 seller_limiter = None
+                cooldown_lock = None
+                seller_fingerprint = None
             cls._http_clients[key] = WbHttpClient(
                 base_url=base_url,
                 token=token,
                 path_limiters=path_limiters,
                 seller_limiter=seller_limiter,
+                cooldown_lock=cooldown_lock,
+                seller_fingerprint=seller_fingerprint,
             )
         return cls._http_clients[key]
 
@@ -197,6 +203,30 @@ def _build_limiters(token: str):
         )
         for path, (calls, period) in ENDPOINT_LIMITS.items()
     }
+
+
+def _build_cooldown_lock():
+    """Build the process-level seller cooldown lock (F-13).
+
+    Shares the same ``rate_limits.db`` file as :func:`_build_limiters` and
+    :func:`_build_seller_limiter`. The lock instance is stateless beyond
+    the DB path, so a single builder with no per-token parameter is
+    sufficient — the seller fingerprint is supplied at read/record time.
+
+    Unlike the rate limiters, this lock has no in-memory opt-out path
+    tied to ``WB_RATE_LIMITER=memory`` — the class transparently falls
+    back to an in-process dict on any ``sqlite3.Error``, which covers
+    both the "no DB available" and the "opt-out" cases without extra
+    branching here.
+
+    Returns:
+        A :class:`SellerCooldownLock` ready for reads and records.
+    """
+    from wb.core.rate_limiter import SellerCooldownLock
+
+    settings = _Container.settings()
+    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
+    return SellerCooldownLock(db_path=db_path)
 
 
 def _build_seller_limiter(token: str):

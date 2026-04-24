@@ -31,6 +31,7 @@ from pathlib import Path
 __all__ = [
     'RateLimiter',
     'SharedRateLimiter',
+    'SellerCooldownLock',
     'compute_token_fingerprint',
     'compute_seller_fingerprint',
 ]
@@ -331,5 +332,158 @@ class SharedRateLimiter:
                 'Shared rate limiter DB unavailable (%s); falling back to '
                 'in-memory rate limiter. Parallel wb processes will no longer '
                 'coordinate rate limits. Set WB_RATE_LIMITER=memory to silence.',
+                exc,
+            )
+
+
+class SellerCooldownLock:
+    """Cross-process TTL lock recording a known WB seller-scope cooldown.
+
+    When WB returns a 429 with ``x-ratelimit-reset: N`` (see F-12), F-13
+    persists ``(seller_fingerprint, expires_at_ts = now + N)`` to a shared
+    SQLite table. Every subsequent ``WbHttpClient.request`` first calls
+    :meth:`read_remaining` — if the lock hasn't expired, the HTTP call
+    short-circuits with :class:`RateLimitError` carrying the remaining
+    seconds. No network attempt is made, so WB's leaky-bucket penalty
+    cannot extend.
+
+    Uses the same ``rate_limits.db`` file as :class:`SharedRateLimiter`
+    but a separate table (``seller_cooldown``) so the concerns stay
+    independent. Rows are TTL-based — once ``expires_at_ts`` passes, a
+    call to :meth:`read_remaining` returns ``None`` and subsequent calls
+    see no lock. An UPSERT pattern replaces the row on each new 429 so
+    the lock always reflects the most recent cooldown value.
+
+    On any ``sqlite3.Error`` at init or during read/record, the instance
+    transparently flips to an internal in-memory fallback dict. A single
+    module-level warning is emitted per process on the first fallback.
+
+    Attributes:
+        db_path: Shared SQLite database file.
+    """
+
+    def __init__(self, db_path: Path) -> None:
+        """Initialise the lock, creating the DB table on first use.
+
+        Args:
+            db_path: Shared SQLite database file (same file as
+                :class:`SharedRateLimiter`).
+        """
+        self._db_path = db_path
+        self._fallback: dict[str, float] | None = None
+
+        try:
+            self._init_db()
+        except (sqlite3.Error, OSError) as exc:
+            self._activate_fallback(exc)
+
+    def read_remaining(self, seller_fingerprint: str) -> float | None:
+        """Return seconds remaining on the cooldown, or ``None`` if clear.
+
+        An expired row is equivalent to no lock; the method returns
+        ``None`` in that case and the stale row is left to be overwritten
+        by the next :meth:`record` call.
+
+        Args:
+            seller_fingerprint: Output of ``compute_seller_fingerprint``
+                for the token whose cooldown we're checking.
+
+        Returns:
+            Positive float seconds remaining when the lock is active;
+            ``None`` when no active lock exists (either missing or
+            expired).
+        """
+        if self._fallback is not None:
+            expires_at = self._fallback.get(seller_fingerprint)
+            if expires_at is None:
+                return None
+            remaining = expires_at - time.time()
+            return remaining if remaining > 0 else None
+
+        try:
+            conn = sqlite3.connect(str(self._db_path), timeout=_SQLITE_LOCK_TIMEOUT)
+            try:
+                row = conn.execute(
+                    'SELECT expires_at FROM seller_cooldown WHERE seller = ?',
+                    (seller_fingerprint,),
+                ).fetchone()
+            finally:
+                conn.close()
+        except sqlite3.Error as exc:
+            self._activate_fallback(exc)
+            return self.read_remaining(seller_fingerprint)
+
+        if row is None:
+            return None
+        expires_at = row[0]
+        remaining = expires_at - time.time()
+        return remaining if remaining > 0 else None
+
+    def record(self, seller_fingerprint: str, cooldown_seconds: float) -> None:
+        """Store a cooldown deadline for the seller (UPSERT).
+
+        Idempotent — a later call with a shorter cooldown overrides a
+        longer one (the most recent WB response is always the authority).
+
+        Args:
+            seller_fingerprint: Seller scope key (see
+                ``compute_seller_fingerprint``).
+            cooldown_seconds: Value from ``x-ratelimit-reset``.
+        """
+        if cooldown_seconds <= 0:
+            return
+        expires_at = time.time() + cooldown_seconds
+        if self._fallback is not None:
+            self._fallback[seller_fingerprint] = expires_at
+            return
+
+        try:
+            conn = sqlite3.connect(str(self._db_path), timeout=_SQLITE_LOCK_TIMEOUT)
+            try:
+                conn.execute(
+                    'INSERT INTO seller_cooldown (seller, expires_at) '
+                    'VALUES (?, ?) ON CONFLICT(seller) DO UPDATE SET '
+                    'expires_at = excluded.expires_at',
+                    (seller_fingerprint, expires_at),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except sqlite3.Error as exc:
+            self._activate_fallback(exc)
+            self._fallback[seller_fingerprint] = expires_at  # type: ignore[index]
+
+    def _init_db(self) -> None:
+        """Create the seller_cooldown table on first use (idempotent)."""
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(self._db_path), timeout=_SQLITE_LOCK_TIMEOUT)
+        try:
+            conn.execute('PRAGMA journal_mode=WAL')
+            conn.execute('PRAGMA synchronous=NORMAL')
+            conn.executescript('''
+                CREATE TABLE IF NOT EXISTS seller_cooldown (
+                    seller     TEXT PRIMARY KEY,
+                    expires_at REAL NOT NULL
+                );
+            ''')
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _activate_fallback(self, exc: Exception) -> None:
+        """Swap to an in-memory dict after a DB failure.
+
+        Mirrors :meth:`SharedRateLimiter._activate_fallback` — a single
+        process-wide warning is emitted on the first fallback; future
+        failures go silent to avoid log spam.
+        """
+        global _FALLBACK_WARNED
+        self._fallback = {}
+        if not _FALLBACK_WARNED:
+            _FALLBACK_WARNED = True
+            logger.warning(
+                'Seller cooldown lock DB unavailable (%s); falling back to '
+                'in-memory lock. Cross-process cooldown coordination disabled '
+                'for this process.',
                 exc,
             )

@@ -24,7 +24,7 @@ from wb.core.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from wb.core.rate_limiter import RateLimiter
+    from wb.core.rate_limiter import RateLimiter, SellerCooldownLock
 
 __all__ = ['WbHttpClient']
 
@@ -122,6 +122,8 @@ class WbHttpClient:
             retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY,
             path_limiters: dict[str, 'RateLimiter'] | None = None,
             seller_limiter: 'RateLimiter | None' = None,
+            cooldown_lock: 'SellerCooldownLock | None' = None,
+            seller_fingerprint: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip('/')
         self._token = token
@@ -130,6 +132,8 @@ class WbHttpClient:
         self._retry_base_delay = retry_base_delay
         self._path_limiters: dict[str, RateLimiter] = path_limiters or {}
         self._seller_limiter: RateLimiter | None = seller_limiter
+        self._cooldown_lock: SellerCooldownLock | None = cooldown_lock
+        self._seller_fingerprint: str | None = seller_fingerprint
         self._client = httpx.Client(
             base_url=self._base_url,
             headers={
@@ -138,6 +142,58 @@ class WbHttpClient:
                 'Accept': 'application/json',
             },
             timeout=self._timeout,
+        )
+
+    def _check_cooldown_lock(self) -> None:
+        """F-13: raise RateLimitError immediately if a known cooldown is active.
+
+        Consulted at the top of every :meth:`request` and
+        :meth:`request_raw`. Short-circuits the HTTP round-trip entirely
+        when WB has previously told us (via ``x-ratelimit-reset``) that
+        the seller is locked until a specific deadline. Prevents our own
+        retries — whether from this process or a parallel ``wb``
+        invocation sharing the SQLite file — from extending WB's
+        leaky-bucket penalty.
+
+        Raises:
+            RateLimitError: When the lock is active for the seller;
+                ``retry_after`` carries the remaining seconds and
+                ``response_body`` is ``None`` (no wire data exists).
+        """
+        if self._cooldown_lock is None or self._seller_fingerprint is None:
+            return
+        remaining = self._cooldown_lock.read_remaining(self._seller_fingerprint)
+        if remaining is None:
+            return
+        logger.warning(
+            'Seller cooldown lock active — %.0fs remaining; skipping HTTP call',
+            remaining,
+        )
+        raise RateLimitError(
+            f'Seller cooldown active — {remaining:.0f}s remaining',
+            retry_after=remaining,
+        )
+
+    def _record_cooldown(self, exc: RateLimitError) -> None:
+        """F-13: persist the cooldown deadline after a 429 carries one.
+
+        Called right after a :class:`RateLimitError` is raised by the
+        response handler but before any retry decision. When WB told us
+        ``x-ratelimit-reset: N``, store ``now + N`` so the *next* call —
+        in this process or any other — sees the lock and skips WB.
+
+        Args:
+            exc: The raised :class:`RateLimitError`. Records only when
+                ``retry_after`` is populated (some 429s lack it).
+        """
+        if (
+            self._cooldown_lock is None
+            or self._seller_fingerprint is None
+            or exc.retry_after is None
+        ):
+            return
+        self._cooldown_lock.record(
+            self._seller_fingerprint, float(exc.retry_after),
         )
 
     def close(self) -> None:
@@ -176,6 +232,7 @@ class WbHttpClient:
         """
         last_exception: Exception | None = None
 
+        self._check_cooldown_lock()
         if self._seller_limiter is not None:
             self._seller_limiter.acquire()
         if limiter := self._path_limiters.get(path):
@@ -192,6 +249,7 @@ class WbHttpClient:
                 return self._handle_response(response)
             except RateLimitError as exc:
                 last_exception = exc
+                self._record_cooldown(exc)
                 self._retry_or_raise(
                     attempt, exc, exc.retry_after, 'Rate limited'
                 )
@@ -331,6 +389,7 @@ class WbHttpClient:
         """
         last_exception: Exception | None = None
 
+        self._check_cooldown_lock()
         if self._seller_limiter is not None:
             self._seller_limiter.acquire()
         if limiter := self._path_limiters.get(path):
@@ -348,6 +407,7 @@ class WbHttpClient:
                 return response.content
             except RateLimitError as exc:
                 last_exception = exc
+                self._record_cooldown(exc)
                 self._retry_or_raise(
                     attempt, exc, exc.retry_after, 'Rate limited'
                 )

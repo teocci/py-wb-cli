@@ -227,6 +227,122 @@ class TestWbHttpClient:
             with WbHttpClient(BASE_URL, 'token') as client:
                 assert client.get('/test') == {}
 
+    # ── F-13: cooldown lock integration ────────────────────────────────
+
+    def test_active_cooldown_lock_short_circuits_without_http(self):
+        """F-13: active lock raises RateLimitError before any HTTP attempt."""
+        from unittest.mock import MagicMock
+
+        lock = MagicMock()
+        lock.read_remaining.return_value = 42.0
+
+        with respx.mock:
+            route = respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(200, json={})
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                cooldown_lock=lock,
+                seller_fingerprint='seller-x',
+            )
+            with pytest.raises(RateLimitError) as exc_info:
+                client.get('/test')
+            client.close()
+
+        assert route.call_count == 0  # no HTTP call made
+        assert exc_info.value.retry_after == 42.0
+        lock.read_remaining.assert_called_with('seller-x')
+
+    def test_cooldown_lock_cleared_allows_http(self):
+        """Lock returning None (no active cooldown) permits the call."""
+        from unittest.mock import MagicMock
+
+        lock = MagicMock()
+        lock.read_remaining.return_value = None
+
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(200, json={'ok': True})
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                cooldown_lock=lock,
+                seller_fingerprint='seller-x',
+            )
+            assert client.get('/test') == {'ok': True}
+            client.close()
+
+    def test_429_with_reset_records_cooldown_lock(self, monkeypatch):
+        """F-13: 429 carrying x-ratelimit-reset writes to the lock."""
+        import wb.client.http as http_mod
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        lock = MagicMock()
+        lock.read_remaining.return_value = None
+
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(
+                    429, headers={'x-ratelimit-reset': '30'},
+                )
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                max_retries=0,
+                cooldown_lock=lock,
+                seller_fingerprint='seller-x',
+            )
+            with pytest.raises(RateLimitError):
+                client.get('/test')
+            client.close()
+
+        lock.record.assert_called_with('seller-x', 30.0)
+
+    def test_429_without_reset_does_not_record(self, monkeypatch):
+        """429 with no usable header doesn't touch the lock."""
+        import wb.client.http as http_mod
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        lock = MagicMock()
+        lock.read_remaining.return_value = None
+
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(429)
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                max_retries=0,
+                cooldown_lock=lock,
+                seller_fingerprint='seller-x',
+            )
+            with pytest.raises(RateLimitError):
+                client.get('/test')
+            client.close()
+
+        lock.record.assert_not_called()
+
+    def test_cooldown_check_skipped_when_no_fingerprint(self):
+        """If seller_fingerprint is None the lock is never consulted."""
+        from unittest.mock import MagicMock
+
+        lock = MagicMock()
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(200, json={})
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                cooldown_lock=lock,  # lock present
+                seller_fingerprint=None,  # but no fp → skip
+            )
+            client.get('/test')
+            client.close()
+
+        lock.read_remaining.assert_not_called()
+
     def test_x_ratelimit_reset_populates_retry_after(self):
         """F-12: `x-ratelimit-reset` header sets RateLimitError.retry_after."""
         with respx.mock:
