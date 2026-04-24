@@ -82,7 +82,8 @@
       "Bash(.venv/Scripts/python -c ' *)",
       "Read(//c/Users/teocci/.claude/plans/**)",
       "Bash(.venv/Scripts/python scripts/probe_daily_report.py)",
-      "Bash(.venv/Scripts/python scripts/probe_poc1_recovery.py)"
+      "Bash(.venv/Scripts/python scripts/probe_poc1_recovery.py)",
+      "Bash(wb version *)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

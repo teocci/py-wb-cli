@@ -49,7 +49,9 @@
       "Bash(cd /d \"D:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\")",
       "Bash(grep -E \"\\\\.py$\")",
       "Bash(curl:*)",
-      "Bash(.venv/Scripts/python -m *)"
+      "Bash(.venv/Scripts/python -m *)",
+      "Bash(gh run *)",
+      "Bash(gh workflow *)"
     ]
   }
 }
