@@ -119,6 +119,86 @@ class TestWbHttpClient:
                     client.get('/test')
                 assert exc_info.value.retry_after is None
 
+    def test_rate_limit_captures_response_body(self):
+        """429 exception carries the raw response body for downstream triage."""
+        body = '{"title":"too many requests","detail":"Limited by global limiter, per seller abc"}'
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                return_value=httpx.Response(429, text=body)
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=0) as client:
+                with pytest.raises(RateLimitError) as exc_info:
+                    client.get('/test')
+                assert exc_info.value.response_body == body
+
+    def test_seller_global_429_uses_patient_schedule(self, monkeypatch):
+        """Seller-scope 429 (body contains 'global limiter') uses 5/15 s backoff."""
+        import wb.client.http as http_mod
+
+        sleeps: list[float] = []
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda s: sleeps.append(s))
+        monkeypatch.setattr(http_mod.random, 'uniform', lambda a, b: 0.0)
+
+        body = '{"title":"too many requests","detail":"Limited by global limiter, per seller abc"}'
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(429, text=body),
+                    httpx.Response(429, text=body),
+                    httpx.Response(200, json={}),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=2) as client:
+                client.get('/test')
+
+        assert len(sleeps) == 2
+        assert sleeps[0] >= 5.0
+        assert sleeps[1] >= 15.0
+
+    def test_plain_429_uses_short_schedule(self, monkeypatch):
+        """Per-endpoint 429 (no 'global limiter') uses 1/2 s backoff as before."""
+        import wb.client.http as http_mod
+
+        sleeps: list[float] = []
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda s: sleeps.append(s))
+        monkeypatch.setattr(http_mod.random, 'uniform', lambda a, b: 0.0)
+
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(429, text='{"error":"rate limited"}'),
+                    httpx.Response(429, text='{"error":"rate limited"}'),
+                    httpx.Response(200, json={}),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=2) as client:
+                client.get('/test')
+
+        assert len(sleeps) == 2
+        assert sleeps[0] < 5.0
+        assert sleeps[1] < 10.0
+
+    def test_retry_after_header_overrides_patient_schedule(self, monkeypatch):
+        """Explicit Retry-After always wins, even on a seller-global 429."""
+        import wb.client.http as http_mod
+
+        sleeps: list[float] = []
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda s: sleeps.append(s))
+        monkeypatch.setattr(http_mod.random, 'uniform', lambda a, b: 0.0)
+
+        body = '{"detail":"Limited by global limiter, per seller abc"}'
+        with respx.mock:
+            respx.get(f'{BASE_URL}/test').mock(
+                side_effect=[
+                    httpx.Response(429, text=body, headers={'Retry-After': '120'}),
+                    httpx.Response(200, json={}),
+                ]
+            )
+            with WbHttpClient(BASE_URL, 'token', max_retries=1) as client:
+                client.get('/test')
+
+        assert sleeps == [120.0]
+
     # ── API errors ────────────────────────────────────────────────────
 
     @pytest.mark.parametrize(

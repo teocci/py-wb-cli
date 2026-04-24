@@ -37,6 +37,14 @@ _RETRYABLE_STATUS_CODES = _RETRYABLE_UPSTREAM_STATUS_CODES | {429}
 # Jitter fraction applied to exponential backoff delay
 _JITTER_FRACTION = 0.5
 
+# Substring in a WB 429 response body that identifies a seller-scope global
+# throttle. WB's gateway returns HTTP 429 with a JSON body of the form
+# ``{"title":"too many requests","detail":"Limited by global limiter, per
+# seller <uuid>; See …"}``. When this string appears, the per-endpoint
+# backoff (1/2/4 s) is too short because the seller-wide window needs
+# multiple seconds to clear — we switch to the UPSTREAM schedule instead.
+_SELLER_GLOBAL_THROTTLE_MARKER = 'global limiter'
+
 
 def _is_upstream_error(exc: Exception | None) -> bool:
     """True when ``exc`` is a retryable 5xx :class:`ApiError`."""
@@ -44,6 +52,14 @@ def _is_upstream_error(exc: Exception | None) -> bool:
         isinstance(exc, ApiError)
         and exc.status_code in _RETRYABLE_UPSTREAM_STATUS_CODES
     )
+
+
+def _is_seller_global_throttle(exc: Exception | None) -> bool:
+    """True when ``exc`` is a 429 carrying WB's seller-scope throttle body."""
+    if not isinstance(exc, RateLimitError):
+        return False
+    body = exc.response_body or ''
+    return _SELLER_GLOBAL_THROTTLE_MARKER in body.lower()
 
 
 class WbHttpClient:
@@ -329,6 +345,7 @@ class WbHttpClient:
             raise RateLimitError(
                 'Rate limited by WB API',
                 retry_after=retry_seconds,
+                response_body=response.text,
             )
         if response.status_code >= 400:
             raise ApiError(
@@ -416,12 +433,19 @@ class WbHttpClient:
     ) -> float:
         """Calculate backoff delay with jitter, scaled by error class.
 
-        429 and non-server-error retries use the standard exponential
-        schedule (``retry_base_delay * 2^attempt``). 5xx upstream errors
-        use a longer schedule (``UPSTREAM_RETRY_BASE_DELAY *
-        UPSTREAM_RETRY_MULTIPLIER^attempt``) because gateway stress
-        rarely clears in a couple of seconds and burning retries early
-        just amplifies the storm.
+        Three schedules:
+
+        - **Timeouts and per-endpoint 429s** use the standard exponential
+          schedule (``retry_base_delay * 2^attempt`` ≈ 1 / 2 / 4 s).
+        - **5xx upstream errors** and **seller-scope 429s** (WB gateway's
+          ``"Limited by global limiter, per seller …"`` response) use the
+          patient UPSTREAM schedule (``UPSTREAM_RETRY_BASE_DELAY *
+          UPSTREAM_RETRY_MULTIPLIER^attempt`` ≈ 5 / 15 / 45 s). Both
+          signals represent stress that rarely clears in a couple of
+          seconds, so short retries just amplify the storm.
+
+        A server-supplied ``Retry-After`` overrides this entirely — see
+        :meth:`_retry_or_raise`.
 
         Args:
             attempt: Zero-based attempt index.
@@ -431,7 +455,7 @@ class WbHttpClient:
         Returns:
             Delay in seconds.
         """
-        if _is_upstream_error(exc):
+        if _is_upstream_error(exc) or _is_seller_global_throttle(exc):
             base = UPSTREAM_RETRY_BASE_DELAY * (UPSTREAM_RETRY_MULTIPLIER ** attempt)
         else:
             base = self._retry_base_delay * (2 ** attempt)

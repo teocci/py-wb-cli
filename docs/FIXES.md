@@ -14,8 +14,11 @@ Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases
 | F-6 | TTY-aware ANSI output | ✅ DONE | core/output.py | 0.20.4 | [detail](phases/F-6-tty-ansi.md) |
 | F-7 | campaign list --fields projection | ✅ DONE | cli/campaign.py | 0.20.5 | [detail](phases/F-7-fields-projection.md) |
 | F-8 | Empty PaymentType crash | ✅ DONE | domain/models.py | 0.20.6 | [detail](phases/F-8-payment-type.md) |
+| F-9 | Patient 429 backoff on seller-global throttle | ✅ DONE | client/http.py | 0.25.1 | [detail](phases/F-9-patient-429-backoff.md) |
+| F-10 | Seller-scope global rate limiter (JWT `sid`-keyed) | 🔲 PLANNED | core/rate_limiter.py, services/_factory.py, client/http.py | 0.25.2 | [detail](phases/F-10-seller-global-limiter.md) |
+| F-11 | Dedup `list_campaigns` in daily-report | 🔲 PLANNED | services/stats.py | 0.25.3 | [detail](phases/F-11-dedup-list-campaigns.md) |
 
-_No fixes currently in progress. Add new entries here when a fix is planned._
+_F-9, F-10, F-11 in progress — seller-level rate limit resilience bundle._
 
 ## How to Add a Fix
 

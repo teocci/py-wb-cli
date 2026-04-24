@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.25.1 (2026-04-24)
+- F-9: patient 429 backoff on seller-global throttle — `RateLimitError` now carries `response_body`; `_calculate_delay` switches to the UPSTREAM schedule (5/15/45 s + jitter) when the body contains `"global limiter"`, matching how WB's gateway surfaces seller-wide throttles. Per-endpoint 429s and explicit `Retry-After` headers keep existing semantics
+
 ## v0.25.0 (2026-04-24)
 - I-12: SQLite-backed cross-process rate limiter — new `SharedRateLimiter` coordinates preemptive throttling across parallel `wb` invocations via `~/.wb-cli/rate_limits.db` (WAL mode, per-`(token_fingerprint, endpoint)` rows, `BEGIN IMMEDIATE` serialisation). Transparent fallback to in-memory `RateLimiter` on DB errors with a single warning per process; `WB_RATE_LIMITER=memory` forces the legacy in-process behaviour
 

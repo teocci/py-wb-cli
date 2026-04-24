@@ -83,6 +83,11 @@ class RateLimitError(WbCliError):
 
     Attributes:
         retry_after: Seconds to wait before retrying, if provided by the API.
+        response_body: Raw response body text, if available. Used by the
+            HTTP client's retry logic to distinguish a seller-scope global
+            throttle ("Limited by global limiter, per seller …") from a
+            simple per-endpoint rate limit, which require different
+            backoff schedules.
     """
 
     error_code: str = 'RATE_LIMITED'
@@ -91,9 +96,11 @@ class RateLimitError(WbCliError):
             self,
             message: str,
             retry_after: float | None = None,
+            response_body: str | None = None,
     ) -> None:
         super().__init__(message, exit_code=ExitCode.RATE_LIMITED)
         self.retry_after = retry_after
+        self.response_body = response_body
 
     def to_dict(self) -> dict:
         """Serialize with retry_after hint."""
