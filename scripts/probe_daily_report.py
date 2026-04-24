@@ -1,9 +1,20 @@
 """Direct probe of the three endpoints used by `wb stats daily-report`.
 
 Bypasses the CLI rate limiter + retry loop: fires one raw httpx request per
-endpoint and prints the HTTP status and any Retry-After hint. Shows which
-endpoint is currently 429-ing and confirms whether the 429 is coming from
-preemptive budget exhaustion (local) or a WB-side global throttle.
+endpoint and prints the HTTP status together with every rate-limit header
+WB's gateway returns. Shows which endpoint is currently 429-ing, how close
+we are to the next throttle (via `x-ratelimit-remaining` on 200s), and the
+authoritative cooldown in seconds (via `x-ratelimit-reset` on 429s).
+
+WB's undocumented headers read here:
+
+- ``x-ratelimit-remaining`` — calls left before the next reset (on 2xx)
+- ``x-ratelimit-reset``     — seconds until the window clears (on 429)
+- ``x-ratelimit-retry``     — alias of reset (on 429)
+- ``x-ratelimit-limit``     — the limit that was hit (on 429)
+
+These headers are absent from the swagger 429 schema
+(``docs/swagger/01-general.yaml``) but are sent on every response.
 """
 from __future__ import annotations
 
@@ -20,6 +31,16 @@ CONFIG = Path(os.path.expanduser('~/.wb-cli/profiles.json'))
 PROMO = 'https://advert-api.wildberries.ru'
 ANALY = 'https://seller-analytics-api.wildberries.ru'
 
+# Headers to surface in the probe output. Ordered so the most useful values
+# (remaining budget, cooldown seconds) appear first.
+_RATE_LIMIT_HEADERS: tuple[str, ...] = (
+    'x-ratelimit-remaining',
+    'x-ratelimit-reset',
+    'x-ratelimit-retry',
+    'x-ratelimit-limit',
+    'Retry-After',
+)
+
 
 def load_tokens() -> tuple[str, str, str]:
     data = json.loads(CONFIG.read_text(encoding='utf-8'))
@@ -30,6 +51,24 @@ def load_tokens() -> tuple[str, str, str]:
 
 def mask(t: str) -> str:
     return f'{t[:4]}...{t[-4:]}'
+
+
+def format_rate_headers(headers: httpx.Headers) -> str:
+    """Build a compact ``key=value`` summary of every rate-limit header present."""
+    parts = []
+    for name in _RATE_LIMIT_HEADERS:
+        value = headers.get(name)
+        if value is not None:
+            # Short alias for readability: x-ratelimit-remaining → rem, etc.
+            short = {
+                'x-ratelimit-remaining': 'rem',
+                'x-ratelimit-reset': 'reset',
+                'x-ratelimit-retry': 'retry',
+                'x-ratelimit-limit': 'lim',
+                'Retry-After': 'retry-after',
+            }[name]
+            parts.append(f'{short}={value}')
+    return '  '.join(parts) if parts else '(no rate-limit headers)'
 
 
 def probe(label: str, method: str, base: str, path: str, *,
@@ -47,13 +86,16 @@ def probe(label: str, method: str, base: str, path: str, *,
         except httpx.TimeoutException as e:
             print(f'[{label}] TIMEOUT: {e}')
             return
-    ra = r.headers.get('Retry-After')
+
+    rl_summary = format_rate_headers(r.headers)
     tail = ''
     if r.status_code >= 400:
-        body = r.text[:300].replace('\n', ' ')
+        body = r.text[:200].replace('\n', ' ')
         tail = f'   body={body!r}'
-    print(f'[{label:20s}] HTTP {r.status_code:3d}   '
-          f'Retry-After={ra or "—":<5s}   bytes={len(r.content)}{tail}')
+    print(
+        f'[{label:20s}] HTTP {r.status_code:3d}   '
+        f'bytes={len(r.content):>6d}   {rl_summary}{tail}'
+    )
 
 
 def main() -> int:
@@ -61,6 +103,11 @@ def main() -> int:
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     print(f'profile={active}   promo={mask(promo)}   analy={mask(analy)}')
     print(f'probe date = {yesterday}')
+    print(
+        'rate-limit header legend: rem=x-ratelimit-remaining (calls left), '
+        'reset=x-ratelimit-reset (sec until cooldown clears), '
+        'retry=x-ratelimit-retry (alias), lim=x-ratelimit-limit'
+    )
     print('-' * 70)
 
     # 1. EP_CAMPAIGN_INFO — GET with status filter in query
