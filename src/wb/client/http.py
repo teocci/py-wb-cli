@@ -13,6 +13,7 @@ from wb.core.constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BASE_DELAY,
     DEFAULT_TIMEOUT,
+    DEFAULT_TOKEN_TYPE,
     UPSTREAM_RETRY_BASE_DELAY,
     UPSTREAM_RETRY_MULTIPLIER,
 )
@@ -132,6 +133,7 @@ class WbHttpClient:
             budget: 'EndpointBudget | None' = None,
             token_fp: str | None = None,
             seller_id: str | None = None,
+            token_type: str = DEFAULT_TOKEN_TYPE,
     ) -> None:
         self._base_url = base_url.rstrip('/')
         self._token = token
@@ -141,6 +143,7 @@ class WbHttpClient:
         self._budget: EndpointBudget | None = budget
         self._token_fp: str | None = token_fp
         self._seller_id: str | None = seller_id
+        self._token_type: str = token_type
         self._client = httpx.Client(
             base_url=self._base_url,
             headers={
@@ -154,9 +157,9 @@ class WbHttpClient:
     def _pre_flight(self, path: str) -> None:
         """Reserve a slot in the per-(token, endpoint) budget before calling.
 
-        Lookups the static prior from :data:`ENDPOINT_LIMITS` and delegates
-        to :meth:`EndpointBudget.reserve`. When the budget is unset
-        (test path or non-rate-limited client) or the path has no
+        Looks up the token-type-aware prior via :func:`select_prior` and
+        delegates to :meth:`EndpointBudget.reserve`. When the budget is
+        unset (test path or non-rate-limited client) or the path has no
         documented prior, this is a no-op — matching pre-R-2 behaviour
         where unknown paths were not throttled.
 
@@ -167,8 +170,8 @@ class WbHttpClient:
         """
         if self._budget is None or self._token_fp is None:
             return
-        from wb.core.rate_limits import ENDPOINT_LIMITS
-        prior = ENDPOINT_LIMITS.get(path)
+        from wb.core.rate_limits import select_prior
+        prior = select_prior(path, self._token_type)
         if prior is None:
             return
         self._budget.reserve(

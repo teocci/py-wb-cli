@@ -13,9 +13,28 @@ triggers:
 
 Pre-flight reference. Consult before writing any sequence of wb CLI calls. Source of truth: `RATE_LIMITS.md`.
 
+## Token type — check this first (R-5+)
+
+The numbers in this file are for **Personal/Service** tokens. **Base** tokens get 30–60× tighter limits on the same endpoints (e.g. `wb budget balance` drops from 1/s to 2/h). To find your type:
+
+```bash
+wb auth list                     # column "Type" shows token_type per profile
+wb rate status                   # token_type appears next to each token fingerprint
+```
+
+If `token_type` shows `base`:
+
+- Treat every Personal/Service rate below as wishful thinking — read the **Base** column in `RATE_LIMITS.md` instead.
+- For budget visibility, use `wb rate status` (pure local read, no network — see Diagnostic surfaces in `RATE_LIMITS.md`). For connectivity / token-validity checks, use `wb auth ping` (uniform `/ping` rate, not Base-stratified).
+- Composite commands (`wb assess`, `wb pulse`, `wb daily-report`) become multi-minute or multi-hour operations on Base. See `RATE_LIMITS.md` § Composite commands for wall-time estimates per type.
+
+If you don't know the token type, the CLI defaults to `base` (the safer assumption). Set it explicitly with `wb auth login --token-type {personal|service|base|test}`.
+
 ## How the preemptive limiter works
 
 The CLI acquires a rate-limit slot **before** each HTTP request (sliding window, per-endpoint, per-process). You do not need to add sleeps; unless you are chaining write operations on the same resource in rapid succession (see safe patterns below).
+
+The bootstrap prior is selected by `select_prior(path, token_type)` — Base tokens get the tight `BASE_OVERRIDES` numbers, others get `ENDPOINT_LIMITS`. Once WB responds, header-driven `EndpointBudget` takes over and self-corrects from the live `X-Ratelimit-*` headers.
 
 ## Command → limit table
 

@@ -7,8 +7,13 @@ import typer
 from wb.auth.profiles import ProfileStore
 from wb.auth.token_validation import validate_promotion_token
 from wb.core.config import Settings
-from wb.core.constants import ALL_CATEGORY, ExitCode, TOKEN_CATEGORIES
-from wb.core.exceptions import WbCliError
+from wb.core.constants import (
+    ALL_CATEGORY,
+    ExitCode,
+    TOKEN_CATEGORIES,
+    TOKEN_TYPES,
+)
+from wb.core.exceptions import ValidationError, WbCliError
 from wb.core.output import _stdout_console
 
 auth_app = typer.Typer(
@@ -33,10 +38,27 @@ def auth_login(
             help='Token category (run `wb auth categories` to list valid values)',
         ),
         token: str = typer.Option(..., '--token', '-t', help='WB API token'),
+        token_type: str | None = typer.Option(
+            None, '--token-type',
+            help=(
+                'Token type for rate-limit prior selection: '
+                f'{", ".join(TOKEN_TYPES)}. Defaults to "base" for new '
+                'profiles; existing token_type kept if not specified.'
+            ),
+        ),
         skip_validation: bool = typer.Option(False, '--skip-validation', help='Skip token validation'),
 ) -> None:
     """Store an API token for a profile."""
     store = _get_profile_store()
+
+    if token_type is not None and token_type not in TOKEN_TYPES:
+        typer.secho(
+            f'Invalid --token-type {token_type!r}. '
+            f'Valid types: {", ".join(TOKEN_TYPES)}.',
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR)
 
     if not skip_validation and category in ('promotion', ALL_CATEGORY):
         typer.echo('Validating token...')
@@ -48,14 +70,25 @@ def auth_login(
             raise typer.Abort() from exc
 
     store.save_token(profile, category, token)
+    if token_type is not None:
+        try:
+            store.set_token_type(profile, token_type)
+        except ValidationError as exc:  # pragma: no cover — guarded above
+            typer.secho(str(exc), fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=ExitCode.VALIDATION_ERROR) from exc
     store.set_active(profile)
+
+    saved_type = store.get_profile(profile).token_type
     if category == ALL_CATEGORY:
         typer.secho(
-            f'Token saved to profile {profile!r} [all {len(TOKEN_CATEGORIES)} categories].',
+            f'Token saved to profile {profile!r} [all {len(TOKEN_CATEGORIES)} categories, type={saved_type}].',
             fg=typer.colors.GREEN,
         )
     else:
-        typer.secho(f'Token saved to profile {profile!r} [{category}].', fg=typer.colors.GREEN)
+        typer.secho(
+            f'Token saved to profile {profile!r} [{category}, type={saved_type}].',
+            fg=typer.colors.GREEN,
+        )
 
 
 @auth_app.command('logout')
@@ -95,6 +128,7 @@ def auth_list(
             data.append({
                 'name': p.name,
                 'active': p.name == store.active_profile_name,
+                'token_type': p.token_type,
                 'categories': list(p.tokens.keys()),
                 'created_at': p.created_at,
                 'last_used': p.last_used,
@@ -107,13 +141,14 @@ def auth_list(
     table = Table(title='WB CLI Profiles')
     table.add_column('Profile', style='cyan')
     table.add_column('Active', justify='center')
+    table.add_column('Type', style='magenta')
     table.add_column('Categories', style='green')
     table.add_column('Created', style='dim')
 
     for p in profiles:
         is_active = '*' if p.name == store.active_profile_name else ''
         categories = ', '.join(p.tokens.keys()) or 'none'
-        table.add_row(p.name, is_active, categories, p.created_at[:10])
+        table.add_row(p.name, is_active, p.token_type, categories, p.created_at[:10])
 
     _stdout_console.print(table)
 
@@ -148,6 +183,7 @@ def auth_status(
         import json
         data = {
             'profile': profile.name,
+            'token_type': profile.token_type,
             'categories': list(profile.tokens.keys()),
             'portal_session': has_portal,
             'last_used': profile.last_used,
@@ -164,6 +200,7 @@ def auth_status(
         return
 
     typer.echo(f'Active profile: {profile.name}')
+    typer.echo(f'Token type: {profile.token_type}')
     typer.echo(f'Token categories: {", ".join(profile.tokens.keys()) or "none"}')
     typer.echo(f'Portal session: {"yes" if has_portal else "no"}')
     if has_portal:

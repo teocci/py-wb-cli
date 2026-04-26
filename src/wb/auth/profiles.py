@@ -11,8 +11,10 @@ from pathlib import Path
 from wb.core.constants import (
     ALL_CATEGORY,
     DEFAULT_PROFILE_NAME,
+    DEFAULT_TOKEN_TYPE,
     PROFILES_FILE,
     TOKEN_CATEGORIES,
+    TOKEN_TYPES,
 )
 from wb.core.exceptions import ConfigError, ValidationError
 
@@ -26,6 +28,13 @@ class Profile:
     Attributes:
         name: Profile identifier.
         tokens: Mapping of category -> token string.
+        token_type: One of :data:`wb.core.constants.TOKEN_TYPES`. Drives
+            the bootstrap rate-limit prior selection in
+            :func:`wb.core.rate_limits.select_prior`. Single value
+            applies to every category in ``tokens``; in practice a
+            seller's tokens are all the same type. Defaults to
+            :data:`wb.core.constants.DEFAULT_TOKEN_TYPE` (``'base'``)
+            for legacy profiles missing the field.
         created_at: ISO timestamp of profile creation.
         last_used: ISO timestamp of last usage.
     """
@@ -33,6 +42,7 @@ class Profile:
     name: str
     tokens: dict[str, str] = field(default_factory=dict)
     portal_session: dict[str, str] = field(default_factory=dict)
+    token_type: str = DEFAULT_TOKEN_TYPE
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_used: str | None = None
     seller_id: str | None = None
@@ -112,6 +122,7 @@ class Profile:
         data = {
             'name': self.name,
             'tokens': self.tokens,
+            'token_type': self.token_type,
             'created_at': self.created_at,
             'last_used': self.last_used,
         }
@@ -123,11 +134,16 @@ class Profile:
 
     @classmethod
     def from_dict(cls, data: dict) -> Profile:
-        """Deserialize from dict."""
+        """Deserialize from dict.
+
+        Legacy profiles missing ``token_type`` default to
+        :data:`DEFAULT_TOKEN_TYPE` (Base) — the safer assumption.
+        """
         return cls(
             name=data['name'],
             tokens=data.get('tokens', {}),
             portal_session=data.get('portal_session', {}),
+            token_type=data.get('token_type', DEFAULT_TOKEN_TYPE),
             created_at=data.get('created_at', datetime.now(timezone.utc).isoformat()),
             last_used=data.get('last_used'),
             seller_id=data.get('seller_id'),
@@ -231,6 +247,27 @@ class ProfileStore:
         categories = TOKEN_CATEGORIES if category == ALL_CATEGORY else [category]
         for cat in categories:
             profile.set_token(cat, token)
+        self._save()
+
+    def set_token_type(self, profile_name: str, token_type: str) -> None:
+        """Persist the token type on a profile.
+
+        Args:
+            profile_name: Existing profile name.
+            token_type: One of :data:`wb.core.constants.TOKEN_TYPES`.
+
+        Raises:
+            ConfigError: When the profile doesn't exist.
+            ValidationError: When ``token_type`` isn't a known value.
+        """
+        if profile_name not in self._profiles:
+            raise ConfigError(f'Profile {profile_name!r} does not exist')
+        if token_type not in TOKEN_TYPES:
+            raise ValidationError(
+                f'Unknown token type {token_type!r}. '
+                f'Valid types: {", ".join(TOKEN_TYPES)}'
+            )
+        self._profiles[profile_name].token_type = token_type
         self._save()
 
     def save_portal_session(

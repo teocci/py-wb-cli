@@ -3,6 +3,13 @@
 **Date:** 2026-04-24
 **Tests:** 1140/1141 (1 pre-existing env-isolation failure in `test_auth_list_empty`, unrelated)
 
+> **Superseded by R-5 (v0.31.0).** The `wb rate probe` command was removed —
+> the R-1..R-4 redesign made the runtime header-driven, so every real WB call
+> updates `endpoint_budget` automatically. Probe became a footgun on Base
+> tokens (a single call to `/adv/v1/balance` costs a 30-min lockout). Use
+> `wb auth ping` for connectivity / token validity (uniform `/ping` rate),
+> and `wb rate status` for budget visibility (no network).
+
 ## Problem
 
 `wb rate status` (I-13) is 100 % safe and 100 % local, but only accurate for cooldowns **the CLI has directly observed** — `SellerCooldownLock` rows are written only when our HTTP client sees a 429 (F-13). Two gaps remained:

@@ -13,6 +13,8 @@ triggers:
 
 Per-product advertising cost vs. total orders for a given date. Standard output combines Promotion API spend data with Analytics funnel order counts.
 
+> **Base-token sellers (R-5+):** the per-product breakdown chains `EP_CAMPAIGN_FULLSTATS` (1/h Base) per active campaign batch and `EP_FUNNEL_PRODUCTS` (2/h Base, 30-min interval). For 5+ active campaigns, expect 30-min-plus wall time on Base. The response cache short-circuits past-day reruns — always prefer `reports/daily/*_raw.json` reuse on Base before triggering a fresh run.
+
 ## Source contract
 
 - `ad_spend` / `advertising_costs` come from `wb stats product-spend` and are aggregated by NM ID for the requested date.
@@ -46,8 +48,8 @@ wb stats daily-report --date YYYY-MM-DD
 ## Running the skill
 
 1. **Pre-flight rate check.** This workflow makes 3+ API calls across two services. Before starting, run `wb --json rate status`:
-   - If `locked: true`, sleep `seller_cooldown_seconds + 5` and retry; do NOT start the workflow during an active cooldown (it would waste one of its calls on a 429 that extends the lock).
-   - If `locked: false`, proceed directly; no need to probe unless you suspect an external tool tripped the throttle, in which case `wb --json rate probe` gives the authoritative answer in one call.
+   - If any endpoint shows `locked: true`, sleep `reset_in_s + 5` and retry; do NOT start the workflow during an active cooldown (it would waste one of its calls on a 429 that extends the lock).
+   - If everything shows `locked: false`, proceed directly. Since R-5 there's no longer a `wb rate probe` — every real call refreshes the budget on its own, and `wb auth ping` is the cheap connectivity check.
 2. Resolve yesterday's date: `python -c "from datetime import date, timedelta; print(date.today() - timedelta(days=1))"`
 3. Prefer the composite command: `wb --json stats daily-report --date YYYY-MM-DD`.
 4. If composite rate-limits or fails, fall back to the two-step workflow:

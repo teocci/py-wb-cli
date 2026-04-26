@@ -189,8 +189,8 @@ class TestWbHttpClient:
 
     # ── R-2: EndpointBudget integration ────────────────────────────────
 
-    def test_pre_flight_calls_budget_reserve_with_prior(self):
-        """Pre-flight resolves the static prior and delegates to budget.reserve."""
+    def test_pre_flight_calls_budget_reserve_with_personal_prior(self):
+        """Personal token type → pre-flight uses ENDPOINT_LIMITS prior."""
         from unittest.mock import MagicMock
         from wb.core.constants import EP_ACCOUNT_BALANCE
         from wb.core.rate_limits import ENDPOINT_LIMITS
@@ -203,6 +203,7 @@ class TestWbHttpClient:
             client = WbHttpClient(
                 BASE_URL, 'token',
                 budget=budget, token_fp='tk-fp', seller_id='sid-1',
+                token_type='personal',
             )
             client.get(EP_ACCOUNT_BALANCE)
             client.close()
@@ -214,6 +215,31 @@ class TestWbHttpClient:
         assert kwargs['prior'] == ENDPOINT_LIMITS[EP_ACCOUNT_BALANCE]
         assert kwargs['seller_id'] == 'sid-1'
         assert kwargs['max_wait_seconds'] == 60.0  # mirrors F-12 bail-out
+
+    def test_pre_flight_uses_base_override_for_base_token(self):
+        """R-5: Base token type → pre-flight uses BASE_OVERRIDES prior."""
+        from unittest.mock import MagicMock
+        from wb.core.constants import EP_ACCOUNT_BALANCE
+        from wb.core.rate_limits import BASE_OVERRIDES
+
+        budget = MagicMock()
+        with respx.mock:
+            respx.get(f'{BASE_URL}{EP_ACCOUNT_BALANCE}').mock(
+                return_value=httpx.Response(200, json={'balance': 0})
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                budget=budget, token_fp='tk-fp', seller_id='sid-1',
+                token_type='base',
+            )
+            client.get(EP_ACCOUNT_BALANCE)
+            client.close()
+
+        budget.reserve.assert_called_once()
+        kwargs = budget.reserve.call_args.kwargs
+        assert kwargs['prior'] == BASE_OVERRIDES[EP_ACCOUNT_BALANCE]
+        # Base prior is dramatically tighter than the Personal/Service one
+        assert kwargs['prior'][1] == 1800.0  # 30-min interval, burst 1
 
     def test_observe_called_after_200_response(self):
         """observe runs on success — feeds X-Ratelimit-Remaining into the budget."""

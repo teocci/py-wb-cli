@@ -1236,10 +1236,10 @@ components:
                 description: Error title
               detail:
                 type: string
-                description: Error details. The error means that the service from the [Catalog](https://dev.wildberries.ru/business-solutions) has insufficient funds on its balance
+                description: Error details. The error is only returned to services from the [Solutions for business Catalog](https://dev.wildberries.ru/business-solutions)
           example:
             title: payment required
-            detail: please top up your balance in your company personal account https://dev.wildberries.ru/company
+            detail: wb solution for business has insufficient funds on its balance. please top up the balance in the company's personal account https://dev.wildberries.ru/company
     '429':
       description: Too many requests
       content:

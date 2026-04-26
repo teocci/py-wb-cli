@@ -42,9 +42,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 5 requests | 200 ms | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 5 requests | 200 ms | 5 requests |
+        | Service | 1 s | 5 requests | 200 ms | 5 requests |
+        | Base | 1 h | 4 requests | 15 min | 1 request |
         </div>
       tags:
         - Campaigns
@@ -123,9 +125,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 5 requests | 200 ms | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 5 requests | 200 ms | 5 requests |
+        | Service | 1 s | 5 requests | 200 ms | 5 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Campaigns
@@ -251,9 +255,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 20 requests | 3 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 20 requests | 3 s | 5 requests |
+        | Service | 1 min | 20 requests | 3 s | 5 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -493,9 +499,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 12 s | 1 request | 12 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 12 s | 1 request | 12 s | 5 requests |
+        | Service | 12 s | 1 request | 12 s | 5 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       parameters:
         - name: payment_type
@@ -560,9 +568,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 5 requests | 12 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 5 requests | 12 s | 5 requests |
+        | Service | 1 min | 5 requests | 12 s | 5 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       tags:
         - Campaigns Creation
@@ -676,9 +686,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 5 requests | 200 ms | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 5 requests | 200 ms | 5 requests |
+        | Service | 1 s | 5 requests | 200 ms | 5 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       tags:
         - Campaigns Management
@@ -922,9 +934,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 1 request | 1 s | 1 request |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 1 request | 1 s | 1 request |
+        | Service | 1 s | 1 request | 1 s | 1 request |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       tags:
         - Campaigns Management
@@ -1028,9 +1042,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 5 requests | 200 ms | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 5 requests | 200 ms | 5 requests |
+        | Service | 1 s | 5 requests | 200 ms | 5 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       tags:
         - Campaigns Management
@@ -1179,9 +1195,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 1 request | 1 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 1 request | 1 s | 5 requests |
+        | Service | 1 s | 1 request | 1 s | 5 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       tags:
         - Finances
@@ -1318,9 +1336,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 1 request | 1 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 1 request | 1 s | 5 requests |
+        | Service | 1 s | 1 request | 1 s | 5 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Finances
@@ -1655,9 +1675,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 1 request | 1 s | 1 request |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 1 request | 1 s | 1 request |
+        | Service | 1 s | 1 request | 1 s | 1 request |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       tags:
         - Campaigns Management
@@ -1787,9 +1809,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 5 requests | 12 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 5 requests | 12 s | 5 requests |
+        | Service | 1 min | 5 requests | 12 s | 5 requests |
+        | Base | 1 h | 20 requests | 3 min | 1 request |
         </div>
       parameters:
         - name: nmId
@@ -1867,9 +1891,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 10 requests | 6 s | 20 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 10 requests | 6 s | 20 requests |
+        | Service | 1 min | 10 requests | 6 s | 20 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -2191,9 +2217,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 2 requests | 500 ms | 4 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 2 requests | 500 ms | 4 requests |
+        | Service | 1 s | 2 requests | 500 ms | 4 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -2416,9 +2444,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 10 requests | 100 ms | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 10 requests | 100 ms | 10 requests |
+        | Service | 1 s | 10 requests | 100 ms | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Media
@@ -2485,9 +2515,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 10 requests | 100 ms | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 10 requests | 100 ms | 10 requests |
+        | Service | 1 s | 10 requests | 100 ms | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Media
@@ -2632,9 +2664,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 10 requests | 100 ms | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 10 requests | 100 ms | 10 requests |
+        | Service | 1 s | 10 requests | 100 ms | 10 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Media
@@ -2913,9 +2947,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 1 request |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 1 request |
+        | Service | 1 min | 3 requests | 20 s | 1 request |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Statistics
@@ -3314,9 +3350,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 10 requests | 100 ms | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 10 requests | 100 ms | 10 requests |
+        | Service | 1 s | 10 requests | 100 ms | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Statistics
@@ -3393,10 +3431,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Promotions Calendar</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 6 s | 10 requests | 600 ms | 5 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 6 s | 10 requests | 600 ms | 5 requests |
+        | Service | 6 s | 10 requests | 600 ms | 5 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - $ref: '#/components/parameters/startDateTime'
@@ -3432,10 +3471,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Promotions Calendar</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 6 s | 10 requests | 600 ms | 5 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 6 s | 10 requests | 600 ms | 5 requests |
+        | Service | 6 s | 10 requests | 600 ms | 5 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - $ref: '#/components/parameters/promotionIDs'
@@ -3511,10 +3551,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Promotions Calendar</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 6 s | 10 requests | 600 ms | 5 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 6 s | 10 requests | 600 ms | 5 requests |
+        | Service | 6 s | 10 requests | 600 ms | 5 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         $ref: '#/components/requestBodies/PromotionsSupplierTaskRequest'
@@ -3617,9 +3658,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 10 requests | 6 s | 20 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 10 requests | 6 s | 20 requests |
+        | Service | 1 min | 10 requests | 6 s | 20 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -5334,10 +5377,10 @@ components:
                 description: Error title
               detail:
                 type: string
-                description: Error details. The error means that the service from the [Catalog](https://dev.wildberries.ru/business-solutions) has insufficient funds on its balance
+                description: Error details. The error is only returned to services from the [Solutions for business Catalog](https://dev.wildberries.ru/business-solutions)
           example:
             title: payment required
-            detail: please top up your balance in your company personal account https://dev.wildberries.ru/company
+            detail: wb solution for business has insufficient funds on its balance. please top up the balance in the company's personal account https://dev.wildberries.ru/company
     '429':
       description: Too many requests
       content:

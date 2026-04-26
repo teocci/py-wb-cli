@@ -1,17 +1,13 @@
-"""Tests for I-13 + R-3 (`wb rate status`) and I-14 (`wb rate probe`)."""
+"""Tests for I-13 + R-3 + R-5 (`wb rate status`)."""
 
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import time
 from pathlib import Path
-from unittest.mock import patch
 
-import httpx
 import pytest
-import respx
 from typer.testing import CliRunner
 
 from wb.cli.app import app
@@ -260,199 +256,61 @@ class TestRateStatus:
         ServiceContainer.reset()
 
 
-class TestRateProbe:
-    """I-14 + R-4: single-call probe that respects per-endpoint cooldowns
-    recorded in the ``endpoint_budget`` table by every WB response.
-    """
+class TestRateProbeRemoved:
+    """R-5 removed `wb rate probe` — verify it's gone."""
 
-    PROBE_URL = 'https://advert-api.wildberries.ru/adv/v1/balance'
-    PROBE_ENDPOINT = '/adv/v1/balance'
+    def test_probe_subcommand_no_longer_registered(self, isolated_home):
+        """`wb rate probe` should now exit with usage error (unknown command)."""
+        result = runner.invoke(app, ['rate', 'probe'])
+        assert result.exit_code != 0
+        assert 'probe' in result.output.lower()  # error mentions the unknown name
 
-    def _token_fp(self) -> str:
+    def test_rate_help_lists_only_status(self, isolated_home):
+        """`wb rate --help` lists only the `status` subcommand."""
+        result = runner.invoke(app, ['rate', '--help'])
+        assert result.exit_code == 0
+        assert 'status' in result.output
+        assert 'probe' not in result.output
+
+
+class TestRateStatusTokenType:
+    """R-5: rate status surfaces token_type per token group."""
+
+    def test_token_type_in_payload_for_known_profile(self, isolated_home, monkeypatch):
+        """A token recorded for a known profile gets the persisted type."""
+        from wb.auth.profiles import ProfileStore
         from wb.core.rate_limiter import compute_token_fingerprint
-        return compute_token_fingerprint(TOKEN)
 
-    def test_help(self, isolated_home):
-        result = runner.invoke(app, ['rate', 'probe', '--help'])
-        assert result.exit_code == 0
-        assert 'probe' in result.output.lower()
-
-    def test_skips_network_when_endpoint_locked(self, isolated_home):
-        """``remaining=0`` + ``reset_at`` in the future → no HTTP, exit 5."""
-        db = isolated_home / '.wb-cli' / 'rate_limits.db'
-        _seed_budget_row(
-            db,
-            token_fp=self._token_fp(),
-            endpoint=self.PROBE_ENDPOINT,
-            seller_id='seller-under-test',
-            bucket_limit=1,
-            remaining=0,
-            reset_in_s=60.0,
-        )
-
-        with respx.mock:
-            route = respx.get(self.PROBE_URL).mock(
-                return_value=httpx.Response(200)
-            )
-            result = runner.invoke(app, ['--json', 'rate', 'probe'])
-
-        assert result.exit_code == 5
-        assert route.call_count == 0  # critical: no HTTP call
-        payload = json.loads(result.output)
-        assert payload['outcome'] == 'lock-active'
-        assert payload['locked'] is True
-        assert payload['seller_id'] == 'seller-under-test'
-        assert payload['token_fingerprint'] == self._token_fp()
-        assert 59.0 < payload['cooldown_seconds'] <= 60.0
-
-    def test_unrelated_endpoint_lock_does_not_block_probe(self, isolated_home):
-        """A lock on a different endpoint must NOT block ``rate probe``."""
-        db = isolated_home / '.wb-cli' / 'rate_limits.db'
-        _seed_budget_row(
-            db,
-            token_fp=self._token_fp(),
-            endpoint='/adv/v3/fullstats',  # different endpoint
-            seller_id='seller-under-test',
-            bucket_limit=3,
-            remaining=0,
-            reset_in_s=600.0,
-        )
-
-        with respx.mock:
-            route = respx.get(self.PROBE_URL).mock(
-                return_value=httpx.Response(
-                    200, json={'balance': 1}, headers={'x-ratelimit-remaining': '5'},
-                )
-            )
-            result = runner.invoke(app, ['--json', 'rate', 'probe'])
-
-        assert result.exit_code == 0
-        assert route.call_count == 1
-        payload = json.loads(result.output)
-        assert payload['outcome'] == 'ok'
-        assert payload['calls_remaining'] == 5
-
-    def test_200_reports_calls_remaining(self, isolated_home):
-        """Clear state + 200 with `x-ratelimit-remaining` → outcome='ok'."""
-        with respx.mock:
-            respx.get(self.PROBE_URL).mock(
-                return_value=httpx.Response(
-                    200,
-                    json={'balance': 1000},
-                    headers={'x-ratelimit-remaining': '27'},
-                )
-            )
-            result = runner.invoke(app, ['--json', 'rate', 'probe'])
-
-        assert result.exit_code == 0
-        payload = json.loads(result.output)
-        assert payload['outcome'] == 'ok'
-        assert payload['locked'] is False
-        assert payload['calls_remaining'] == 27
-        assert payload['http_status'] == 200
-        assert payload['seller_id'] == 'seller-under-test'
-
-    def test_200_without_remaining_header(self, isolated_home):
-        """200 without the header → calls_remaining=null, still exit 0."""
-        with respx.mock:
-            respx.get(self.PROBE_URL).mock(
-                return_value=httpx.Response(200, json={'balance': 1000})
-            )
-            result = runner.invoke(app, ['--json', 'rate', 'probe'])
-
-        assert result.exit_code == 0
-        payload = json.loads(result.output)
-        assert payload['outcome'] == 'ok'
-        assert payload['calls_remaining'] is None
-
-    def test_429_writes_endpoint_budget_and_exits(self, isolated_home):
-        """429 → ``endpoint_budget`` row upserted with reset_at, exit 5."""
-        with respx.mock:
-            respx.get(self.PROBE_URL).mock(
-                return_value=httpx.Response(
-                    429,
-                    headers={'x-ratelimit-retry': '120'},
-                    json={'detail': 'too many requests'},
-                )
-            )
-            result = runner.invoke(app, ['--json', 'rate', 'probe'])
-
-        assert result.exit_code == 5
-        payload = json.loads(result.output)
-        assert payload['outcome'] == '429'
-        assert payload['locked'] is True
-        assert payload['cooldown_seconds'] == 120.0
-
-        # Budget row was persisted under the (token, endpoint) key
-        db = isolated_home / '.wb-cli' / 'rate_limits.db'
-        conn = sqlite3.connect(str(db))
-        try:
-            row = conn.execute(
-                'SELECT remaining, reset_at, seller_id FROM endpoint_budget '
-                'WHERE token_fp = ? AND endpoint = ?',
-                (self._token_fp(), self.PROBE_ENDPOINT),
-            ).fetchone()
-        finally:
-            conn.close()
-        assert row is not None
-        remaining, reset_at, seller_id = row
-        # observe() decrements via remaining=int(headers); 429 here doesn't
-        # send x-ratelimit-remaining so the row stores remaining=None.
-        assert remaining is None
-        assert reset_at - time.time() > 119.0
-        assert seller_id == 'seller-under-test'
-
-    def test_500_does_not_touch_budget(self, isolated_home):
-        """Non-429 error → no budget row written (no rate-limit headers)."""
-        with respx.mock:
-            respx.get(self.PROBE_URL).mock(
-                return_value=httpx.Response(500, text='boom')
-            )
-            result = runner.invoke(app, ['--json', 'rate', 'probe'])
-
-        assert result.exit_code == 6
-        payload = json.loads(result.output)
-        assert payload['outcome'] == 'error'
-        assert payload['locked'] is False
-
-        # Budget table either doesn't exist or has no row for this endpoint
-        db = isolated_home / '.wb-cli' / 'rate_limits.db'
-        if db.exists():
-            conn = sqlite3.connect(str(db))
-            try:
-                # The table is created on EndpointBudget init even when no
-                # rows are written, so check for the absence of a row not
-                # the absence of the table.
-                rows = conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' "
-                    "AND name='endpoint_budget'"
-                ).fetchall()
-                if rows:
-                    row = conn.execute(
-                        'SELECT * FROM endpoint_budget WHERE token_fp = ? '
-                        'AND endpoint = ?',
-                        (self._token_fp(), self.PROBE_ENDPOINT),
-                    ).fetchone()
-                    assert row is None
-            finally:
-                conn.close()
-
-    def test_no_token_exits_config_error(self, tmp_path, monkeypatch):
-        """No token → outcome='no-token', exit 7 (CONFIG_ERROR)."""
-        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
         monkeypatch.delenv('WB_API_TOKEN', raising=False)
-        monkeypatch.delenv('WB_ANALYTICS_TOKEN', raising=False)
-        monkeypatch.chdir(tmp_path)
         ServiceContainer.reset()
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('default')
+        store.save_token('default', 'promotion', TOKEN)
+        store.set_token_type('default', 'personal')
 
-        with respx.mock:
-            route = respx.get(self.PROBE_URL).mock(
-                return_value=httpx.Response(200)
-            )
-            result = runner.invoke(app, ['--json', 'rate', 'probe'])
-        ServiceContainer.reset()
+        token_fp = compute_token_fingerprint(TOKEN)
+        db = isolated_home / '.wb-cli' / 'rate_limits.db'
+        _seed_budget_row(
+            db, token_fp=token_fp, endpoint='/adv/v3/fullstats',
+            seller_id='seller-under-test', bucket_limit=3, remaining=2,
+            reset_in_s=20.0,
+        )
 
-        assert result.exit_code == 7
-        assert route.call_count == 0
+        result = runner.invoke(app, ['--json', 'rate', 'status'])
         payload = json.loads(result.output)
-        assert payload['outcome'] == 'no-token'
+        token = payload['sellers'][0]['tokens'][0]
+        assert token['token_type'] == 'personal'
+
+    def test_token_type_null_for_unknown_token(self, isolated_home):
+        """A budget row whose fingerprint matches no profile carries token_type=null."""
+        db = isolated_home / '.wb-cli' / 'rate_limits.db'
+        _seed_budget_row(
+            db, token_fp='unknown_fp', endpoint='/adv/v3/fullstats',
+            seller_id='seller-x', bucket_limit=3, remaining=1,
+            reset_in_s=15.0,
+        )
+
+        result = runner.invoke(app, ['--json', 'rate', 'status'])
+        payload = json.loads(result.output)
+        token = payload['sellers'][0]['tokens'][0]
+        assert token['token_type'] is None

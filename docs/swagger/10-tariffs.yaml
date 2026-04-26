@@ -32,9 +32,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 1 request | 1 min | 2 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 1 request | 1 min | 2 requests |
+        | Service | 1 min | 1 request | 1 min | 2 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       parameters:
         - $ref: '#/components/parameters/Locale'
@@ -100,9 +102,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 60 requests | 1 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 60 requests | 1 s | 5 requests |
+        | Service | 1 min | 60 requests | 1 s | 5 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - $ref: '#/components/parameters/Date'
@@ -152,9 +156,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 60 requests | 1 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 60 requests | 1 s | 5 requests |
+        | Service | 1 min | 60 requests | 1 s | 5 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - $ref: '#/components/parameters/Date'
@@ -203,9 +209,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 6 requests | 10 s | 6 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 6 requests | 10 s | 6 requests |
+        | Service | 1 min | 6 requests | 10 s | 6 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - name: warehouseIDs
@@ -260,9 +268,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 60 requests | 1 s | 5 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 60 requests | 1 s | 5 requests |
+        | Service | 1 min | 60 requests | 1 s | 5 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - $ref: '#/components/parameters/Date'
@@ -942,10 +952,10 @@ components:
                 description: Error title
               detail:
                 type: string
-                description: Error details. The error means that the service from the [Catalog](https://dev.wildberries.ru/business-solutions) has insufficient funds on its balance
+                description: Error details. The error is only returned to services from the [Solutions for business Catalog](https://dev.wildberries.ru/business-solutions)
           example:
             title: payment required
-            detail: please top up your balance in your company personal account https://dev.wildberries.ru/company
+            detail: wb solution for business has insufficient funds on its balance. please top up the balance in the company's personal account https://dev.wildberries.ru/company
     '429':
       description: Too many requests
       content:

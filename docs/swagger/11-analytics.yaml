@@ -57,9 +57,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -125,9 +127,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -189,9 +193,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -243,6 +249,13 @@ paths:
         <br><br>
         Also you can create a CSV-version of [search texts](/openapi/analytics#tag/Search-Queries-for-Your-Items/paths/~1api~1v2~1search-report~1product~1search-texts/post) or [inventory](/openapi/analytics#tag/Stocks-Report) report.
         <br><br>
+
+        Each new report must have a unique ID.
+
+        <div class="description_important">
+          Do not use the same ID for different reports — this may cause errors during generation
+        </div>
+
         The set of parameters in the `params` object depends on the report type. To get a description of the parameters, select the report type from the dropdown list in the description of the `reportType` parameter.
         <br><br>
         The parameters `includeSubstitutedSKUs` and `includeSearchTexts` cannot both be set to `false`
@@ -256,9 +269,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         content:
@@ -555,9 +570,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - in: query
@@ -653,9 +670,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         content:
@@ -750,9 +769,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - in: path
@@ -879,9 +900,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         required: true
@@ -943,9 +966,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         required: true
@@ -1011,9 +1036,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         required: true
@@ -1066,7 +1093,7 @@ paths:
         Forms the top search texts by product.
 
         Search text selection parameters:
-          - `limit` — number of queries, maximum 30 (for the [Advanced](https://seller.wildberries.ru/monetization/tariffs) tariff, the maximum is 100)
+          - `limit` — number of queries, maximum 30. For the **Advanced** and **Premium** [Jam](https://seller.wildberries.ru/monetization/tariffs) tariffs, the maximum is 100.
           - `topOrderBy` — method for selecting the top queries
 
         The parameters `includeSubstitutedSKUs` and `includeSearchTexts` cannot both be set to `false`.<br><br>
@@ -1076,9 +1103,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         required: true
@@ -1126,18 +1155,28 @@ paths:
       x-category: contentanalytics
       tags:
         - Search Queries for Your Items
-      summary: Orders and Positions by Product Search Texts
+      summary: Orders and Positions by Item Search Texts
       description: |
-        Forms data for a table on the number of orders and positions by queries. The data is specified within a period for a specific product.<br><br>
+        The method forms data for the table:
+          - about orders for each search query for a specific item
+          - about item positions in search results for each query
 
-        The report data is updated once an hour.
+        The data is provided within the period for the [requested item](/openapi/analytics#tag/Search-Queries-for-Your-Items/paths/~1api~1v2~1search-report~1product~1search-texts/post) and grouped by day. The maximum period is 7 days.<br><br>
+
+        The report data is updated once per hour.
+
+        <div class="description_important">
+          You can get a report for a maximum of the last 365 days from the moment of the request
+        </div>
 
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         required: true
@@ -1259,9 +1298,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -1385,9 +1426,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -1444,9 +1487,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 3 requests | 20 s | 3 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 3 requests | 20 s | 3 requests |
+        | Service | 1 min | 3 requests | 20 s | 3 requests |
+        | Base | 1 h | 2 requests | 30 min | 1 request |
         </div>
       requestBody:
         required: true
@@ -2690,7 +2735,8 @@ components:
           example:
             - костюм
             - пиджак
-          description: Search texts. For the [Advanced](https://seller.wildberries.ru/monetization/tariffs) tariff, the maximum is 100
+          description: |
+            Search texts. For the **Advanced** and **Premium** [Jam](https://seller.wildberries.ru/monetization/tariffs) tariffs, the maximum is 100
           type: array
           items:
             type: string
@@ -5612,10 +5658,10 @@ components:
                 description: Error title
               detail:
                 type: string
-                description: Error details. The error means that the service from the [Catalog](https://dev.wildberries.ru/business-solutions) has insufficient funds on its balance
+                description: Error details. The error is only returned to services from the [Solutions for business Catalog](https://dev.wildberries.ru/business-solutions)
           example:
             title: payment required
-            detail: please top up your balance in your company personal account https://dev.wildberries.ru/company
+            detail: wb solution for business has insufficient funds on its balance. please top up the balance in the company's personal account https://dev.wildberries.ru/company
     '429':
       description: Too many requests
       content:

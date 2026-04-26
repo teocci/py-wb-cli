@@ -34,6 +34,8 @@ __all__ = [
     'ALL_CATEGORY',
     'TOKEN_CATEGORIES',
     'CATEGORY_DISPLAY_NAMES',
+    'TOKEN_TYPES',
+    'DEFAULT_TOKEN_TYPE',
     'PING_PATH',
     'PORTAL_AUTH_HEADER',
     'PORTAL_SESSION_HEADER',
@@ -196,6 +198,19 @@ CATEGORY_DISPLAY_NAMES: dict[str, str] = {
     'feedbacks-questions': 'Feedbacks and Questions',
     'prices-discounts':    'Prices and Discounts',
 }
+
+# ── Token types (R-5) ────────────────────────────────────────────────
+# WB issues four token types. Personal/Service share the standard advert
+# rate budget; Base is 30–60× tighter on most advert + analytics endpoints
+# (e.g. /adv/v1/balance: 1/s for Personal vs 2/h for Base). Test tokens are
+# rare and treated like Base for safety. See RATE_LIMITS.md and the
+# BASE_OVERRIDES map in wb.core.rate_limits.
+TOKEN_TYPES: tuple[str, ...] = ('personal', 'service', 'base', 'test')
+
+# Default when a profile carries no explicit token_type. Base is the safer
+# assumption: over-throttling Personal is harmless; under-throttling Base
+# trips a 30-minute lockout on the first call.
+DEFAULT_TOKEN_TYPE: str = 'base'
 
 # ── Connection check ─────────────────────────────────────────────────
 PING_PATH = '/ping'

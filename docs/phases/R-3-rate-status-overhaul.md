@@ -76,6 +76,63 @@ $VENV/python -m pytest tests/unit/ -q                   # 1177 passed, 1 pre-exi
 
 Cross-token visibility regression test (`test_lock_visible_from_unrelated_token_shell`) demonstrates the original F-14 bug is impossible by construction — `read_all()` ignores token gating entirely.
 
+## Live verification (2026-04-26, post-release)
+
+Read-only smoke test against the production env (`wb rate status` makes zero HTTP calls — just queries the local SQLite). The DB already had one row from the R-2 verification call to `/api/advert/v2/adverts` the day before.
+
+**Table mode:**
+
+```
+$ wb rate status
+Profile : 25169
+
+Seller 407bbe2b-f3f9-404d-906f-99b2ef926815 (1 token)
+                            Token def07bba57905265
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ Endpoint               ┃ Remaining ┃ Reset (s) ┃ Last seen (s ago) ┃ State ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ /api/advert/v2/adverts │ 0/?       │ 0         │ 29327             │       │
+└────────────────────────┴───────────┴───────────┴───────────────────┴───────┘
+```
+
+**JSON mode:**
+
+```json
+{
+  "now_epoch": 1777196150.019,
+  "profile": "25169",
+  "sellers": [
+    {
+      "seller_id": "407bbe2b-f3f9-404d-906f-99b2ef926815",
+      "tokens": [
+        {
+          "token_fp": "def07bba57905265",
+          "endpoints": [
+            {
+              "endpoint": "/api/advert/v2/adverts",
+              "remaining": 0,
+              "bucket_limit": null,
+              "reset_in_s": 0.0,
+              "last_seen_ago_s": 29327.6,
+              "locked": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Confirmed end-to-end:
+
+- **Plaintext seller ID** (`407bbe2b-f3f9-404d-906f-99b2ef926815`) renders directly — no opaque hash, matching the R-1 design choice.
+- **JSON shape matches the contract above** — top-level `now_epoch` / `profile` / `sellers[]`; per-endpoint `remaining`, `bucket_limit`, `reset_in_s`, `last_seen_ago_s`, `locked`. All pre-R-3 keys gone.
+- **`locked: false` despite `remaining: 0`** is the correct evaluation — `reset_in_s = 0.0` (the bucket already refilled ~8 h ago), so the row is no longer actively locked. The `locked` flag follows `remaining == 0 AND reset_at > now`.
+- **No `seller_cooldown` row surfaces** — the legacy F-13 row in the same DB file (still present from yesterday's accidental trigger, ~31 h expired) is correctly invisible. `rate_status` reads `endpoint_budget` exclusively.
+- **F-14 confirmed fixed by construction** — there is no per-token gating filter in the read path, so the original "rate status reports clear while the next command 429s" failure mode cannot recur.
+- **Diagnostic byproduct**: `last_seen_ago_s ≈ 29327` (~8 h) tells us no other `wb` calls have hit `/api/advert/v2/adverts` since the R-2 verification — the next call there will bootstrap fresh through the static prior, which is exactly what the metadata-driven model expects.
+
 ## Risks
 
 - **JSON shape is breaking.** Documented in CHANGELOG. The pre-R-3 payload was small and already in flux; downstream consumers (the rate-recover skill and one report script) update in R-4.

@@ -83,14 +83,25 @@
       "Read(//c/Users/teocci/.claude/plans/**)",
       "Bash(.venv/Scripts/python scripts/probe_daily_report.py)",
       "Bash(.venv/Scripts/python scripts/probe_poc1_recovery.py)",
-      "Bash(wb version *)"
+      "Bash(wb version *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(git restore *)",
+      "Bash(.venv/Scripts/python)",
+      "Edit(/.claude/skills/wb-pulse/**)",
+      "Edit(/.claude/skills/wb-assess/**)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(.venv/Scripts/python -c \"from pathlib import Path; print\\(len\\(Path\\('src/wb/cli/rate.py'\\).read_text\\(encoding='utf-8'\\).splitlines\\(\\)\\)\\)\")",
+      "Bash(.venv/Scripts/python -c \"from wb.cli.rate import rate_app; print\\('imports ok'\\)\")",
+      "Bash(.venv/Scripts/python -c \"from pathlib import Path; print\\(len\\(Path\\('tests/unit/test_cli_rate.py'\\).read_text\\(encoding='utf-8'\\).splitlines\\(\\)\\)\\)\")"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
       "d:\\d\\teocci\\code\\python\\py-wb-cli",
       "D:\\teocci\\code\\python\\py-wb-cli\\src\\wb\\domain",
       "C:\\Users\\teocci\\.wb-cli",
-      "\\tmp"
+      "\\tmp",
+      "C:\\Users\\teocci\\.claude\\plans"
     ]
   }
 }

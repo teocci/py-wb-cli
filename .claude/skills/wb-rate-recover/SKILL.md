@@ -15,13 +15,23 @@ triggers:
 
 Recovery guide for 429 / rate-limit failures. Invoke when CLI output contains `Rate limited (attempt N/4)`, `Endpoint <path> locked for ~Ns`, a table row shows `False | Rate limited by WB API`, or any `RATE_LIMITED` exit code (5).
 
+## Token type matters (R-5+)
+
+Before any recovery step, check `wb rate status` for the `token_type` field on each token group. The standard cooldown numbers in this guide are for **Personal/Service**; **Base** tokens get 30-min to 1-h refill windows on the same endpoints. On Base, "wait 60 seconds and retry" is rarely correct — wait what `reset_in_s` says, which can be 1800+ s.
+
+**No active probe command.** R-5 removed `wb rate probe` — it was vestigial since R-1..R-4 made the runtime header-driven. Two replacements:
+- **Connectivity / token validity** → `wb auth ping`
+- **Live budget state** → `wb rate status` (no network call)
+
+Any real `wb` call also refreshes the budget for the endpoint(s) it touches via `EndpointBudget.observe(...)`. There is no longer a way to "ask WB about state" without making a useful call — and that's the right design.
+
 ## Pre-flight — always start here (local, no network)
 
 ```bash
 wb --json rate status
 ```
 
-The output is read from local SQLite (no API call). Since R-3 the payload is grouped per `(seller, token, endpoint)`:
+The output is read from local SQLite (no API call). Since R-3 the payload is grouped per `(seller, token, endpoint)`; since R-5 each token group includes `token_type`:
 
 ```json
 {
@@ -33,8 +43,9 @@ The output is read from local SQLite (no API call). Since R-3 the payload is gro
       "tokens": [
         {
           "token_fp": "aabbccdd11223344",
+          "token_type": "base",
           "endpoints": [
-            {"endpoint": "/adv/v3/fullstats", "remaining": 0, "bucket_limit": 3, "reset_in_s": 3499.0, "last_seen_ago_s": 12.0, "locked": true}
+            {"endpoint": "/adv/v3/fullstats", "remaining": 0, "bucket_limit": 1, "reset_in_s": 3499.0, "last_seen_ago_s": 12.0, "locked": true}
           ]
         }
       ]
@@ -48,7 +59,7 @@ The output is read from local SQLite (no API call). Since R-3 the payload is gro
 | `endpoint.locked: true` | This specific endpoint is unreachable until `reset_in_s` passes. Other endpoints under the same token stay reachable. |
 | `endpoint.reset_in_s: N` | Seconds remaining before the locked endpoint refills. Sleep at least `N + 5 s` if your retry needs that endpoint. |
 | `sellers: []` | Empty `endpoint_budget` table — no rate-limit state observed yet. Clean slate. |
-| All endpoints `locked: false` | No active cooldowns. The CLI hasn't seen a 429; if the previous command failed, try `rate probe` to refresh. |
+| All endpoints `locked: false` | No active cooldowns. If the previous command failed, the failure was transient or in-process. Just retry. |
 
 **To pick the longest active cooldown** with `jq`:
 
@@ -63,25 +74,15 @@ wb --json rate status | jq '
 
 If this returns `0`, no endpoint is currently locked. Otherwise sleep that many seconds before retrying.
 
-## Verification probe (one controlled network call)
+## When `rate status` shows nothing locked but the call still fails
 
-If `rate status` shows the endpoint you need is clear but you're not sure (fresh process, another tool may have tripped the throttle), run the probe:
+If `rate status` is empty (no rows yet) or every endpoint shows `locked: false`, three things can be true:
 
-```bash
-wb --json rate probe
-```
+1. **Fresh process / fresh DB** — no calls have been observed yet. Just retry the original command; the first response will populate the budget for that endpoint.
+2. **The failure was in-process retry exhaustion** — three internal retries already happened; the budget now reflects the lock that was written on the third 429. `rate status` shows it; sleep `reset_in_s + 5s`.
+3. **A parallel process or external client tripped the throttle without writing to our `endpoint_budget`** — only the next real call to that endpoint will surface the actual cooldown via WB's response headers. You can either retry the original command (which will block per-endpoint at the budget layer if WB responds with `remaining=0`) or run a cheap unrelated command.
 
-This makes exactly one call to `/adv/v1/balance` (cheapest per-seller endpoint). The probe writes `X-Ratelimit-*` headers back into `endpoint_budget` so a follow-up `rate status` reflects the live state:
-
-| `outcome` | `locked` | `calls_remaining` | What to do |
-|---|---|---|---|
-| `ok` | false | positive number | Safe to proceed; `calls_remaining` is how many calls before the next reset window |
-| `ok` | false | `0` | **Do not call `/adv/v1/balance` again this window.** Sleep ~60 s, do not probe twice |
-| `lock-active` | true | `0` | The probe endpoint itself is already locked; sleep `cooldown_seconds`. Other endpoints are likely still reachable — check `rate status` again |
-| `429` | true | 0 | The probe just tripped; the new `cooldown_seconds` is written to the budget automatically; sleep that value |
-| `no-token`, `error`, `network-error` | — | — | Configuration / transport problem; investigate before retrying |
-
-**Do not loop `wb rate probe`.** Each probe consumes one call from the `/adv/v1/balance` window. Once you have a reading, act on it.
+For a connectivity / token-validity sanity check, use `wb auth ping` — it hits `/ping` (uniform 3/30s rate, no Base stratification) and confirms the token is alive without consuming an advert bucket.
 
 ## Reading warning messages (legacy log lines)
 
@@ -112,11 +113,10 @@ CLI exited RATE_LIMITED or warnings appeared?
 │   ├── any endpoint with locked == true
 │   │   └── sleep max(reset_in_s) + 5s, then retry original command
 │   └── all endpoints unlocked (or sellers == [])
-│       ├── Same command raised RATE_LIMITED just now → run wb --json rate probe
-│       │   ├── outcome == "429"      → sleep cooldown_seconds + 5s
-│       │   ├── outcome == "ok", calls_remaining == 0 → sleep 60s (next window)
-│       │   └── outcome == "ok", calls_remaining > 0  → retry original command
-│       └── Command succeeded with warnings → no action needed (transient)
+│       ├── token_type == "base" → wait the documented Base interval for the
+│       │   failed endpoint (RATE_LIMITS.md § Endpoints, Base column), then retry
+│       └── token_type ∈ {personal, service, test} → just retry; the budget
+│           layer will block if WB still says we're throttled
 ```
 
 ## Recovery procedures
@@ -137,10 +137,7 @@ For repeated analyst prompts on the same day range, saved raw JSON is the safest
 # Authoritative check
 wb --json rate status
 
-# If the campaign-write endpoint is locked, wait that long; otherwise probe
-wb --json rate probe
-
-# Then retry the delete
+# Wait reset_in_s for the campaign-write endpoint, then retry
 wb campaign delete <campaign_id> --yes
 ```
 
@@ -149,15 +146,14 @@ wb campaign delete <campaign_id> --yes
 ```bash
 # Check — do not sleep blindly
 wb --json rate status          # reads local endpoint_budget table
-wb --json rate probe           # optional: confirm with WB
 
-# Only then retry
+# Wait reset_in_s for /adv/v3/fullstats, then retry
 wb --json stats daily-report --date <YYYY-MM-DD>
 ```
 
 ## Minimum wait times (fallback if rate status is unavailable)
 
-Use these as a last resort when `wb rate status` / `wb rate probe` aren't available or no relevant row exists in `endpoint_budget` but the throttle is real.
+Use these as a last resort when `wb rate status` is unavailable or no relevant row exists in `endpoint_budget` but the throttle is real. Numbers below are **Personal/Service**; for Base, see the Base column in `RATE_LIMITS.md`.
 
 | Operation | Min wait | Reason |
 |---|---|---|
@@ -171,8 +167,7 @@ Use these as a last resort when `wb rate status` / `wb rate probe` aren't availa
 ## Notes
 
 - `wb rate status` is authoritative whenever a 429 has already been observed by any `wb` process sharing `~/.wb-cli/rate_limits.db`. Cross-process coordination means the lock persists across parallel invocations.
-- `wb rate probe` is the only "safe" way to actively ask WB about the current state. It makes one call against `/adv/v1/balance`; do not loop.
-- `calls_remaining: 0` on a successful probe means "stop, one more call will 429 on `/adv/v1/balance`". Treat it as a hard stop for that endpoint, not a "just one more" signal.
+- Since R-5 there is no `wb rate probe` command. Use `wb auth ping` for connectivity checks; use `wb rate status` for budget visibility. Any real `wb` call refreshes the budget for the endpoint it touches.
 - Per-endpoint scope: a 429 on `/adv/v3/fullstats` no longer locks `/adv/v1/balance` (R-1..R-4 redesign). Other endpoints stay reachable; only the throttled bucket waits.
 - For pre-flight planning of multi-call sequences, see `wb-rate-guide`.
 - Authoritative limits: `RATE_LIMITS.md`.

@@ -12,6 +12,7 @@ from wb.core.config import Settings
 from wb.core.constants import (
     ANALYTICS_BASE_URL,
     CACHE_DB_FILE,
+    DEFAULT_TOKEN_TYPE,
     PRICES_BASE_URL,
     PROMOTION_BASE_URL,
     RATE_LIMIT_DB_FILE,
@@ -21,6 +22,7 @@ from wb.core.constants import (
     RESPONSE_CACHE_RETENTION_DAYS,
     STATISTICS_BASE_URL,
 )
+from wb.core.exceptions import ConfigError
 from wb.storage.audit import AuditLogger
 from wb.storage.response_cache import ResponseCache
 
@@ -93,6 +95,7 @@ class _Container:
             token: str,
             *,
             with_rate_limits: bool = False,
+            token_type: str = DEFAULT_TOKEN_TYPE,
     ) -> WbHttpClient:
         """Return a cached WbHttpClient for the given base URL and token.
 
@@ -105,6 +108,11 @@ class _Container:
                 ``~/.wb-cli/rate_limits.db``. Only advert + analytics
                 clients need this; statistics/prices clients skip it
                 since they use different base URLs.
+            token_type: Drives bootstrap rate-limit prior selection in
+                :func:`wb.core.rate_limits.select_prior`. Defaults to
+                :data:`DEFAULT_TOKEN_TYPE` (``'base'``) — the safer
+                assumption when no profile information is available
+                (env-var-only callers).
 
         Returns:
             Existing or newly created WbHttpClient.
@@ -129,6 +137,7 @@ class _Container:
                 budget=budget,
                 token_fp=token_fp,
                 seller_id=seller_id,
+                token_type=token_type,
             )
         return cls._http_clients[key]
 
@@ -219,6 +228,28 @@ def _get_promotion_token(
     return profile.get_token('promotion')
 
 
+def _get_token_type(profile_name: str | None = None) -> str:
+    """Resolve the token type for rate-limit prior selection.
+
+    Reads :attr:`Profile.token_type` for the named (or active) profile.
+    Falls back to :data:`DEFAULT_TOKEN_TYPE` (``'base'``) when no
+    profile is registered yet — env-var-only callers default to the
+    safer Base assumption rather than the looser Personal one.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        One of :data:`wb.core.constants.TOKEN_TYPES`.
+    """
+    settings = _Container.settings()
+    try:
+        store = ProfileStore(settings.config_dir)
+        return store.get_profile(profile_name).token_type
+    except (ConfigError, OSError):
+        return DEFAULT_TOKEN_TYPE
+
+
 def create_portal_client(
         profile_name: str | None = None,
         cli_authorizev3: str | None = None,
@@ -306,7 +337,11 @@ def create_promotion_client(
         Configured PromotionClient instance.
     """
     token = _get_promotion_token(profile_name)
-    http = _Container.http_client(PROMOTION_BASE_URL, token, with_rate_limits=True)
+    token_type = _get_token_type(profile_name)
+    http = _Container.http_client(
+        PROMOTION_BASE_URL, token,
+        with_rate_limits=True, token_type=token_type,
+    )
     return PromotionClient(http)
 
 
@@ -417,7 +452,11 @@ def create_analytics_client(
     """
     from wb.client.analytics import AnalyticsClient
     token = _get_analytics_token(profile_name)
-    http = _Container.http_client(ANALYTICS_BASE_URL, token, with_rate_limits=True)
+    token_type = _get_token_type(profile_name)
+    http = _Container.http_client(
+        ANALYTICS_BASE_URL, token,
+        with_rate_limits=True, token_type=token_type,
+    )
     return AnalyticsClient(http)
 
 
@@ -494,7 +533,11 @@ def create_reports_client(profile_name: str | None = None):
     """
     from wb.client.reports import ReportsClient
     token = _get_analytics_token(profile_name)
-    http = _Container.http_client(ANALYTICS_BASE_URL, token, with_rate_limits=True)
+    token_type = _get_token_type(profile_name)
+    http = _Container.http_client(
+        ANALYTICS_BASE_URL, token,
+        with_rate_limits=True, token_type=token_type,
+    )
     return ReportsClient(http)
 
 

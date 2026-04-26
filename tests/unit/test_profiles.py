@@ -5,7 +5,12 @@ import json
 import pytest
 
 from wb.auth.profiles import Profile, ProfileStore
-from wb.core.constants import ALL_CATEGORY, TOKEN_CATEGORIES
+from wb.core.constants import (
+    ALL_CATEGORY,
+    DEFAULT_TOKEN_TYPE,
+    TOKEN_CATEGORIES,
+    TOKEN_TYPES,
+)
 from wb.core.exceptions import ConfigError, ValidationError
 
 
@@ -181,6 +186,33 @@ class TestProfile:
         assert profile.tokens == {}
         assert profile.portal_session == {}
         assert profile.last_used is None
+
+    # ── token_type (R-5) ──────────────────────────────────────────────
+
+    def test_default_token_type_is_base(self):
+        """New profiles default token_type to DEFAULT_TOKEN_TYPE ('base')."""
+        profile = Profile(name='p')
+        assert profile.token_type == DEFAULT_TOKEN_TYPE
+        assert profile.token_type == 'base'
+
+    @pytest.mark.parametrize('token_type', TOKEN_TYPES)
+    def test_token_type_persists_through_roundtrip(self, token_type):
+        """to_dict/from_dict preserves every TOKEN_TYPES value."""
+        original = Profile(name='p', token_type=token_type)
+        rebuilt = Profile.from_dict(original.to_dict())
+        assert rebuilt.token_type == token_type
+
+    def test_legacy_dict_without_token_type_defaults_to_base(self):
+        """Profiles JSON written before R-5 must read as 'base'."""
+        legacy_data = {'name': 'legacy', 'tokens': {'promotion': 'tok'}}
+        profile = Profile.from_dict(legacy_data)
+        assert profile.token_type == DEFAULT_TOKEN_TYPE
+
+    def test_to_dict_includes_token_type(self):
+        """to_dict must serialize the token_type field."""
+        profile = Profile(name='p', token_type='personal')
+        data = profile.to_dict()
+        assert data['token_type'] == 'personal'
 
     # ── touch ─────────────────────────────────────────────────────────
 
@@ -392,3 +424,27 @@ class TestProfileStore:
         store.create_profile('deep-profile')
 
         assert (nested_dir / 'profiles.json').exists()
+
+    # ── set_token_type (R-5) ──────────────────────────────────────────
+
+    def test_set_token_type_persists(self, tmp_path):
+        """set_token_type writes to disk and reloads correctly."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('typed')
+        store.set_token_type('typed', 'personal')
+
+        reloaded = ProfileStore(tmp_path).get_profile('typed')
+        assert reloaded.token_type == 'personal'
+
+    def test_set_token_type_rejects_unknown_value(self, tmp_path):
+        """set_token_type raises ValidationError for unknown types."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        with pytest.raises(ValidationError, match='Unknown token type'):
+            store.set_token_type('p', 'super-base')
+
+    def test_set_token_type_missing_profile_raises(self, tmp_path):
+        """set_token_type raises ConfigError when the profile doesn't exist."""
+        store = ProfileStore(tmp_path)
+        with pytest.raises(ConfigError, match='does not exist'):
+            store.set_token_type('ghost', 'base')

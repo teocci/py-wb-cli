@@ -4,8 +4,7 @@ info:
   version: order
   description: |
     <div class="description_important">
-      <b>Methods for working with assembly orders of the DBW model (Delivery by Wildberries) are now in a <a href="https://dev.wildberries.ru/en/release-notes?id=312">separate environment</a>.
-    </b>
+      Methods for working with assembly orders of the DBW model (Delivery by Wildberries) are now in a <a href="https://dev.wildberries.ru/en/release-notes?id=312">separate environment</a>.
     </div>
 
     Use the FBS Orders (Fulfillment by Seller) methods to:
@@ -347,9 +346,9 @@ paths:
         Returns a list of all new [assembly orders](/openapi/orders-fbs#tag/FBS-Assembly-Orders/paths/~1api~1v3~1orders/get).
 
         <div class="description_important">
-        Metadata specified in the <code>requiredMeta</code> and <code>optionalMeta</code> fields in assembly orders only affects the ability to transfer a supply to delivery. If your product requires mandatory marking with identification means, you must specify all needed metadata whether it was received in <code>requiredMeta</code> or <code>optionalMeta</code> field (see 4.6 of the <a href ="https://seller.wildberries.ru/confirm-offer-condition/product/view">Offer</a>).
-        <br>
-        We recommend adding all metadata received in the <code>requiredMeta</code> and <code>optionalMeta</code> fields to the assembly orders
+          Metadata specified in the <code>requiredMeta</code> and <code>optionalMeta</code> fields in assembly orders only affects the ability to transfer a supply to delivery. If your product requires mandatory marking with identification means, you must specify all needed metadata whether it was received in <code>requiredMeta</code> or <code>optionalMeta</code> field (see 4.6 of the <a href ="https://seller.wildberries.ru/confirm-offer-condition/product/view">Offer</a>).
+          <br>
+          We recommend adding all metadata received in the <code>requiredMeta</code> and <code>optionalMeta</code> fields to the assembly orders
         </div>
 
         <div class="description_limit">
@@ -489,7 +488,7 @@ paths:
         - `canceled_by_client` — the buyer canceled the order upon receipt
         - `declined_by_client` — the buyer canceled the order in the first hour <br> Cancellation is available to the buyer in the first hour from the moment of order, if the order is not transferred to confirm status.
         - `defect` — cancellation of the order due to a defect
-        - `ready_for_pickup` — the assembly orders came at pickup point and waiting for the client
+        - `ready_for_pickup` — the order came at pickup point and waiting for the client
         - `postponed_delivery` — courier delivery is postponed
         - `accepted_by_carrier` — accepted by carrier. The order is handed over to delivery service in the seller country
         - `sent_to_carrier` — dispatched to carrier. The order is on the way to delivery service's warehouse in the seller
@@ -805,15 +804,15 @@ paths:
                           description: Assembly order ID
                           example: 5346346
                         partA:
-                          type: integer
+                          type: string
                           nullable: false
-                          description: The first part of the sticker identifier (for printing the signature)
-                          example: 231648
+                          description: The first part of the sticker ID for printing the signature
+                          example: '231648'
                         partB:
-                          type: integer
+                          type: string
                           nullable: false
-                          description: The second part of the sticker identifier (for printing the signature)
-                          example: 9753
+                          description: The second part of the sticker ID for printing the signature
+                          example: '9753'
                         barcode:
                           type: string
                           nullable: false
@@ -1460,7 +1459,7 @@ paths:
         - FBS Assembly Orders
       summary: Get Stickers for Cross-Border Assembly Orders
       description: |
-        Returns a list of stickers for cross-border assembly orders in PDF.<br><br>
+        Returns a list of stickers for Cross-Border assembly orders in PDF.<br><br>
 
         For each assembly order, the response contains the sticker generation status:
           - `awaitingTrackNumber` — the sticker is not ready. Waiting for a carrier's track number.
@@ -1538,16 +1537,37 @@ paths:
                           nullable: false
                           description: Base64 encoded sticker in a PDF format
                           example: JVBERi0xLjQKJSBjcmVhdGVkIGJ5IFBpbGxvdyBQREYgZHJpdmVyCjQgMCBvYmo8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgNSAwIFIKPj5lbmRvYmoKNSAwIG9iajw8Ci9UeXBlIC9QYWdlcwovQ291bnQgMQovS2lkcyBbIDIgMCBSIF0KPj5lbmRvYmoKMSAwIG9iajw8Ci9UeXBlIC9YT2JqZWN0Ci9TdWJ0eXBlIC9JbWFnZQovV2lkdGggMjkwCi9IZWlnaHQgMjkwCi9GaWx0ZXIgWyAvQ0NJVFRGYXhEZWNvZGUgXQovRGVjb2RlUGFybXMgWyA8PAovSyAtMQovQmxhY2tJczEgdHJ1ZQovQ29sdW1ucyAyOTAKL1Jvd3MgMjkwCj4+IF0KL0JpdHNQZXJDb21wb25lbnQgMQovQ29sb3JTcGFjZSAvRGV2aWNlR3JheQovTGVuZ3RoIDY2Ngo+PnN0cmVhbQomoLYaX////////////8g2b4gpHITff///////////8nBSkIB8nBS/////////////////////+QgHkNB/IQD////////////////////////////+P//////////////////////////IQ5CHIQ////////////////////////////////jkNB/H/////////////////////4yEOQh+P//////////////////EhoKR//////yDYchDkIchDyBg2E4aCcFL////////////////////////IgFIiAhODQTg0f/////////////////+ThCICEQGgnDQTg0E4NBODZ////////////////////////4k4NESEOJCCP/////////////////8gpHIQ5CCCEEENB8hDyBg2f//////////////////////////xEZKQhOEJwhOB5f//////////////yDZviDQIjkDBS///////////////ycFLEnCCThP//////////////////kIB5CHkQEEnCEQEJwbP///////////////////////////4ycGgnBoIgFL/////////////////////+QhxIQ4kIcg0H////////////////////////8cSEOJCHEhAP//////////////////jIQDIQ+Qh5OE////////////////////////4iIiI/////////////wAQAQJAAABAwABAAAAIgEAAAEBAwABAAAAIgEAAAIBAwABAAAAAQAAAAMBAwABAAAABAAAAAYBAwABAAAAAQAAABEBBAABAAAACAAAABYBAwABAAAAIgEAABcBBAABAAAAKAIAABwBAwABAAAAAQAAAAAAAAAKZW5kc3RyZWFtCmVuZG9iagoyIDAgb2JqPDwKL1Jlc291cmNlcyA8PAovUHJvY1NldCBbIC9QREYgL0ltYWdlQiBdCi9YT2JqZWN0IDw8Ci9pbWFnZSAxIDAgUgo+Pgo+PgovTWVkaWFCb3ggWyAwIDAgMjkwLjAgMjkwLjAgXQovQ29udGVudHMgMyAwIFIKL1R5cGUgL1BhZ2UKL1BhcmVudCA1IDAgUgo+PmVuZG9iagozIDAgb2JqPDwKL0xlbmd0aCA0Nwo+PnN0cmVhbQpxIDI5MC4wMDAwMDAgMCAwIDI5MC4wMDAwMDAgMCAwIGNtIC9pbWFnZSBEbyBRCgplbmRzdHJlYW0KZW5kb2JqCjYgMCBvYmo8PAovQ3JlYXRpb25EYXRlIChEOjIwMjUxMTA3MTMzNTE1WikKL01vZERhdGUgKEQ6MjAyNTExMDcxMzM1MTVaKQo+PmVuZG9iagp4cmVmCjAgNwowMDAwMDAwMDAwIDY1NTM2IGYgCjAwMDAwMDAxNDQgMDAwMDAgbiAKMDAwMDAwMTA1MiAwMDAwMCBuIAowMDAwMDAxMjE0IDAwMDAwIG4gCjAwMDAwMDAwNDAgMDAwMDAgbiAKMDAwMDAwMDA4NyAwMDAwMCBuIAowMDAwMDAxMzA5IDAwMDAwIG4gCnRyYWlsZXIKPDwKL1Jvb3QgNCAwIFIKL1NpemUgNwovSW5mbyA2IDAgUgo+PgpzdGFydHhyZWYKMTM5MQolJUVPRg==
+                        partA:
+                          type: string
+                          nullable: false
+                          description: The first part of the sticker ID for printing the signature
+                          example: '231648'
+                        partB:
+                          type: string
+                          nullable: false
+                          description: The second part of the sticker ID for printing the signature
+                          example: '9753'
+                        barcode:
+                          type: string
+                          nullable: false
+                          description: The encoded value of the sticker
+                          example: '!uKEtQZVx'
               example:
                 stickers:
                   - orderId: 987654320
                     status: awaitingTrackNumber
                     parcelId: ''
                     file: ''
+                    partA: ''
+                    partB: ''
+                    barcode: ''
                   - orderId: 123456789
                     status: ready
                     parcelId: WB0000000001
                     file: JVBERi0xLjQKJSBjcmVhdGVkIGJ5IFBpbGxvdyBQREYgZHJpdmVyCjQgMCBvYmo8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgNSAwIFIKPj5lbmRvYmoKNSAwIG9iajw8Ci9UeXBlIC9QYWdlcwovQ291bnQgMQovS2lkcyBbIDIgMCBSIF0KPj5lbmRvYmoKMSAwIG9iajw8Ci9UeXBlIC9YT2JqZWN0Ci9TdWJ0eXBlIC9JbWFnZQovV2lkdGggMjkwCi9IZWlnaHQgMjkwCi9GaWx0ZXIgWyAvQ0NJVFRGYXhEZWNvZGUgXQovRGVjb2RlUGFybXMgWyA8PAovSyAtMQovQmxhY2tJczEgdHJ1ZQovQ29sdW1ucyAyOTAKL1Jvd3MgMjkwCj4+IF0KL0JpdHNQZXJDb21wb25lbnQgMQovQ29sb3JTcGFjZSAvRGV2aWNlR3JheQovTGVuZ3RoIDY2Ngo+PnN0cmVhbQomoLYaX////////////8g2b4gpHITff///////////8nBSkIB8nBS/////////////////////+QgHkNB/IQD////////////////////////////+P//////////////////////////IQ5CHIQ////////////////////////////////jkNB/H/////////////////////4yEOQh+P//////////////////EhoKR//////yDYchDkIchDyBg2E4aCcFL////////////////////////IgFIiAhODQTg0f/////////////////+ThCICEQGgnDQTg0E4NBODZ////////////////////////4k4NESEOJCCP/////////////////8gpHIQ5CCCEEENB8hDyBg2f//////////////////////////xEZKQhOEJwhOB5f//////////////yDZviDQIjkDBS///////////////ycFLEnCCThP//////////////////kIB5CHkQEEnCEQEJwbP///////////////////////////4ycGgnBoIgFL/////////////////////+QhxIQ4kIcg0H////////////////////////8cSEOJCHEhAP//////////////////jIQDIQ+Qh5OE////////////////////////4iIiI/////////////wAQAQJAAABAwABAAAAIgEAAAEBAwABAAAAIgEAAAIBAwABAAAAAQAAAAMBAwABAAAABAAAAAYBAwABAAAAAQAAABEBBAABAAAACAAAABYBAwABAAAAIgEAABcBBAABAAAAKAIAABwBAwABAAAAAQAAAAAAAAAKZW5kc3RyZWFtCmVuZG9iagoyIDAgb2JqPDwKL1Jlc291cmNlcyA8PAovUHJvY1NldCBbIC9QREYgL0ltYWdlQiBdCi9YT2JqZWN0IDw8Ci9pbWFnZSAxIDAgUgo+Pgo+PgovTWVkaWFCb3ggWyAwIDAgMjkwLjAgMjkwLjAgXQovQ29udGVudHMgMyAwIFIKL1R5cGUgL1BhZ2UKL1BhcmVudCA1IDAgUgo+PmVuZG9iagozIDAgb2JqPDwKL0xlbmd0aCA0Nwo+PnN0cmVhbQpxIDI5MC4wMDAwMDAgMCAwIDI5MC4wMDAwMDAgMCAwIGNtIC9pbWFnZSBEbyBRCgplbmRzdHJlYW0KZW5kb2JqCjYgMCBvYmo8PAovQ3JlYXRpb25EYXRlIChEOjIwMjUxMTA3MTMzNTE1WikKL01vZERhdGUgKEQ6MjAyNTExMDcxMzM1MTVaKQo+PmVuZG9iagp4cmVmCjAgNwowMDAwMDAwMDAwIDY1NTM2IGYgCjAwMDAwMDAxNDQgMDAwMDAgbiAKMDAwMDAwMTA1MiAwMDAwMCBuIAowMDAwMDAxMjE0IDAwMDAwIG4gCjAwMDAwMDAwNDAgMDAwMDAgbiAKMDAwMDAwMDA4NyAwMDAwMCBuIAowMDAwMDAxMzA5IDAwMDAwIG4gCnRyYWlsZXIKPDwKL1Jvb3QgNCAwIFIKL1NpemUgNwovSW5mbyA2IDAgUgo+PgpzdGFydHhyZWYKMTM5MQolJUVPRg==
+                    partA: '231648'
+                    partB: '9753'
+                    barcode: '!uKEtQZVx'
         '400':
           description: Bad request
           content:
@@ -1579,7 +1599,7 @@ paths:
         - FBS Assembly Orders
       summary: Status History for Cross-Border Orders
       description: |
-        Returns status history for cross-border orders
+        Returns status history for Cross-Border orders
 
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for <strong>FBS assembly orders, supplies and passes</strong> methods:
@@ -1715,7 +1735,7 @@ paths:
       tags:
         - FBS Assembly Orders
       description: |
-        The method allows getting information about the client by assembly order ID. <br>Only for cross-border orders from **Turkey**
+        The method allows getting information about the client by assembly order ID. <br>Only for Cross-Border orders from **Turkey**
 
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for <strong>FBS assembly orders, supplies and passes</strong> methods:
@@ -2153,7 +2173,12 @@ paths:
 
         If the supply wasn't handed over for delivery, than scanning its QR code or accepting the first product will automatically close the supply.
 
-        You can transfer the supply to delivery only if it contains at least one assembly order.
+        You can transfer the supply to delivery only if:
+          - there is at least one assembly order
+          - required labeling is specified for all assembly orders
+          - labeling of all assembly orders passed validation
+
+        If the supply contains assembly orders with required UIN, make sure that you have created and uploaded the Delivery Contract Specification in advance. The [GIIS DMDK](https://minfin.gov.ru/ru/perfomance/jewels/dmdk) takes about 30 minutes to process changes in UIN statuses.
 
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for <strong>FBS assembly orders, supplies and passes</strong> methods:
@@ -2715,10 +2740,10 @@ components:
                 description: Error title
               detail:
                 type: string
-                description: Error details. The error means that the service from the [Catalog](https://dev.wildberries.ru/business-solutions) has insufficient funds on its balance
+                description: Error details. The error is only returned to services from the [Solutions for business Catalog](https://dev.wildberries.ru/business-solutions)
           example:
             title: payment required
-            detail: please top up your balance in your company personal account https://dev.wildberries.ru/company
+            detail: wb solution for business has insufficient funds on its balance. please top up the balance in the company's personal account https://dev.wildberries.ru/company
     '429':
       description: Too many requests
       content:
@@ -2868,20 +2893,25 @@ components:
                           type: string
                           description: |
                             State:
-                            - IMEI
+                            - `imei`
                               - `pending` — Metadata for inspection
                               - `required` — Required metadata is not filled
                               - `imeiInvalidFormat` — Invalid format
                               - `imeiAlreadySold` — The item with this IMEI has already been sold
-                            - UIN
+                            - `uin`
                               - `required` — Required metadata is not filled
                               - `pending` — Metadata for inspection
                               - `uinInvalidFormat` — Invalid format
-                              - `uinNotFound` — Not found
                               - `uinBadStatus` — Invalid batch status
                               - `uinBadProcess` — Invalid processing stage
                               - `uinBadStatusAndBadProcess` — Invalid batch status. Invalid processing stage
-                            - SGTIN
+                              - `uinNotFound` — Not found in GIIS DMDK [https://minfin.gov.ru/ru/perfomance/jewels/dmdk].
+                                When you receive this error, make sure that the UIN:
+                                - is specified in the uploaded Delivery Contract Specification. If the specification was uploaded more than 30 minutes ago, [delete UIN](./orders-fbs#tag/FBS-Metadata/paths/~1api~1v3~1orders~1%7BorderId%7D~1meta/delete) from the assembly order and [add it](./orders-fbs#tag/FBS-Metadata/paths/~1api~1v3~1orders~1%7BorderId%7D~1meta~1uin/put) again
+                                - is registered in GIIS DMDK
+                                - is specified correctly and is read from the tag without errors
+                                - is in circulation
+                            - `sgtin`
                               - `pending` — Metadata for inspection
                               - `required` — Required metadata is not filled
                               - `sgtinInvalidFormat` — Invalid format
@@ -2894,11 +2924,11 @@ components:
                               - `sgtinDisaggregation` — Disaggregation
                               - `sgtinDisaggregated` — Disaggregated
                               - `sgtinAppliedNotPaid` — Not paid
-                            - GTIN
+                            - `gtin`
                               - `required` — Required metadata is not filled
-                            - Expiration
+                            - `expiration`
                               - `required` — Required metadata is not filled
-                            - Customs declaration
+                            - `customsDeclaration`
                               - `required` — Required metadata is not filled
     Next:
       type: integer
@@ -3059,8 +3089,8 @@ components:
         crossBorderType:
           description: |
             Assembly order type:
-              - `0` — non-cross-border
-              - `1` — cross-border
+              - `0` — Non-Cross-Border
+              - `1` — Cross-Border
           enum:
             - 0
             - 1
@@ -3153,8 +3183,8 @@ components:
         crossBorderType:
           description: |
             Supply type:
-              - `0` — non-cross-border
-              - `1` — cross-border
+              - `0` — Non-Cross-Border
+              - `1` — Cross-Border
               - `null` — no value
           enum:
             - 0
@@ -3371,8 +3401,8 @@ components:
         crossBorderType:
           description: |
             Assembly order type:
-              - `0` — non-cross-border
-              - `1` — cross-border
+              - `0` — Non-Cross-Border
+              - `1` — Cross-Border
           enum:
             - 0
             - 1
@@ -3494,7 +3524,7 @@ components:
             example: uinMaySell
             description: |
               State:
-              - IMEI
+              - `imei`
                 - `pending` — Metadata for inspection
                 - `filled` — Validation passed
                 - `deadlineExceeded` — Validation passed
@@ -3502,18 +3532,23 @@ components:
                 - `required` — Required metadata is not filled. Validation failed
                 - `imeiInvalidFormat` — Invalid format. Validation failed
                 - `imeiAlreadySold` — The item with this IMEI has already been sold. Validation failed
-              - UIN
+              - `uin`
                 - `pending` — Metadata for inspection
                 - `filled` — Validation passed
                 - `deadlineExceeded` — Validation passed
                 - `optional` — Metadata is not required. Validation passed
                 - `required` — Required metadata is not filled. Validation failed
                 - `uinInvalidFormat` — Invalid format. Validation failed
-                - `uinNotFound` — Not found. Validation failed
                 - `uinBadStatus` — Invalid batch status. Validation failed
                 - `uinBadProcess` — Invalid processing stage. Validation failed
                 - `uinBadStatusAndBadProcess` — Invalid batch status. Invalid processing stage. Validation failed
-              - SGTIN
+                - `uinNotFound` — Not found in GIIS DMDK. Validation failed.
+                  The status may mean that the UIN:
+                    - is not specified in the uploaded Delivery Contract Specification
+                    - is not registered in GIIS DMDK
+                    - is specified incorrectly and is read from the tag with errors
+                    - is not in circulation
+              - `sgtin`
                 - `pending` — Metadata for inspection
                 - `filled` — Validation passed
                 - `deadlineExceeded` — Validation passed
@@ -3529,15 +3564,15 @@ components:
                 - `sgtinDisaggregation` — Disaggregation. Validation failed
                 - `sgtinDisaggregated` — Disaggregated. Validation failed
                 - `sgtinAppliedNotPaid` — Not paid. Validation failed
-              - GTIN
+              - `gtin`
                 - `filled` — Validation passed
                 - `optional` — Metadata is not required. Validation passed
                 - `required` — Required metadata is not filled. Validation failed
-              - Expiration
+              - `expiration`
                 - `filled` — Validation passed
                 - `optional` — Metadata is not required. Validation passed
                 - `required` — Required metadata is not filled. Validation failed
-              - Customs declaration
+              - `customsDeclaration`
                 - `filled` — Validation passed
                 - `required` — Required metadata is not filled. Validation failed
     v3.GetMetaMultiRequest:
@@ -3660,7 +3695,7 @@ components:
     CrossborderTurkeyClientInfoResp:
       properties:
         orders:
-          description: Client information for cross-border orders from Turkey
+          description: Client information for Cross-Border orders from Turkey
           items:
             $ref: '#/components/schemas/CrossborderTurkeyClientInfo'
           type: array

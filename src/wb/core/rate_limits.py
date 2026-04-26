@@ -1,13 +1,25 @@
 """Per-endpoint rate limit definitions for WB APIs.
 
 Maps each API endpoint path to ``(calls, period_seconds)`` for use with
-:class:`wb.core.rate_limiter.RateLimiter`.
+:class:`wb.core.rate_limiter.RateLimiter`. Values are sourced from
+``docs/swagger/`` and reflect the **Personal/Service** column where
+swagger stratifies by token type. See ``RATE_LIMITS.md`` for the full
+reference (Personal vs Base) and CLI command mappings.
 
-Values are sourced from ``docs/swagger/`` where available, otherwise from
-empirical observation (noted inline). See ``RATE_LIMITS.md`` for the full
-reference table including CLI command mappings and agent guidance.
+Since R-5 the bootstrap prior is chosen by token type via
+:func:`select_prior`. Lookup order:
+
+1. ``BASE_OVERRIDES[path]`` when ``token_type == 'base'`` and the
+   endpoint is stratified — the dramatically tighter Base bucket
+   prevents first-call 429s on Base tokens.
+2. ``ENDPOINT_LIMITS[path]`` — Personal/Service prior, also used for
+   Test tokens (rare; we keep the safer-than-Personal Base assumption
+   only when explicitly typed Base).
+3. ``None`` — endpoint not throttled by the CLI; the request goes
+   through and ``EndpointBudget`` learns from the response headers.
 
 Sliding-window interpretation of the swagger ``Burst`` column:
+
 - ``burst = 1``   → space calls by ``period / limit``; stored as ``(1, interval)``
 - ``burst = limit`` → full burst allowed; stored as ``(limit, period)``
 """
@@ -15,6 +27,7 @@ Sliding-window interpretation of the swagger ``Burst`` column:
 from __future__ import annotations
 
 from wb.core.constants import (
+    DEFAULT_TOKEN_TYPE,
     EP_ACCOUNT_BALANCE,
     EP_BID_SET,
     EP_BUDGET_DEPOSIT,
@@ -53,7 +66,7 @@ from wb.core.constants import (
     EP_WAREHOUSE_REMAINS_STATUS,
 )
 
-__all__ = ['ENDPOINT_LIMITS']
+__all__ = ['BASE_OVERRIDES', 'ENDPOINT_LIMITS', 'select_prior']
 
 # Mapping of endpoint path → (calls, period_seconds) for sliding-window throttling.
 #
@@ -128,3 +141,81 @@ ENDPOINT_LIMITS: dict[str, tuple[int, float]] = {
     #   status poll and download share the same path; use stricter (1/5s)
     EP_WAREHOUSE_REMAINS_STATUS: (1, 5.0),   # swagger 12: poll 1/5s, download 1/min
 }
+
+# ── Base-token overrides (R-5) ─────────────────────────────────────────
+#
+# Endpoints where the swagger ``| Type |`` table documents a Base limit
+# tighter than Personal/Service. Format identical to ``ENDPOINT_LIMITS``:
+# ``(calls, period_seconds)`` with the same burst-1-collapses-to-interval
+# convention.
+#
+# Endpoints not in this map use the Personal/Service prior even for Base
+# tokens — either swagger documents a uniform rate (campaign mutations,
+# normquery list/get, stocks-warehouses) or the endpoint isn't stratified
+# at all. ``EndpointBudget`` self-corrects from response headers if the
+# real Base limit is tighter than the prior.
+BASE_OVERRIDES: dict[str, tuple[int, float]] = {
+    # Promotion API
+    EP_CAMPAIGN_FULLSTATS: (1, 3600.0),   # 1/h, burst 1
+    EP_CAMPAIGN_INFO:      (1, 3600.0),   # 1/h, burst 1
+    EP_CAMPAIGN_RENAME:    (1, 1800.0),   # 2/h, 30 min interval, burst 1
+    EP_RECOMMENDED_BID:    (1,  180.0),   # 20/h, 3 min interval, burst 1
+    EP_ELIGIBLE_SUBJECTS:  (1, 1800.0),   # 2/h, 30 min interval, burst 1
+    EP_BUDGET_DEPOSIT:     (1,  720.0),   # 5/h, 12 min interval, burst 1
+    EP_ACCOUNT_BALANCE:    (1, 1800.0),   # 2/h, 30 min interval, burst 1
+    EP_BID_SET:            (1, 1800.0),   # 2/h, 30 min interval, burst 1
+
+    # Normquery (cluster) API
+    EP_NQ_STATS:           (1,  720.0),   # 5/h, 12 min interval, burst 1
+    EP_NQ_STATS_DAILY:     (1, 1800.0),   # 2/h, 30 min interval, burst 1
+    EP_NQ_SET_BIDS:        (1,  720.0),   # 5/h, 12 min interval, burst 1
+    EP_NQ_DEL_BIDS:        (1,  720.0),   # 5/h, 12 min interval, burst 1
+
+    # Analytics — sales funnel
+    EP_FUNNEL_PRODUCTS:    (1, 1800.0),   # 2/h, 30 min interval, burst 1
+    EP_FUNNEL_HISTORY:     (1, 1800.0),   # 2/h, 30 min interval, burst 1
+    EP_FUNNEL_GROUPED:     (1, 1800.0),   # 2/h, 30 min interval, burst 1
+
+    # Analytics — search-report (1/h each, burst 1)
+    EP_SEARCH_REPORT:      (1, 3600.0),
+    EP_SEARCH_GROUPS:      (1, 3600.0),
+    EP_SEARCH_DETAILS:     (1, 3600.0),
+    EP_SEARCH_TEXTS:       (1, 3600.0),
+    EP_SEARCH_ORDERS:      (1, 3600.0),
+
+    # Analytics — CSV (1/h each, burst 1)
+    EP_CSV_CREATE:         (1, 3600.0),
+    EP_CSV_LIST:           (1, 3600.0),
+    EP_CSV_RETRY:          (1, 3600.0),
+
+    # Reports — warehouse remains (4/h, 15 min interval, burst 1)
+    EP_WAREHOUSE_REMAINS_CREATE: (1, 900.0),
+    EP_WAREHOUSE_REMAINS_STATUS: (1, 900.0),
+}
+
+
+def select_prior(
+        path: str,
+        token_type: str = DEFAULT_TOKEN_TYPE,
+) -> tuple[int, float] | None:
+    """Return the bootstrap rate-limit prior for an endpoint + token type.
+
+    Used by :class:`wb.client.http.WbHttpClient` to seed
+    :meth:`wb.core.endpoint_budget.EndpointBudget.reserve` on first call
+    to a fresh ``(token, endpoint)`` bucket. Once WB responds, the budget
+    switches to header-driven authority and the prior is no longer
+    consulted for that bucket.
+
+    Args:
+        path: API endpoint path (an ``EP_*`` constant value).
+        token_type: One of :data:`wb.core.constants.TOKEN_TYPES`.
+            Unknown values are treated as :data:`DEFAULT_TOKEN_TYPE`.
+
+    Returns:
+        ``(calls, period_seconds)`` to pass to ``EndpointBudget.reserve``,
+        or ``None`` when the path has no documented prior (the request
+        proceeds without preemptive throttling).
+    """
+    if token_type == 'base' and path in BASE_OVERRIDES:
+        return BASE_OVERRIDES[path]
+    return ENDPOINT_LIMITS.get(path)

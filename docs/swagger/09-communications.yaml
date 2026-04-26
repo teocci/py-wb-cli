@@ -34,10 +34,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Questions
@@ -111,10 +112,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Questions
@@ -182,10 +184,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Questions
@@ -282,10 +285,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Questions
@@ -498,10 +502,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Questions
@@ -643,10 +648,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Questions
@@ -807,10 +813,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Feedbacks
@@ -878,10 +885,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Feedbacks
@@ -978,10 +986,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Feedbacks
@@ -1167,10 +1176,11 @@ paths:
          <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       requestBody:
         content:
@@ -1233,10 +1243,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       requestBody:
         content:
@@ -1282,10 +1293,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Feedbacks
@@ -1369,10 +1381,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Feedbacks
@@ -1678,10 +1691,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Feedbacks
@@ -1834,10 +1848,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Pinned Feedback
@@ -1969,10 +1984,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Pinned Feedback
@@ -2042,10 +2058,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Pinned Feedback
@@ -2113,10 +2130,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Pinned Feedback
@@ -2226,10 +2244,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account for all methods in the <strong>Feedbacks and Questions</strong> category:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 s | 3 requests | 333 ms | 6 requests |
-
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 s | 3 requests | 333 ms | 6 requests |
+        | Service | 1 s | 3 requests | 333 ms | 6 requests |
+        | Base | 1 h | 5 requests | 12 min | 1 request |
         </div>
       tags:
         - Pinned Feedback
@@ -2261,9 +2280,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 10 s | 10 requests | 1 s | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 10 s | 10 requests | 1 s | 10 requests |
+        | Service | 10 s | 10 requests | 1 s | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Buyers Chat
@@ -2299,9 +2320,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 10 s | 10 requests | 1 s | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 10 s | 10 requests | 1 s | 10 requests |
+        | Service | 10 s | 10 requests | 1 s | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Buyers Chat
@@ -2448,9 +2471,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 10 s | 10 requests | 1 s | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 10 s | 10 requests | 1 s | 10 requests |
+        | Service | 10 s | 10 requests | 1 s | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       tags:
         - Buyers Chat
@@ -2706,9 +2731,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 20 requests | 3 s | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 20 requests | 3 s | 10 requests |
+        | Service | 1 min | 20 requests | 3 s | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       parameters:
         - $ref: '#/components/parameters/is_archive'
@@ -2742,9 +2769,11 @@ paths:
         <div class="description_limit">
         <a href="/openapi/api-information#tag/Introduction/Rate-Limits">Request limit</a> per one seller's account:
 
-        | Period | Limit | Interval | Burst |
-        | --- | --- | --- | --- |
-        | 1 min | 20 requests | 3 s | 10 requests |
+        | Type | Period | Limit | Interval | Burst |
+        | --- | --- | --- | --- | --- |
+        | Personal | 1 min | 20 requests | 3 s | 10 requests |
+        | Service | 1 min | 20 requests | 3 s | 10 requests |
+        | Base | 1 h | 1 request | 1 h | 1 request |
         </div>
       requestBody:
         $ref: '#/components/requestBodies/PatchClaimReq'
@@ -3728,10 +3757,10 @@ components:
                 description: Error title
               detail:
                 type: string
-                description: Error details. The error means that the service from the [Catalog](https://dev.wildberries.ru/business-solutions) has insufficient funds on its balance
+                description: Error details. The error is only returned to services from the [Solutions for business Catalog](https://dev.wildberries.ru/business-solutions)
           example:
             title: payment required
-            detail: please top up your balance in your company personal account https://dev.wildberries.ru/company
+            detail: wb solution for business has insufficient funds on its balance. please top up the balance in the company's personal account https://dev.wildberries.ru/company
     '429':
       description: Too many requests
       content:

@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.30.0 |
-| **Tests Passing** | 1169/1171 (1 pre-existing env test + 1 timing-flaky in-memory limiter test that passes solo) |
-| **Phases Complete** | 43 |
+| **Current Version** | 0.31.0 |
+| **Tests Passing** | 1201/1202 (1 pre-existing env test in `test_auth_list_empty`) |
+| **Phases Complete** | 45 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -59,8 +59,8 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | R-2 | HTTP client integration — drop F-13 lock + seller-global limiter | ✅ DONE | 0.28.0 |
 | R-3 | `wb rate status` overhaul — read `endpoint_budget`, group by seller | ✅ DONE | 0.29.0 |
 | R-4 | Cleanup — drop `SellerCooldownLock`, `SELLER_GLOBAL_BUDGET`, docs | ✅ DONE | 0.30.0 |
-| F-15 | `wb rate` + skills assume uniform endpoint limits — Base tokens trip 30-min penalty | 🔲 PLANNED | TBD |
-| R-5 | Token-type-aware rate handling + `wb rate` overhaul + skill refresh | 🔲 PLANNED | TBD |
+| F-15 | `wb rate` + skills assume uniform endpoint limits — Base tokens trip 30-min penalty | ✅ DONE | 0.31.0 |
+| R-5 | Token-type-aware rate handling + `wb rate probe` removal + skill refresh | ✅ DONE | 0.31.0 |
 | A-1 | `wb auth login --profile NAME` env bootstrap (non-breaking) | 🔲 PLANNED | TBD |
 | A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | 🔲 PLANNED | TBD |
 | A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |

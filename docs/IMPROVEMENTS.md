@@ -36,7 +36,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.28.0 | R-2  | ✅ DONE | HTTP client integration (drops F-13 + seller-global limiter from runtime) — [detail](phases/R-2-http-client-integration.md) |
 | 0.29.0 | R-3  | ✅ DONE | `wb rate status` overhaul — [detail](phases/R-3-rate-status-overhaul.md) |
 | 0.30.0 | R-4  | ✅ DONE | Cleanup + docs (deletes `SellerCooldownLock`) — [detail](phases/R-4-cleanup-docs.md) |
-| TBD    | R-5  | 🔲 PLANNED | Token-type-aware rate handling + `wb rate` overhaul + skill refresh — [detail](phases/R-5-token-type-aware-rates.md) |
+| 0.31.0 | R-5  | ✅ DONE | Token-type-aware rate handling + `wb rate probe` removal + skill refresh — [detail](phases/R-5-token-type-aware-rates.md) |
 | TBD    | A-1  | 🔲 PLANNED | `wb auth login --profile NAME` env bootstrap — [detail](phases/A-1-auth-login-env-bootstrap.md) |
 | TBD    | A-2  | 🔲 PLANNED | Drop runtime env fallback (BREAKING) — [detail](phases/A-2-drop-runtime-env-fallback.md) |
 | TBD    | A-3  | 🔲 PLANNED | `wb auth whoami` + docs sweep — [detail](phases/A-3-auth-whoami-docs.md) |

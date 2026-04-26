@@ -12,6 +12,8 @@ triggers:
 
 Morning situational awareness. Run this once per day (or any time you need a current state snapshot) before using wb-optimize or wb-launch.
 
+> **Base-token sellers (R-5+):** the full snapshot chains four endpoints whose Base buckets are 1/h or tighter (`/adv/v1/balance` 2/h, `/api/advert/v2/adverts` 1/h, `/adv/v3/fullstats` 1/h, `/api/advert/v0/bids/recommendations` 20/h with 3-min interval). A second full assess in the same hour will block on the campaign-info bucket. Use `wb assess --quick` for follow-up readings within the same hour, and consult `wb rate status` if any leg fails.
+
 ## Usage
 
 ```bash

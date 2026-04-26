@@ -20,7 +20,7 @@ Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases
 | F-12 | Honor `x-ratelimit-reset` header (60 s bail-out) | ✅ DONE | client/http.py | 0.25.4 | [detail](phases/F-12-ratelimit-reset-header.md) |
 | F-13 | `SellerCooldownLock` short-circuit on known cooldown | ✅ DONE | core/rate_limiter.py, services/_factory.py, client/http.py | 0.25.5 | [detail](phases/F-13-seller-cooldown-lock.md) |
 | F-14 | `rate status` misses seller cooldown (astronomic compounded cooldowns) | ✅ DONE | core/endpoint_budget.py, cli/rate.py, client/http.py | 0.30.0 | [detail](phases/F-14-rate-status-misses-cooldown.md) — resolved by metadata-driven redesign R-1..R-4 |
-| F-15 | `wb rate` code + skills assume uniform endpoint limits — Base tokens trip 30-min penalty on `/adv/v1/balance` and other endpoints | 🔲 PLANNED | cli/rate.py, services/_factory.py, .claude/skills/wb-rate-*, RATE_LIMITS.md | TBD | [detail](phases/F-15-rate-base-token-blindspot.md) — addressed by R-5 |
+| F-15 | Base tokens trip 30-min penalty — uniform-rate assumption | ✅ DONE | core/rate_limits.py, auth/profiles.py, cli/auth.py, cli/rate.py, client/http.py, services/_factory.py, .claude/skills/wb-rate-*, RATE_LIMITS.md | 0.31.0 | [detail](phases/F-15-rate-base-token-blindspot.md) — resolved by R-5 |
 
 ### In Progress
 

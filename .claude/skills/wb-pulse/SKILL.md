@@ -13,6 +13,8 @@ triggers:
 
 Intraday health check. Uses **real-time endpoints only** — bid recommendations, budget balance, and campaign status. No analytics (those are hourly/30-min lag — use wb-assess for trend data).
 
+> **Base-token sellers (R-5+):** the bid-recommendations leg costs one Base bucket call per campaign at a 3-min interval (20/h). For 7 campaigns the bid-recommend phase alone is ~21 min. The campaign-info and budget-balance legs each consume a 1/h Base bucket — running pulse twice in the same hour will block on those buckets, not on the bid-recommend interval. Check `wb rate status` between pulses; do not loop pulse on Base.
+
 ## Usage
 
 ```bash

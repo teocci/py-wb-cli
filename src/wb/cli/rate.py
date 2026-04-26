@@ -1,24 +1,17 @@
-"""CLI diagnostic commands for rate-limit state (I-13/I-14, R-3/R-4).
+"""CLI diagnostic command for rate-limit state (I-13, R-3).
 
-Two read-only / read-mostly commands surface the live state of the
-``~/.wb-cli/rate_limits.db`` ``endpoint_budget`` table populated by
-every WB response's ``X-Ratelimit-*`` headers (see
-:mod:`wb.core.endpoint_budget`):
+``wb rate status`` is a pure read of the ``~/.wb-cli/rate_limits.db``
+``endpoint_budget`` table populated by every WB response's
+``X-Ratelimit-*`` headers (see :mod:`wb.core.endpoint_budget`). Output
+is grouped by plaintext seller_id, then by token fingerprint, then by
+endpoint, so every operator sees every active cooldown regardless of
+which token their shell is currently configured with.
 
-- ``wb rate status`` — pure read, no network. Grouped by plaintext
-  seller_id, then by token fingerprint, then by endpoint, so every
-  operator sees every active cooldown regardless of which token their
-  shell is currently configured with.
-- ``wb rate probe`` — single-call probe against ``/adv/v1/balance`` to
-  refresh the budget for that endpoint. Pre-flight reads the
-  ``endpoint_budget`` row for the current token's probe bucket and
-  skips the network entirely when ``remaining=0`` and ``reset_at`` is
-  still in the future. After the call, the response headers feed back
-  into the budget via :meth:`EndpointBudget.observe_headers`.
-
-R-4 cleanup: both commands now go through ``EndpointBudget`` only —
-the legacy seller-wide ``SellerCooldownLock`` short-circuit (F-13) is
-gone, so a 429 on one endpoint no longer locks unrelated endpoints.
+R-5 removed the previously-shipped ``wb rate probe`` command — it was
+vestigial after the R-1..R-4 header-driven redesign. Use
+:command:`wb auth ping` to verify connectivity and :command:`wb rate
+status` to read the live budget; any real WB call refreshes the budget
+naturally through ``EndpointBudget.observe(...)``.
 """
 
 from __future__ import annotations
@@ -29,29 +22,14 @@ import time
 import typer
 
 from wb.cli._helpers import get_profile, get_renderer
-from wb.core.constants import (
-    EP_ACCOUNT_BALANCE,
-    PROMOTION_BASE_URL,
-    RATE_LIMIT_DB_FILE,
-)
-from wb.core.exceptions import RateLimitError
+from wb.core.constants import RATE_LIMIT_DB_FILE
 
 __all__ = ['rate_app']
 
 rate_app = typer.Typer(
-    help='Local rate-limit diagnostic and safe single-call probe',
+    help='Local rate-limit diagnostic',
     no_args_is_help=True,
 )
-
-# Endpoint used by `wb rate probe`. Picked for:
-# - small response body (balance is a handful of numeric fields)
-# - per-seller scope (carries the x-ratelimit-* headers we care about)
-# - 1/s documented rate limit (generous, won't itself cause throttling)
-_PROBE_ENDPOINT = EP_ACCOUNT_BALANCE
-
-# Hard timeout for a single probe request — deliberately short so a stuck
-# probe never compounds a pending cooldown through connection hold time.
-_PROBE_TIMEOUT_SECONDS = 10.0
 
 
 @rate_app.command('status')
@@ -90,9 +68,10 @@ def rate_status(ctx: typer.Context) -> None:
     db_path = settings.config_dir / RATE_LIMIT_DB_FILE
     budget = EndpointBudget(db_path=db_path)
     rows = budget.read_all()
+    fp_to_type = _build_fp_to_token_type(store)
 
     now = time.time()
-    sellers = _group_rows_by_seller(rows, now)
+    sellers = _group_rows_by_seller(rows, now, fp_to_type)
 
     payload = {
         'now_epoch': round(now, 3),
@@ -115,7 +94,35 @@ def rate_status(ctx: typer.Context) -> None:
     _render_status_table(active_profile, sellers)
 
 
-def _group_rows_by_seller(rows, now: float) -> list[dict]:
+def _build_fp_to_token_type(store) -> dict[str, str]:
+    """Map known token fingerprints to the token_type from their profile.
+
+    Walks the local :class:`ProfileStore` once, computes the fingerprint
+    for every category token in every profile, and emits
+    ``{token_fp: token_type}``. Used by ``rate status`` to annotate
+    budget rows with the type WB will enforce — rows whose fingerprint
+    matches no local profile carry a ``None`` type and the renderer
+    shows ``unknown``.
+    """
+    from wb.core.rate_limiter import compute_token_fingerprint
+
+    mapping: dict[str, str] = {}
+    try:
+        profiles = store.list_profiles()
+    except Exception:  # noqa: BLE001 — profiles file missing / corrupt
+        return mapping
+    for profile in profiles:
+        for token in profile.tokens.values():
+            if token:
+                mapping[compute_token_fingerprint(token)] = profile.token_type
+    return mapping
+
+
+def _group_rows_by_seller(
+        rows,
+        now: float,
+        fp_to_type: dict[str, str] | None = None,
+) -> list[dict]:
     """Group budget rows by seller, then token, then endpoint.
 
     Args:
@@ -123,12 +130,17 @@ def _group_rows_by_seller(rows, now: float) -> list[dict]:
             :meth:`EndpointBudget.read_all`.
         now: Wall-clock epoch seconds; used to compute ``reset_in_s`` and
             ``last_seen_ago_s`` once for the whole snapshot.
+        fp_to_type: Optional ``{token_fp: token_type}`` map — usually
+            built by :func:`_build_fp_to_token_type`. Tokens not in the
+            map render with ``token_type: null``.
 
     Returns:
-        List of ``{seller_id, tokens: [...]}`` dicts. Sellers and tokens
-        are alphabetically ordered for stable diffing; endpoints within a
-        token are ordered by reset deadline (locked endpoints first).
+        List of ``{seller_id, tokens: [{token_fp, token_type, endpoints: [...]}]}``
+        dicts. Sellers and tokens are alphabetically ordered for stable
+        diffing; endpoints within a token are ordered by reset deadline
+        (locked endpoints first).
     """
+    fp_to_type = fp_to_type or {}
     by_seller: dict[str | None, dict[str, list]] = {}
     for row in rows:
         token_endpoints = by_seller.setdefault(row.seller_id, {})
@@ -142,7 +154,11 @@ def _group_rows_by_seller(rows, now: float) -> list[dict]:
                 _endpoint_payload(r, now) for r in by_seller[seller_id][token_fp]
             ]
             endpoints.sort(key=lambda e: (not e['locked'], e['reset_in_s']))
-            tokens_list.append({'token_fp': token_fp, 'endpoints': endpoints})
+            tokens_list.append({
+                'token_fp': token_fp,
+                'token_type': fp_to_type.get(token_fp),
+                'endpoints': endpoints,
+            })
         sellers.append({'seller_id': seller_id, 'tokens': tokens_list})
     return sellers
 
@@ -197,10 +213,11 @@ def _render_status_table(active_profile: str, sellers: list[dict]) -> None:
                 ]
                 for ep in token['endpoints']
             ]
+            ttype = token.get('token_type') or 'unknown'
             render_table(
                 ['Endpoint', 'Remaining', 'Reset (s)', 'Last seen (s ago)', 'State'],
                 rows,
-                title=f'Token {token["token_fp"]}',
+                title=f'Token {token["token_fp"]} (type: {ttype})',
             )
 
 
@@ -213,248 +230,3 @@ def _format_remaining(ep: dict) -> str:
     return f'{left}/{right}'
 
 
-def _resolve_any_token(settings, profile_store_cls, profile_hint: str | None) -> str:
-    """Best-effort token lookup using the standard priority chain.
-
-    Priority: env / .env → promotion token in the named (or active) profile.
-    Returns an empty string when no token is available — the command still
-    runs, just without a cooldown reading.
-    """
-    if settings.api_token:
-        return settings.api_token
-    try:
-        profile = profile_store_cls(settings.config_dir).get_profile(profile_hint)
-        return profile.get_token('promotion')
-    except Exception:  # noqa: BLE001
-        return ''
-
-
-@rate_app.command('probe')
-def rate_probe(ctx: typer.Context) -> None:
-    """Single-call probe to refresh per-endpoint cooldown visibility.
-
-    Makes at most one GET to ``/adv/v1/balance`` (cheapest per-seller
-    endpoint) and interprets the result through ``EndpointBudget``:
-
-    - Pre-flight: read the budget row for ``(token_fp, /adv/v1/balance)``.
-      When ``remaining == 0`` and ``reset_at`` is still in the future,
-      skip the network entirely and report the lock state. Other
-      endpoints stay reachable — the per-endpoint scope is the whole
-      point of the R-1..R-4 redesign.
-    - On HTTP 200, ``EndpointBudget.observe_headers`` records the live
-      ``X-Ratelimit-*`` values and the probe reports
-      ``x-ratelimit-remaining`` so agents can see how close we are to
-      a trip.
-    - On HTTP 429, the same ``observe_headers`` call writes the
-      ``reset_at`` deadline; this command exits with ``RATE_LIMITED``
-      and future ``wb`` calls to the same endpoint will see the lock
-      via :meth:`EndpointBudget.reserve`.
-    """
-    import httpx
-
-    from wb.auth.profiles import ProfileStore
-    from wb.core.config import Settings
-    from wb.core.endpoint_budget import EndpointBudget
-    from wb.core.rate_limiter import compute_token_fingerprint, extract_seller_id
-
-    renderer = get_renderer(ctx)
-    settings = Settings()
-    settings.ensure_config_dir()
-
-    profile_hint = get_profile(ctx)
-    store = ProfileStore(settings.config_dir)
-    try:
-        active_profile = profile_hint or store.active_profile_name
-    except Exception:  # noqa: BLE001
-        active_profile = profile_hint or settings.active_profile
-
-    token = _resolve_any_token(settings, ProfileStore, profile_hint)
-    if not token:
-        _emit_probe_result(
-            renderer, ctx,
-            {
-                'profile': active_profile,
-                'seller_id': None,
-                'token_fingerprint': '',
-                'outcome': 'no-token',
-                'locked': False,
-                'cooldown_seconds': 0.0,
-                'calls_remaining': None,
-            },
-            exit_code=7,
-        )
-        return
-
-    token_fp = compute_token_fingerprint(token)
-    seller_id = extract_seller_id(token)
-    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
-    budget = EndpointBudget(db_path=db_path)
-
-    # Pre-flight: skip the network if WB has already told us this
-    # endpoint is locked for the current token.
-    cooldown = _compute_endpoint_cooldown(budget, token_fp, _PROBE_ENDPOINT)
-    if cooldown > 0:
-        _emit_probe_result(
-            renderer, ctx,
-            {
-                'profile': active_profile,
-                'seller_id': seller_id,
-                'token_fingerprint': token_fp,
-                'outcome': 'lock-active',
-                'locked': True,
-                'cooldown_seconds': round(cooldown, 1),
-                'calls_remaining': 0,
-            },
-            exit_code=5,
-        )
-        return
-
-    # Make the one controlled request.
-    try:
-        with httpx.Client(timeout=_PROBE_TIMEOUT_SECONDS) as client:
-            response = client.get(
-                f'{PROMOTION_BASE_URL}{_PROBE_ENDPOINT}',
-                headers={
-                    'Authorization': token,
-                    'Accept': 'application/json',
-                },
-            )
-    except httpx.RequestError as exc:
-        _emit_probe_result(
-            renderer, ctx,
-            {
-                'profile': active_profile,
-                'seller_id': seller_id,
-                'token_fingerprint': token_fp,
-                'outcome': 'network-error',
-                'locked': False,
-                'cooldown_seconds': 0.0,
-                'calls_remaining': None,
-                'error': str(exc),
-            },
-            exit_code=6,
-        )
-        return
-
-    # Always feed the response headers back into the budget — both 200s
-    # (refreshes ``remaining``) and 429s (records ``reset_at``).
-    budget.observe_headers(
-        token_fp, _PROBE_ENDPOINT, response.headers, seller_id=seller_id,
-    )
-
-    payload = {
-        'profile': active_profile,
-        'seller_id': seller_id,
-        'token_fingerprint': token_fp,
-        'http_status': response.status_code,
-    }
-
-    if response.status_code == 429:
-        from wb.core.endpoint_budget import parse_rate_limit_wait
-        cooldown_seconds = parse_rate_limit_wait(response.headers) or 0.0
-        payload.update({
-            'outcome': '429',
-            'locked': True,
-            'cooldown_seconds': round(cooldown_seconds, 1),
-            'calls_remaining': 0,
-        })
-        _emit_probe_result(renderer, ctx, payload, exit_code=5)
-        return
-
-    if response.status_code >= 400:
-        payload.update({
-            'outcome': 'error',
-            'locked': False,
-            'cooldown_seconds': 0.0,
-            'calls_remaining': None,
-            'error_body': response.text[:200],
-        })
-        _emit_probe_result(renderer, ctx, payload, exit_code=6)
-        return
-
-    # 2xx — happy path. ``x-ratelimit-remaining`` may or may not be present.
-    remaining_raw = response.headers.get('x-ratelimit-remaining')
-    calls_remaining: int | None = None
-    if remaining_raw is not None:
-        try:
-            calls_remaining = int(remaining_raw)
-        except ValueError:
-            calls_remaining = None
-
-    payload.update({
-        'outcome': 'ok',
-        'locked': False,
-        'cooldown_seconds': 0.0,
-        'calls_remaining': calls_remaining,
-    })
-    _emit_probe_result(renderer, ctx, payload, exit_code=0)
-
-
-def _compute_endpoint_cooldown(
-        budget,
-        token_fp: str,
-        endpoint: str,
-) -> float:
-    """Return seconds remaining on the endpoint cooldown, or 0 if clear.
-
-    Walks :meth:`EndpointBudget.read_all` once and filters in Python —
-    cheap because the table is small (one row per touched endpoint per
-    token) and this command is only ever called interactively.
-
-    Args:
-        budget: Live :class:`EndpointBudget` instance.
-        token_fp: Token fingerprint for the row's primary key.
-        endpoint: API endpoint path constant.
-
-    Returns:
-        Positive float seconds remaining when ``remaining == 0`` and
-        ``reset_at > now``; ``0.0`` otherwise.
-    """
-    now = time.time()
-    for row in budget.read_all():
-        if row.token_fp != token_fp or row.endpoint != endpoint:
-            continue
-        if row.remaining == 0 and row.reset_at > now:
-            return row.reset_at - now
-        return 0.0
-    return 0.0
-
-
-def _emit_probe_result(
-        renderer,
-        ctx: typer.Context,
-        payload: dict,
-        *,
-        exit_code: int,
-) -> None:
-    """Render probe output then exit with the requested code."""
-    if renderer.is_json:
-        compact = (ctx.obj or {}).get('compact', False)
-        typer.echo(
-            json.dumps(
-                payload,
-                separators=(',', ':') if compact else (',', ': '),
-                indent=None if compact else 2,
-                ensure_ascii=False,
-            )
-        )
-    else:
-        typer.echo(f"Profile            : {payload.get('profile', '')}")
-        typer.echo(f"Seller             : {payload.get('seller_id') or '(unknown sid)'}")
-        typer.echo(f"Token fingerprint  : {payload.get('token_fingerprint') or '(none)'}")
-        typer.echo(f"Outcome            : {payload.get('outcome', 'unknown')}")
-        if payload.get('locked'):
-            typer.echo(
-                f"Endpoint cooldown  : LOCKED — {payload['cooldown_seconds']:.0f}s remaining"
-            )
-        else:
-            typer.echo('Endpoint cooldown  : clear')
-        if payload.get('calls_remaining') is not None:
-            typer.echo(f"Calls remaining    : {payload['calls_remaining']}")
-        if 'error' in payload:
-            typer.echo(f"Error              : {payload['error']}")
-        if 'error_body' in payload:
-            typer.echo(f"Error body         : {payload['error_body']}")
-
-    if exit_code != 0:
-        raise typer.Exit(exit_code)

@@ -15,7 +15,10 @@ WB applies **per-token-type** rate limits on many advert endpoints. The live web
 | Base     | 1 h    | 2 requests | 30 min   | 1 request  |
 | Test     | …      | …          | …        | …          |
 
-The swagger files in `docs/swagger/` only document the Personal / Service variant. Base-token limits are **dramatically tighter** but invisible from swagger alone.
+The swagger files in `docs/swagger/` carry the **full per-type table** (column header
+is "Type", not "Token type") for every stratified endpoint — earlier reading missed
+this and assumed swagger only had the Personal / Service variant. The R-5 catalog is
+built directly from those tables.
 
 **Impact in our code:**
 
@@ -40,14 +43,14 @@ A follow-up test on `/adv/v1/promotion/count` (swagger: 5/s, burst 5) returned `
 
 ## Fix approach
 
-See [R-5 phase doc](R-5-token-type-aware-rates.md) for the implementation plan. In summary:
+See [R-5 phase doc](R-5-token-type-aware-rates.md) for the concretized implementation plan. In summary:
 
-- Detect token type from the JWT (the `t` claim or equivalent — needs investigation).
-- Make `ENDPOINT_LIMITS` token-type-aware (Base override layer at minimum).
-- Switch `rate probe` to a Base-friendlier endpoint OR refuse to probe when the type is Base and the chosen endpoint has tight limits.
-- Add token type to `rate status` output and (in A-3) `wb auth whoami`.
-- Refresh `wb-rate-guide` and `wb-rate-recover` skills to document Base-token caveats.
-- Add a token-type column to `RATE_LIMITS.md` for endpoints with known stratification.
+- **Token type is a profile field** (`Profile.token_type`, default `'base'`), settable via `wb auth login --token-type`. JWT auto-detection is deferred to a future R-6 phase pending a non-Base reference token.
+- `ENDPOINT_LIMITS` gains a sibling `BASE_OVERRIDES` map; lookup goes through `select_prior(path, token_type)`. `WbHttpClient._pre_flight` uses it so first-call priors are Base-aware.
+- **`wb rate probe` removed** as part of R-5. The command was vestigial since R-1..R-4 made the runtime header-driven, and on Base it could only be a 30-min footgun or a refusal. Replacements: `wb auth ping` for connectivity / token-validity (uniform `/ping` rate), `wb rate status` for budget visibility (no network).
+- `wb rate status` displays `token_type` per token group. `wb auth whoami` (A-3) will surface it on the profile view.
+- `wb-rate-guide` and `wb-rate-recover` skills get a "Base caveats" section; both now point at `wb auth ping` + `wb rate status` instead of probe.
+- `RATE_LIMITS.md` gains a "Base override" column for stratified endpoints.
 
 ## Sequencing
 
