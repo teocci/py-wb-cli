@@ -431,75 +431,12 @@ class TestSharedRateLimiterCrossProcess:
 class TestSharedRateLimiterFallback:
     """Graceful degradation when the DB is unusable."""
 
-    def test_env_var_opt_out_picks_memory_limiter(self, monkeypatch, tmp_path):
-        """WB_RATE_LIMITER=memory via the factory yields in-memory limiters only."""
-        from wb.core.constants import RATE_LIMITER_ENV_VAR
-        from wb.services._factory import _build_limiters, ServiceContainer
-
-        monkeypatch.setenv(RATE_LIMITER_ENV_VAR, 'memory')
-        ServiceContainer.reset()
-        limiters = _build_limiters('some-token')
-        assert limiters  # at least one endpoint
-        assert all(isinstance(l, RateLimiter) for l in limiters.values())
-        ServiceContainer.reset()
-
-    def test_factory_default_picks_shared_limiter(self, monkeypatch, tmp_path):
-        """Without the env var, the factory wires SharedRateLimiter."""
-        from wb.core.constants import RATE_LIMITER_ENV_VAR
-        from wb.services._factory import _build_limiters, ServiceContainer
-
-        monkeypatch.delenv(RATE_LIMITER_ENV_VAR, raising=False)
-        # Redirect the config dir so the test doesn't touch ~/.wb-cli
-        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
-        ServiceContainer.reset()
-        limiters = _build_limiters('some-token')
-        assert limiters
-        assert all(isinstance(l, SharedRateLimiter) for l in limiters.values())
-        ServiceContainer.reset()
-
-
-class TestSellerLimiterFactory:
-    """F-10: `_build_seller_limiter` selection matches the env-var policy."""
-
-    def test_default_returns_shared_limiter(self, monkeypatch, tmp_path):
-        from wb.core.constants import RATE_LIMITER_ENV_VAR, SELLER_GLOBAL_SCOPE_KEY
-        from wb.services._factory import _build_seller_limiter, ServiceContainer
-
-        monkeypatch.delenv(RATE_LIMITER_ENV_VAR, raising=False)
-        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
-        ServiceContainer.reset()
-        limiter = _build_seller_limiter(_make_jwt({'sid': 'seller-x'}))
-        try:
-            assert isinstance(limiter, SharedRateLimiter)
-            assert limiter._endpoint == SELLER_GLOBAL_SCOPE_KEY
-            expected_fp = compute_seller_fingerprint(_make_jwt({'sid': 'seller-x'}))
-            assert limiter._token_fingerprint == expected_fp
-        finally:
-            ServiceContainer.reset()
-
-    def test_env_opt_out_returns_memory_limiter(self, monkeypatch, tmp_path):
-        from wb.core.constants import RATE_LIMITER_ENV_VAR
-        from wb.services._factory import _build_seller_limiter, ServiceContainer
-
-        monkeypatch.setenv(RATE_LIMITER_ENV_VAR, 'memory')
-        ServiceContainer.reset()
-        limiter = _build_seller_limiter(_make_jwt({'sid': 'seller-x'}))
-        assert isinstance(limiter, RateLimiter) and not isinstance(limiter, SharedRateLimiter)
-        ServiceContainer.reset()
-
-    def test_uses_configured_budget(self, monkeypatch, tmp_path):
-        """Seller limiter honours SELLER_GLOBAL_BUDGET (30/60s default)."""
-        from wb.core.constants import (
-            RATE_LIMITER_ENV_VAR, SELLER_GLOBAL_BUDGET,
-        )
-        from wb.services._factory import _build_seller_limiter, ServiceContainer
-
-        monkeypatch.setenv(RATE_LIMITER_ENV_VAR, 'memory')  # avoid DB
-        ServiceContainer.reset()
-        limiter = _build_seller_limiter(_make_jwt({'sid': 'seller-x'}))
-        calls, period = SELLER_GLOBAL_BUDGET
-        assert limiter._calls == calls and limiter._period == period
-        ServiceContainer.reset()
+    # Note: the old `_build_limiters` and `_build_seller_limiter` helpers
+    # were removed in R-2 (replaced by the single `EndpointBudget` factory
+    # method `ServiceContainer.endpoint_budget()`). The env-var opt-out
+    # behaviour for `WB_RATE_LIMITER=memory` is covered in
+    # `tests/unit/test_endpoint_budget.py` and via `TestEndpointBudgetFactory`
+    # at the end of this file.
 
     def test_corrupt_db_triggers_fallback(self, tmp_path, caplog):
         """A corrupt DB file at acquire time switches to the in-memory limiter."""
@@ -613,22 +550,58 @@ class TestSellerCooldownLock:
         assert reader.read_remaining('seller-x') is not None
 
 
-class TestCooldownLockFactory:
-    """F-13: factory wiring for SellerCooldownLock."""
+class TestEndpointBudgetFactory:
+    """R-2: `ServiceContainer.endpoint_budget()` replaces the F-10/F-13 builders.
 
-    def test_default_returns_lock_instance(self, monkeypatch, tmp_path):
+    `_build_limiters`, `_build_seller_limiter`, and `_build_cooldown_lock`
+    were removed in R-2; their job is now done by a single
+    :class:`wb.core.endpoint_budget.EndpointBudget` instance accessible
+    via :meth:`wb.services._factory._Container.endpoint_budget`.
+    """
+
+    def test_default_returns_db_backed_budget(self, monkeypatch, tmp_path):
         from pathlib import Path as _Path
         from wb.core.constants import RATE_LIMITER_ENV_VAR
-        from wb.services._factory import _build_cooldown_lock, ServiceContainer
+        from wb.core.endpoint_budget import EndpointBudget
+        from wb.services._factory import ServiceContainer
 
         monkeypatch.delenv(RATE_LIMITER_ENV_VAR, raising=False)
         monkeypatch.setattr(_Path, 'home', lambda: tmp_path)
         ServiceContainer.reset()
-        lock = _build_cooldown_lock()
         try:
-            assert isinstance(lock, SellerCooldownLock)
-            # Round-trip actually works
-            lock.record('seller-x', cooldown_seconds=20.0)
-            assert lock.read_remaining('seller-x') is not None
+            budget = ServiceContainer.endpoint_budget()
+            assert isinstance(budget, EndpointBudget)
+            # DB-backed mode → no in-memory fallback active.
+            assert budget._fallback is None
+        finally:
+            ServiceContainer.reset()
+
+    def test_env_opt_out_uses_in_memory_fallback(self, monkeypatch, tmp_path):
+        from pathlib import Path as _Path
+        from wb.core.constants import RATE_LIMITER_ENV_VAR
+        from wb.core.endpoint_budget import EndpointBudget
+        from wb.services._factory import ServiceContainer
+
+        monkeypatch.setenv(RATE_LIMITER_ENV_VAR, 'memory')
+        monkeypatch.setattr(_Path, 'home', lambda: tmp_path)
+        ServiceContainer.reset()
+        try:
+            budget = ServiceContainer.endpoint_budget()
+            assert isinstance(budget, EndpointBudget)
+            # Force-memory mode → fallback dict active from init.
+            assert budget._fallback is not None
+        finally:
+            ServiceContainer.reset()
+
+    def test_singleton_within_process(self, monkeypatch, tmp_path):
+        from pathlib import Path as _Path
+        from wb.services._factory import ServiceContainer
+
+        monkeypatch.setattr(_Path, 'home', lambda: tmp_path)
+        ServiceContainer.reset()
+        try:
+            a = ServiceContainer.endpoint_budget()
+            b = ServiceContainer.endpoint_budget()
+            assert a is b
         finally:
             ServiceContainer.reset()

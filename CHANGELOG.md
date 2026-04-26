@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.28.0 (2026-04-26)
+- R-1+R-2: metadata-driven rate-limit redesign — new `EndpointBudget` (`src/wb/core/endpoint_budget.py`) keys per-(token, endpoint) bucket state in a new `endpoint_budget` SQLite table, populated from WB's own `X-Ratelimit-*` response headers (parsed via `parse_rate_limit_wait` with the corrected preference order `X-Ratelimit-Retry > Retry-After > X-Ratelimit-Reset` per the official WB doc); `WbHttpClient.request` / `request_raw` now call `_pre_flight(path)` (delegates to `EndpointBudget.reserve` with `max_wait_seconds=60.0` for the F-12 bail-out) and `_observe(path, response)` after every response; the legacy three-layer gate (F-13 `SellerCooldownLock` + static seller-global limiter + per-path limiters) is no longer wired into the runtime path; `ServiceContainer.endpoint_budget()` is the new singleton factory (honours `WB_RATE_LIMITER=memory`); `_extract_seller_id` extracts plaintext `sid` from the JWT for diagnostics. Net change: a 429 on any one endpoint blocks ONLY that endpoint until WB's own reset deadline, not the whole seller. F-13's astronomic compounded cooldowns are eliminated. Live-verified via `wb campaign list` against `/api/advert/v2/adverts`.
+
 ## v0.27.0 (2026-04-24)
 - I-14: `wb rate probe` — single-call cooldown probe that respects the F-13 lock (no HTTP when already locked), reads WB's `x-ratelimit-remaining` header on 200 so agents can see how close we are to a trip, and writes `x-ratelimit-reset` into the lock on 429. Probes `/adv/v1/balance` (cheapest per-seller endpoint). JSON + table output, 10 s timeout, no retries — `calls_remaining: 0` is the signal agents should treat as "stop before next window resets"
 

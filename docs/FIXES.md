@@ -19,8 +19,13 @@ Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases
 | F-11 | Dedup `list_campaigns` in daily-report | ✅ DONE | services/stats.py | 0.25.3 | [detail](phases/F-11-dedup-list-campaigns.md) |
 | F-12 | Honor `x-ratelimit-reset` header (60 s bail-out) | ✅ DONE | client/http.py | 0.25.4 | [detail](phases/F-12-ratelimit-reset-header.md) |
 | F-13 | `SellerCooldownLock` short-circuit on known cooldown | ✅ DONE | core/rate_limiter.py, services/_factory.py, client/http.py | 0.25.5 | [detail](phases/F-13-seller-cooldown-lock.md) |
+| F-14 | `rate status` misses seller cooldown (astronomic compounded cooldowns) | 🔲 PLANNED | core/rate_limiter.py, cli/rate.py, client/http.py | TBD | [detail](phases/F-14-rate-status-misses-cooldown.md) — superseded by metadata-driven redesign R-1..R-4 |
+| F-15 | `wb rate` code + skills assume uniform endpoint limits — Base tokens trip 30-min penalty on `/adv/v1/balance` and other endpoints | 🔲 PLANNED | cli/rate.py, services/_factory.py, .claude/skills/wb-rate-*, RATE_LIMITS.md | TBD | [detail](phases/F-15-rate-base-token-blindspot.md) — addressed by R-5 |
 
-_No fixes currently in progress. Add new entries here when a fix is planned._
+### In Progress
+
+- **F-14** is being addressed by the rate-limit redesign. See phases R-1..R-4 in [IMPROVEMENTS.md](IMPROVEMENTS.md). The redesign deletes F-13's `SellerCooldownLock` (whose blast radius caused the astronomic compounded cooldowns) and replaces it with per-(token, endpoint) buckets driven by WB's own `x-ratelimit-*` response headers.
+- **F-15** is being addressed by R-5 (token-type-aware rates + `wb rate` overhaul + skill refresh). Discovered during R-1 live testing on 2026-04-26 — the WB live web docs reveal Base-token limits that swagger files don't show (e.g. `/adv/v1/balance` is 2 req/HOUR for Base, not 1/s). `wb rate probe` and the `wb-rate-*` skills currently treat all token types uniformly, which is why two probe-style calls cost the seller a 30-minute lockout.
 
 ## How to Add a Fix
 

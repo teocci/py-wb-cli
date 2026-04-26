@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from wb.auth.profiles import ProfileStore
 from wb.client.http import WbHttpClient
@@ -18,12 +19,13 @@ from wb.core.constants import (
     RATE_LIMITER_MEMORY_VALUE,
     RESPONSE_CACHE_DB_FILE,
     RESPONSE_CACHE_RETENTION_DAYS,
-    SELLER_GLOBAL_BUDGET,
-    SELLER_GLOBAL_SCOPE_KEY,
     STATISTICS_BASE_URL,
 )
 from wb.storage.audit import AuditLogger
 from wb.storage.response_cache import ResponseCache
+
+if TYPE_CHECKING:
+    from wb.core.endpoint_budget import EndpointBudget
 
 __all__ = [
     'ServiceContainer',
@@ -70,6 +72,7 @@ class _Container:
     _settings: Settings | None = None
     _http_clients: dict[tuple[str, str], WbHttpClient] = {}
     _response_cache: ResponseCache | None = None
+    _endpoint_budget: 'EndpointBudget | None' = None
 
     @classmethod
     def settings(cls) -> Settings:
@@ -96,12 +99,12 @@ class _Container:
         Args:
             base_url: API base URL.
             token: Authorization token.
-            with_rate_limits: When True, inject per-path rate limiters from
-                :data:`wb.core.rate_limits.ENDPOINT_LIMITS`, the
-                seller-scope global limiter (F-10), and the seller
-                cooldown lock (F-13). Only advert + analytics clients
-                need this; statistics/prices clients skip it since they
-                use different base URLs with no shared limiter state.
+            with_rate_limits: When True, inject the shared
+                :class:`EndpointBudget` so every request consumes /
+                writes per-(token, endpoint) state in
+                ``~/.wb-cli/rate_limits.db``. Only advert + analytics
+                clients need this; statistics/prices clients skip it
+                since they use different base URLs.
 
         Returns:
             Existing or newly created WbHttpClient.
@@ -109,25 +112,43 @@ class _Container:
         key = (base_url, token)
         if key not in cls._http_clients:
             if with_rate_limits:
-                from wb.core.rate_limiter import compute_seller_fingerprint
-                path_limiters = _build_limiters(token)
-                seller_limiter = _build_seller_limiter(token)
-                cooldown_lock = _build_cooldown_lock()
-                seller_fingerprint = compute_seller_fingerprint(token)
+                from wb.core.rate_limiter import compute_token_fingerprint
+                budget = cls.endpoint_budget()
+                token_fp = compute_token_fingerprint(token)
+                seller_id = _extract_seller_id(token)
             else:
-                path_limiters = None
-                seller_limiter = None
-                cooldown_lock = None
-                seller_fingerprint = None
+                budget = None
+                token_fp = None
+                seller_id = None
             cls._http_clients[key] = WbHttpClient(
                 base_url=base_url,
                 token=token,
-                path_limiters=path_limiters,
-                seller_limiter=seller_limiter,
-                cooldown_lock=cooldown_lock,
-                seller_fingerprint=seller_fingerprint,
+                budget=budget,
+                token_fp=token_fp,
+                seller_id=seller_id,
             )
         return cls._http_clients[key]
+
+    @classmethod
+    def endpoint_budget(cls):
+        """Return the shared :class:`EndpointBudget`, creating on first call.
+
+        One instance per process — all rate-limited HTTP clients in this
+        process share it. Cross-process coordination is via the SQLite
+        WAL file at ``~/.wb-cli/rate_limits.db``. The
+        ``WB_RATE_LIMITER=memory`` env var forces the in-memory fallback
+        (diagnostic only — disables cross-process coordination).
+        """
+        if cls._endpoint_budget is None:
+            from wb.core.endpoint_budget import EndpointBudget
+            settings = cls.settings()
+            db_path = settings.config_dir / RATE_LIMIT_DB_FILE
+            env_value = (os.environ.get(RATE_LIMITER_ENV_VAR) or '').lower()
+            force_memory = env_value == RATE_LIMITER_MEMORY_VALUE
+            cls._endpoint_budget = EndpointBudget(
+                db_path=db_path, force_memory=force_memory,
+            )
+        return cls._endpoint_budget
 
     @classmethod
     def response_cache(cls) -> ResponseCache:
@@ -160,110 +181,44 @@ class _Container:
         cls._settings = None
         cls._http_clients.clear()
         cls._response_cache = None
+        cls._endpoint_budget = None
 
 
 #: Public alias for ``_Container`` — use in tests and SDK code.
 ServiceContainer = _Container
 
 
-def _build_limiters(token: str):
-    """Build per-path rate limiters from ENDPOINT_LIMITS.
+def _extract_seller_id(token: str) -> str | None:
+    """Extract the plaintext ``sid`` (seller UUID) from a JWT bearer token.
 
-    By default each endpoint gets a :class:`SharedRateLimiter` backed by
-    ``~/.wb-cli/rate_limits.db`` so parallel ``wb`` processes coordinate.
-    The in-memory :class:`RateLimiter` is used as the fallback when the
-    user opts out via ``WB_RATE_LIMITER=memory``; individual shared
-    limiters that fail to open the DB transparently self-downgrade in
-    their ``acquire()`` path.
-
-    Args:
-        token: Bearer token; only its fingerprint enters the DB as a key.
-
-    Returns:
-        Dict mapping endpoint path → limiter (either class is interchangeable
-        since both expose a zero-arg ``acquire()`` method).
-    """
-    from wb.core.rate_limiter import RateLimiter, SharedRateLimiter, compute_token_fingerprint
-    from wb.core.rate_limits import ENDPOINT_LIMITS
-
-    env_value = (os.environ.get(RATE_LIMITER_ENV_VAR) or '').lower()
-    if env_value == RATE_LIMITER_MEMORY_VALUE:
-        return {path: RateLimiter(calls, period)
-                for path, (calls, period) in ENDPOINT_LIMITS.items()}
-
-    settings = _Container.settings()
-    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
-    fingerprint = compute_token_fingerprint(token)
-    return {
-        path: SharedRateLimiter(
-            calls, period,
-            token_fingerprint=fingerprint,
-            endpoint=path,
-            db_path=db_path,
-        )
-        for path, (calls, period) in ENDPOINT_LIMITS.items()
-    }
-
-
-def _build_cooldown_lock():
-    """Build the process-level seller cooldown lock (F-13).
-
-    Shares the same ``rate_limits.db`` file as :func:`_build_limiters` and
-    :func:`_build_seller_limiter`. The lock instance is stateless beyond
-    the DB path, so a single builder with no per-token parameter is
-    sufficient — the seller fingerprint is supplied at read/record time.
-
-    Unlike the rate limiters, this lock has no in-memory opt-out path
-    tied to ``WB_RATE_LIMITER=memory`` — the class transparently falls
-    back to an in-process dict on any ``sqlite3.Error``, which covers
-    both the "no DB available" and the "opt-out" cases without extra
-    branching here.
-
-    Returns:
-        A :class:`SellerCooldownLock` ready for reads and records.
-    """
-    from wb.core.rate_limiter import SellerCooldownLock
-
-    settings = _Container.settings()
-    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
-    return SellerCooldownLock(db_path=db_path)
-
-
-def _build_seller_limiter(token: str):
-    """Build the seller-scope global rate limiter for the given token.
-
-    Keyed by the JWT ``sid`` claim (seller UUID) — see
-    :func:`wb.core.rate_limiter.compute_seller_fingerprint` — so the
-    promotion, analytics, and statistics tokens of the same seller share
-    a single budget in ``~/.wb-cli/rate_limits.db``, coordinating
-    against WB's gateway-enforced per-seller throttle.
-
-    Respects ``WB_RATE_LIMITER=memory`` the same way
-    :func:`_build_limiters` does: in-process :class:`RateLimiter` as
-    fallback when the SQLite DB is unavailable or the user opts out.
+    Returns ``None`` when the token isn't a 3-part JWT, the payload
+    can't be base64url-decoded, the JSON is malformed, or there's no
+    string ``sid`` claim. Used by :class:`EndpointBudget.observe` as a
+    non-key column so :command:`wb rate status` can group rows by
+    plaintext seller ID instead of an opaque hash.
 
     Args:
-        token: Bearer token; never stored, only its seller fingerprint.
+        token: Bearer token (never stored on disk).
 
     Returns:
-        A :class:`SharedRateLimiter` (default) or :class:`RateLimiter`
-        (opt-out) configured with :data:`SELLER_GLOBAL_BUDGET`.
+        The seller UUID as a string, or ``None`` when not extractable.
     """
-    from wb.core.rate_limiter import RateLimiter, SharedRateLimiter, compute_seller_fingerprint
+    import base64
+    import binascii
+    import json
 
-    calls, period = SELLER_GLOBAL_BUDGET
-    env_value = (os.environ.get(RATE_LIMITER_ENV_VAR) or '').lower()
-    if env_value == RATE_LIMITER_MEMORY_VALUE:
-        return RateLimiter(calls, period)
-
-    settings = _Container.settings()
-    db_path = settings.config_dir / RATE_LIMIT_DB_FILE
-    return SharedRateLimiter(
-        calls, period,
-        token_fingerprint=compute_seller_fingerprint(token),
-        endpoint=SELLER_GLOBAL_SCOPE_KEY,
-        db_path=db_path,
-    )
+    parts = token.split('.')
+    if len(parts) != 3:
+        return None
+    payload_b64 = parts[1]
+    padding = '=' * (-len(payload_b64) % 4)
+    try:
+        payload_bytes = base64.urlsafe_b64decode(payload_b64 + padding)
+        payload = json.loads(payload_bytes)
+    except (ValueError, binascii.Error, json.JSONDecodeError):
+        return None
+    sid = payload.get('sid') if isinstance(payload, dict) else None
+    return sid if isinstance(sid, str) and sid else None
 
 
 # ── Token resolution ──────────────────────────────────────────────────────────

@@ -24,7 +24,7 @@ from wb.core.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from wb.core.rate_limiter import RateLimiter, SellerCooldownLock
+    from wb.core.endpoint_budget import EndpointBudget
 
 __all__ = ['WbHttpClient']
 
@@ -45,11 +45,17 @@ _JITTER_FRACTION = 0.5
 # multiple seconds to clear — we switch to the UPSTREAM schedule instead.
 _SELLER_GLOBAL_THROTTLE_MARKER = 'global limiter'
 
-# Undocumented headers WB sends on 429 (not in swagger). When present, the
-# value is seconds until the cooldown window clears — authoritative, so we
-# prefer it over the standard `Retry-After` fallback. Both header names
-# carry the same value; we read whichever shows up.
-_RATELIMIT_RESET_HEADERS = ('Retry-After', 'x-ratelimit-reset', 'x-ratelimit-retry')
+# Header preference order — see ``docs/web/rate-limits.md`` for the
+# official WB semantics. ``X-Ratelimit-Retry`` is the WB-specific "next
+# request legal in N s" header (smallest of the three on a 429); we
+# prefer it over ``Retry-After`` (HTTP standard) which we prefer over
+# ``X-Ratelimit-Reset`` (the WB-specific "full burst restored in N s",
+# typically the largest value). Picking Reset when only the WB headers
+# are sent over-waits significantly — the doc's example is Retry=2 s
+# vs Reset=29 s, a 14× over-wait. The same ordering is mirrored in
+# :data:`wb.core.endpoint_budget._WAIT_HEADERS` so the budget and the
+# error parser agree on a single ``retry_after`` per response.
+_RATELIMIT_RESET_HEADERS = ('x-ratelimit-retry', 'Retry-After', 'x-ratelimit-reset')
 
 # Threshold for F-12's bail-out vs. retry split. Any `retry_after` larger
 # than this is almost certainly a seller-scope penalty — retrying would
@@ -98,15 +104,18 @@ def _is_seller_global_throttle(exc: Exception | None) -> bool:
 class WbHttpClient:
     """Low-level HTTP client for WB API with retry and rate-limit support.
 
-    Supports two layers of preemptive rate limiting, both acquired before
-    the first attempt to prevent 429 responses rather than react to them:
+    Rate limiting is delegated to a single :class:`EndpointBudget`
+    instance (R-1..R-4 redesign). Before each request, :meth:`_pre_flight`
+    calls ``budget.reserve(...)`` which blocks only as long as WB's own
+    ``X-Ratelimit-*`` headers (or the static prior, when no header data
+    has been observed yet) say it must. After every response — success
+    or 4xx — :meth:`_observe` calls ``budget.observe(...)`` which
+    upserts per-(token, endpoint) bucket state from the headers.
 
-    1. ``seller_limiter`` — acquired first, for every request. Coordinates
-       against WB's gateway-enforced per-seller global budget across all
-       advert + analytics endpoints for the seller, keyed by the JWT
-       ``sid`` claim so tokens of the same seller share one window.
-    2. ``path_limiters`` — acquired second, per endpoint path. Enforces
-       the per-endpoint budgets documented in WB's swagger.
+    The legacy three-layer gate (``cooldown_lock`` + ``seller_limiter``
+    + ``path_limiters``) was removed in phase R-2; F-13's seller-wide
+    cooldown lock was the source of the multi-minute compounded
+    lockouts that this redesign fixes.
 
     Attributes:
         base_url: API base URL.
@@ -120,20 +129,18 @@ class WbHttpClient:
             timeout: float = DEFAULT_TIMEOUT,
             max_retries: int = DEFAULT_MAX_RETRIES,
             retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY,
-            path_limiters: dict[str, 'RateLimiter'] | None = None,
-            seller_limiter: 'RateLimiter | None' = None,
-            cooldown_lock: 'SellerCooldownLock | None' = None,
-            seller_fingerprint: str | None = None,
+            budget: 'EndpointBudget | None' = None,
+            token_fp: str | None = None,
+            seller_id: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip('/')
         self._token = token
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_base_delay = retry_base_delay
-        self._path_limiters: dict[str, RateLimiter] = path_limiters or {}
-        self._seller_limiter: RateLimiter | None = seller_limiter
-        self._cooldown_lock: SellerCooldownLock | None = cooldown_lock
-        self._seller_fingerprint: str | None = seller_fingerprint
+        self._budget: EndpointBudget | None = budget
+        self._token_fp: str | None = token_fp
+        self._seller_id: str | None = seller_id
         self._client = httpx.Client(
             base_url=self._base_url,
             headers={
@@ -144,56 +151,53 @@ class WbHttpClient:
             timeout=self._timeout,
         )
 
-    def _check_cooldown_lock(self) -> None:
-        """F-13: raise RateLimitError immediately if a known cooldown is active.
+    def _pre_flight(self, path: str) -> None:
+        """Reserve a slot in the per-(token, endpoint) budget before calling.
 
-        Consulted at the top of every :meth:`request` and
-        :meth:`request_raw`. Short-circuits the HTTP round-trip entirely
-        when WB has previously told us (via ``x-ratelimit-reset``) that
-        the seller is locked until a specific deadline. Prevents our own
-        retries — whether from this process or a parallel ``wb``
-        invocation sharing the SQLite file — from extending WB's
-        leaky-bucket penalty.
+        Lookups the static prior from :data:`ENDPOINT_LIMITS` and delegates
+        to :meth:`EndpointBudget.reserve`. When the budget is unset
+        (test path or non-rate-limited client) or the path has no
+        documented prior, this is a no-op — matching pre-R-2 behaviour
+        where unknown paths were not throttled.
 
-        Raises:
-            RateLimitError: When the lock is active for the seller;
-                ``retry_after`` carries the remaining seconds and
-                ``response_body`` is ``None`` (no wire data exists).
+        Caps the in-process wait at :data:`_RETRY_AFTER_BAIL_OUT_SECONDS`
+        (60 s, mirrors F-12). Longer cooldowns raise ``RateLimitError``
+        immediately so the CLI exits ``RATE_LIMITED`` rather than
+        blocking the user for minutes.
         """
-        if self._cooldown_lock is None or self._seller_fingerprint is None:
+        if self._budget is None or self._token_fp is None:
             return
-        remaining = self._cooldown_lock.read_remaining(self._seller_fingerprint)
-        if remaining is None:
+        from wb.core.rate_limits import ENDPOINT_LIMITS
+        prior = ENDPOINT_LIMITS.get(path)
+        if prior is None:
             return
-        logger.warning(
-            'Seller cooldown lock active — %.0fs remaining; skipping HTTP call',
-            remaining,
-        )
-        raise RateLimitError(
-            f'Seller cooldown active — {remaining:.0f}s remaining',
-            retry_after=remaining,
+        self._budget.reserve(
+            self._token_fp,
+            path,
+            prior=prior,
+            seller_id=self._seller_id,
+            max_wait_seconds=_RETRY_AFTER_BAIL_OUT_SECONDS,
         )
 
-    def _record_cooldown(self, exc: RateLimitError) -> None:
-        """F-13: persist the cooldown deadline after a 429 carries one.
+    def _observe(self, path: str, response: 'httpx.Response') -> None:
+        """Upsert bucket state from the response's ``X-Ratelimit-*`` headers.
 
-        Called right after a :class:`RateLimitError` is raised by the
-        response handler but before any retry decision. When WB told us
-        ``x-ratelimit-reset: N``, store ``now + N`` so the *next* call —
-        in this process or any other — sees the lock and skips WB.
-
-        Args:
-            exc: The raised :class:`RateLimitError`. Records only when
-                ``retry_after`` is populated (some 429s lack it).
+        Called after every response (200 and 4xx — including 429). When
+        WB sent no rate-limit headers, this is a no-op; when it sent
+        only ``X-Ratelimit-Remaining`` (typical for 200s on tight
+        endpoints), the row's ``reset_at`` defaults to ``now`` and
+        :meth:`EndpointBudget.reserve` falls back to the interval-based
+        wait per the WB doc. When WB sent the full 429 trio (Retry +
+        Reset + Limit), the next :meth:`_pre_flight` honours WB's
+        authoritative deadline.
         """
-        if (
-            self._cooldown_lock is None
-            or self._seller_fingerprint is None
-            or exc.retry_after is None
-        ):
+        if self._budget is None or self._token_fp is None:
             return
-        self._cooldown_lock.record(
-            self._seller_fingerprint, float(exc.retry_after),
+        self._budget.observe(
+            self._token_fp,
+            path,
+            response,
+            seller_id=self._seller_id,
         )
 
     def close(self) -> None:
@@ -232,24 +236,19 @@ class WbHttpClient:
         """
         last_exception: Exception | None = None
 
-        self._check_cooldown_lock()
-        if self._seller_limiter is not None:
-            self._seller_limiter.acquire()
-        if limiter := self._path_limiters.get(path):
-            limiter.acquire()
-
         for attempt in range(self._max_retries + 1):
             try:
+                self._pre_flight(path)
                 response = self._client.request(
                     method,
                     path,
                     params=params,
                     json=json_body,
                 )
+                self._observe(path, response)
                 return self._handle_response(response)
             except RateLimitError as exc:
                 last_exception = exc
-                self._record_cooldown(exc)
                 self._retry_or_raise(
                     attempt, exc, exc.retry_after, 'Rate limited'
                 )
@@ -389,25 +388,20 @@ class WbHttpClient:
         """
         last_exception: Exception | None = None
 
-        self._check_cooldown_lock()
-        if self._seller_limiter is not None:
-            self._seller_limiter.acquire()
-        if limiter := self._path_limiters.get(path):
-            limiter.acquire()
-
         for attempt in range(self._max_retries + 1):
             try:
+                self._pre_flight(path)
                 response = self._client.request(
                     method,
                     path,
                     params=params,
                     headers={'Accept': 'application/octet-stream'},
                 )
+                self._observe(path, response)
                 self._check_error_status(response)
                 return response.content
             except RateLimitError as exc:
                 last_exception = exc
-                self._record_cooldown(exc)
                 self._retry_or_raise(
                     attempt, exc, exc.retry_after, 'Rate limited'
                 )

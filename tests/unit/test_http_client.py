@@ -178,48 +178,8 @@ class TestWbHttpClient:
         assert sleeps[0] < 5.0
         assert sleeps[1] < 10.0
 
-    def test_seller_limiter_acquired_before_path_limiter(self):
-        """F-10: seller-scope limiter is acquired before the per-path one on each request."""
-        from unittest.mock import MagicMock
-
-        seller = MagicMock()
-        path_limiter = MagicMock()
-        acquire_order: list[str] = []
-        seller.acquire.side_effect = lambda: acquire_order.append('seller')
-        path_limiter.acquire.side_effect = lambda: acquire_order.append('path')
-
-        with respx.mock:
-            respx.get(f'{BASE_URL}/test').mock(
-                return_value=httpx.Response(200, json={'ok': True})
-            )
-            client = WbHttpClient(
-                BASE_URL, 'token',
-                path_limiters={'/test': path_limiter},
-                seller_limiter=seller,
-            )
-            client.get('/test')
-            client.close()
-
-        assert acquire_order == ['seller', 'path']
-
-    def test_seller_limiter_fires_even_without_path_limiter(self):
-        """Paths with no per-endpoint limiter still go through the seller limiter."""
-        from unittest.mock import MagicMock
-
-        seller = MagicMock()
-
-        with respx.mock:
-            respx.get(f'{BASE_URL}/unlisted').mock(
-                return_value=httpx.Response(200, json={})
-            )
-            client = WbHttpClient(BASE_URL, 'token', seller_limiter=seller)
-            client.get('/unlisted')
-            client.close()
-
-        assert seller.acquire.call_count == 1
-
-    def test_no_seller_limiter_is_no_op(self):
-        """When seller_limiter is None (default), nothing extra happens."""
+    def test_no_budget_is_no_op(self):
+        """When budget is None (default), pre-flight and observe are skipped."""
         with respx.mock:
             respx.get(f'{BASE_URL}/test').mock(
                 return_value=httpx.Response(200, json={})
@@ -227,121 +187,157 @@ class TestWbHttpClient:
             with WbHttpClient(BASE_URL, 'token') as client:
                 assert client.get('/test') == {}
 
-    # ── F-13: cooldown lock integration ────────────────────────────────
+    # ── R-2: EndpointBudget integration ────────────────────────────────
 
-    def test_active_cooldown_lock_short_circuits_without_http(self):
-        """F-13: active lock raises RateLimitError before any HTTP attempt."""
+    def test_pre_flight_calls_budget_reserve_with_prior(self):
+        """Pre-flight resolves the static prior and delegates to budget.reserve."""
         from unittest.mock import MagicMock
+        from wb.core.constants import EP_ACCOUNT_BALANCE
+        from wb.core.rate_limits import ENDPOINT_LIMITS
 
-        lock = MagicMock()
-        lock.read_remaining.return_value = 42.0
-
+        budget = MagicMock()
         with respx.mock:
-            route = respx.get(f'{BASE_URL}/test').mock(
-                return_value=httpx.Response(200, json={})
+            respx.get(f'{BASE_URL}{EP_ACCOUNT_BALANCE}').mock(
+                return_value=httpx.Response(200, json={'balance': 0})
             )
             client = WbHttpClient(
                 BASE_URL, 'token',
-                cooldown_lock=lock,
-                seller_fingerprint='seller-x',
+                budget=budget, token_fp='tk-fp', seller_id='sid-1',
             )
-            with pytest.raises(RateLimitError) as exc_info:
-                client.get('/test')
+            client.get(EP_ACCOUNT_BALANCE)
             client.close()
 
-        assert route.call_count == 0  # no HTTP call made
-        assert exc_info.value.retry_after == 42.0
-        lock.read_remaining.assert_called_with('seller-x')
+        budget.reserve.assert_called_once()
+        kwargs = budget.reserve.call_args.kwargs
+        args = budget.reserve.call_args.args
+        assert args == ('tk-fp', EP_ACCOUNT_BALANCE)
+        assert kwargs['prior'] == ENDPOINT_LIMITS[EP_ACCOUNT_BALANCE]
+        assert kwargs['seller_id'] == 'sid-1'
+        assert kwargs['max_wait_seconds'] == 60.0  # mirrors F-12 bail-out
 
-    def test_cooldown_lock_cleared_allows_http(self):
-        """Lock returning None (no active cooldown) permits the call."""
+    def test_observe_called_after_200_response(self):
+        """observe runs on success — feeds X-Ratelimit-Remaining into the budget."""
         from unittest.mock import MagicMock
+        from wb.core.constants import EP_ACCOUNT_BALANCE
 
-        lock = MagicMock()
-        lock.read_remaining.return_value = None
-
+        budget = MagicMock()
         with respx.mock:
-            respx.get(f'{BASE_URL}/test').mock(
-                return_value=httpx.Response(200, json={'ok': True})
-            )
-            client = WbHttpClient(
-                BASE_URL, 'token',
-                cooldown_lock=lock,
-                seller_fingerprint='seller-x',
-            )
-            assert client.get('/test') == {'ok': True}
-            client.close()
-
-    def test_429_with_reset_records_cooldown_lock(self, monkeypatch):
-        """F-13: 429 carrying x-ratelimit-reset writes to the lock."""
-        import wb.client.http as http_mod
-        from unittest.mock import MagicMock
-
-        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
-        lock = MagicMock()
-        lock.read_remaining.return_value = None
-
-        with respx.mock:
-            respx.get(f'{BASE_URL}/test').mock(
+            respx.get(f'{BASE_URL}{EP_ACCOUNT_BALANCE}').mock(
                 return_value=httpx.Response(
-                    429, headers={'x-ratelimit-reset': '30'},
+                    200, json={'balance': 0},
+                    headers={'x-ratelimit-remaining': '4'},
                 )
             )
             client = WbHttpClient(
                 BASE_URL, 'token',
-                max_retries=0,
-                cooldown_lock=lock,
-                seller_fingerprint='seller-x',
+                budget=budget, token_fp='tk-fp', seller_id='sid-1',
             )
-            with pytest.raises(RateLimitError):
-                client.get('/test')
+            client.get(EP_ACCOUNT_BALANCE)
             client.close()
 
-        lock.record.assert_called_with('seller-x', 30.0)
+        budget.observe.assert_called_once()
+        # Positional args: (token_fp, endpoint, response)
+        assert budget.observe.call_args.args[:2] == ('tk-fp', EP_ACCOUNT_BALANCE)
+        assert budget.observe.call_args.kwargs.get('seller_id') == 'sid-1'
 
-    def test_429_without_reset_does_not_record(self, monkeypatch):
-        """429 with no usable header doesn't touch the lock."""
+    def test_observe_called_after_429_response(self, monkeypatch):
+        """observe runs even on 429 — feeds reset_at into the budget."""
         import wb.client.http as http_mod
         from unittest.mock import MagicMock
+        from wb.core.constants import EP_ACCOUNT_BALANCE
 
         monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
-        lock = MagicMock()
-        lock.read_remaining.return_value = None
-
+        budget = MagicMock()
         with respx.mock:
-            respx.get(f'{BASE_URL}/test').mock(
-                return_value=httpx.Response(429)
+            respx.get(f'{BASE_URL}{EP_ACCOUNT_BALANCE}').mock(
+                return_value=httpx.Response(
+                    429,
+                    headers={
+                        'x-ratelimit-retry': '5',
+                        'x-ratelimit-reset': '30',
+                        'x-ratelimit-limit': '1',
+                    },
+                )
             )
             client = WbHttpClient(
-                BASE_URL, 'token',
-                max_retries=0,
-                cooldown_lock=lock,
-                seller_fingerprint='seller-x',
+                BASE_URL, 'token', max_retries=0,
+                budget=budget, token_fp='tk-fp', seller_id='sid-1',
             )
             with pytest.raises(RateLimitError):
-                client.get('/test')
+                client.get(EP_ACCOUNT_BALANCE)
             client.close()
 
-        lock.record.assert_not_called()
+        budget.observe.assert_called_once()
 
-    def test_cooldown_check_skipped_when_no_fingerprint(self):
-        """If seller_fingerprint is None the lock is never consulted."""
+    def test_pre_flight_skipped_for_unknown_path(self):
+        """Paths missing from ENDPOINT_LIMITS bypass budget.reserve entirely."""
         from unittest.mock import MagicMock
 
-        lock = MagicMock()
+        budget = MagicMock()
         with respx.mock:
-            respx.get(f'{BASE_URL}/test').mock(
+            respx.get(f'{BASE_URL}/no-such-path').mock(
                 return_value=httpx.Response(200, json={})
             )
             client = WbHttpClient(
                 BASE_URL, 'token',
-                cooldown_lock=lock,  # lock present
-                seller_fingerprint=None,  # but no fp → skip
+                budget=budget, token_fp='tk-fp',
             )
-            client.get('/test')
+            client.get('/no-such-path')
             client.close()
 
-        lock.read_remaining.assert_not_called()
+        budget.reserve.assert_not_called()
+        # observe still runs (it's a no-op when no rate-limit headers)
+        budget.observe.assert_called_once()
+
+    def test_pre_flight_long_cooldown_bails_out(self, monkeypatch):
+        """Reserve raising RateLimitError(retry_after > 60s) propagates immediately."""
+        import wb.client.http as http_mod
+        from unittest.mock import MagicMock
+        from wb.core.constants import EP_ACCOUNT_BALANCE
+        from wb.core.exceptions import RateLimitError as RLE
+
+        monkeypatch.setattr(http_mod.time, 'sleep', lambda *_: None)
+        budget = MagicMock()
+        budget.reserve.side_effect = RLE(
+            'Endpoint locked for ~1800s', retry_after=1800.0,
+        )
+
+        with respx.mock:
+            route = respx.get(f'{BASE_URL}{EP_ACCOUNT_BALANCE}').mock(
+                return_value=httpx.Response(200, json={})
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token', max_retries=3,
+                budget=budget, token_fp='tk-fp',
+            )
+            with pytest.raises(RLE) as exc_info:
+                client.get(EP_ACCOUNT_BALANCE)
+            client.close()
+
+        # No HTTP call should happen.
+        assert route.call_count == 0
+        # F-12 bail-out propagates the long retry_after to the caller.
+        assert exc_info.value.retry_after == 1800.0
+
+    def test_pre_flight_skipped_when_token_fp_missing(self):
+        """Without token_fp, even a passed budget is ignored."""
+        from unittest.mock import MagicMock
+        from wb.core.constants import EP_ACCOUNT_BALANCE
+
+        budget = MagicMock()
+        with respx.mock:
+            respx.get(f'{BASE_URL}{EP_ACCOUNT_BALANCE}').mock(
+                return_value=httpx.Response(200, json={})
+            )
+            client = WbHttpClient(
+                BASE_URL, 'token',
+                budget=budget,  # but no token_fp
+            )
+            client.get(EP_ACCOUNT_BALANCE)
+            client.close()
+
+        budget.reserve.assert_not_called()
+        budget.observe.assert_not_called()
 
     def test_x_ratelimit_reset_populates_retry_after(self):
         """F-12: `x-ratelimit-reset` header sets RateLimitError.retry_after."""

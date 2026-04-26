@@ -32,6 +32,14 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.25.0 | I-12 | ✅ DONE | SQLite-backed cross-process rate limiter — [detail](phases/I-12-shared-rate-limiter.md) |
 | 0.26.0 | I-13 | ✅ DONE | `wb rate-status` diagnostic command — [detail](phases/I-13-rate-status-command.md) |
 | 0.27.0 | I-14 | ✅ DONE | `wb rate probe` — single-call cooldown probe — [detail](phases/I-14-rate-probe-command.md) |
+| 0.28.0 | R-1  | ✅ DONE | `EndpointBudget` state layer — [detail](phases/R-1-endpoint-budget-state.md) |
+| 0.28.0 | R-2  | ✅ DONE | HTTP client integration (drops F-13 + seller-global limiter from runtime) — [detail](phases/R-2-http-client-integration.md) |
+| TBD    | R-3  | 🔲 PLANNED | `wb rate status` overhaul — [detail](phases/R-3-rate-status-overhaul.md) |
+| TBD    | R-4  | 🔲 PLANNED | Cleanup + docs (deletes `SellerCooldownLock`) — [detail](phases/R-4-cleanup-docs.md) |
+| TBD    | R-5  | 🔲 PLANNED | Token-type-aware rate handling + `wb rate` overhaul + skill refresh — [detail](phases/R-5-token-type-aware-rates.md) |
+| TBD    | A-1  | 🔲 PLANNED | `wb auth login --profile NAME` env bootstrap — [detail](phases/A-1-auth-login-env-bootstrap.md) |
+| TBD    | A-2  | 🔲 PLANNED | Drop runtime env fallback (BREAKING) — [detail](phases/A-2-drop-runtime-env-fallback.md) |
+| TBD    | A-3  | 🔲 PLANNED | `wb auth whoami` + docs sweep — [detail](phases/A-3-auth-whoami-docs.md) |
 
 ---
 

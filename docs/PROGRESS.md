@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.27.0 |
-| **Tests Passing** | 1140/1141 (1 pre-existing env test) |
-| **Phases Complete** | 39 |
+| **Current Version** | 0.28.0 |
+| **Tests Passing** | 1174/1175 (1 pre-existing env test) |
+| **Phases Complete** | 41 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -54,8 +54,20 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-13 | `SellerCooldownLock` short-circuit on known cooldown | ✅ DONE | 0.25.5 |
 | I-13 | `wb rate-status` diagnostic command | ✅ DONE | 0.26.0 |
 | I-14 | `wb rate probe` — single-call cooldown probe | ✅ DONE | 0.27.0 |
+| F-14 | `rate status` misses seller cooldown — superseded by R-1..R-4 | 🔲 PLANNED | TBD |
+| R-1 | `EndpointBudget` state layer (header-driven, per-(token, endpoint)) | ✅ DONE | 0.28.0 |
+| R-2 | HTTP client integration — drop F-13 lock + seller-global limiter | ✅ DONE | 0.28.0 |
+| R-3 | `wb rate status` overhaul — read `endpoint_budget`, group by seller | 🔲 PLANNED | TBD |
+| R-4 | Cleanup — drop `SellerCooldownLock`, `SELLER_GLOBAL_BUDGET`, docs | 🔲 PLANNED | TBD |
+| F-15 | `wb rate` + skills assume uniform endpoint limits — Base tokens trip 30-min penalty | 🔲 PLANNED | TBD |
+| R-5 | Token-type-aware rate handling + `wb rate` overhaul + skill refresh | 🔲 PLANNED | TBD |
+| A-1 | `wb auth login --profile NAME` env bootstrap (non-breaking) | 🔲 PLANNED | TBD |
+| A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | 🔲 PLANNED | TBD |
+| A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |
 
 Phase detail files: [docs/phases/](phases/)
+
+**Active redesign:** [analyze-why-the-wb-gentle-lightning.md](../../../../Users/teocci/.claude/plans/analyze-why-the-wb-gentle-lightning.md) — metadata-driven rate-limit redesign (R-1..R-4), with [auth-homogenization.md](../../../../Users/teocci/.claude/plans/auth-homogenization.md) as the follow-up.
 
 ## How to Continue
 
