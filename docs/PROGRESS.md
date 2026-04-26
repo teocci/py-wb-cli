@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.28.0 |
-| **Tests Passing** | 1174/1175 (1 pre-existing env test) |
-| **Phases Complete** | 41 |
+| **Current Version** | 0.29.0 |
+| **Tests Passing** | 1177/1178 (1 pre-existing env test) |
+| **Phases Complete** | 42 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -57,7 +57,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-14 | `rate status` misses seller cooldown — superseded by R-1..R-4 | 🔲 PLANNED | TBD |
 | R-1 | `EndpointBudget` state layer (header-driven, per-(token, endpoint)) | ✅ DONE | 0.28.0 |
 | R-2 | HTTP client integration — drop F-13 lock + seller-global limiter | ✅ DONE | 0.28.0 |
-| R-3 | `wb rate status` overhaul — read `endpoint_budget`, group by seller | 🔲 PLANNED | TBD |
+| R-3 | `wb rate status` overhaul — read `endpoint_budget`, group by seller | ✅ DONE | 0.29.0 |
 | R-4 | Cleanup — drop `SellerCooldownLock`, `SELLER_GLOBAL_BUDGET`, docs | 🔲 PLANNED | TBD |
 | F-15 | `wb rate` + skills assume uniform endpoint limits — Base tokens trip 30-min penalty | 🔲 PLANNED | TBD |
 | R-5 | Token-type-aware rate handling + `wb rate` overhaul + skill refresh | 🔲 PLANNED | TBD |
