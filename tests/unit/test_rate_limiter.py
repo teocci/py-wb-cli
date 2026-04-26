@@ -12,10 +12,9 @@ import pytest
 
 from wb.core.rate_limiter import (
     RateLimiter,
-    SellerCooldownLock,
     SharedRateLimiter,
-    compute_seller_fingerprint,
     compute_token_fingerprint,
+    extract_seller_id,
 )
 import wb.core.rate_limiter as rate_limiter_module
 
@@ -214,58 +213,55 @@ class TestComputeTokenFingerprint:
         assert compute_token_fingerprint('a') != compute_token_fingerprint('b')
 
 
-class TestComputeSellerFingerprint:
-    """Seller-scope fingerprint extracted from JWT ``sid`` claim."""
+class TestExtractSellerId:
+    """Plaintext ``sid`` extracted from JWT — used as a non-key column in
+    the ``endpoint_budget`` table so ``wb rate status`` can group rows by
+    plaintext seller ID. Replaces the F-10 ``compute_seller_fingerprint``
+    helper that was deleted in R-4.
+    """
 
-    def test_returns_16_hex_chars(self):
+    def test_returns_plaintext_sid(self):
         token = _make_jwt({'sid': '173f8646-dc21-58c0-892e-ba069dc0a9cb'})
-        fp = compute_seller_fingerprint(token)
-        assert len(fp) == 16
-        assert all(c in '0123456789abcdef' for c in fp)
+        assert extract_seller_id(token) == '173f8646-dc21-58c0-892e-ba069dc0a9cb'
 
     def test_deterministic_for_same_sid(self):
         token_a = _make_jwt({'sid': 'seller-uuid-1', 'iid': 1})
         token_b = _make_jwt({'sid': 'seller-uuid-1', 'iid': 1})
-        assert compute_seller_fingerprint(token_a) == compute_seller_fingerprint(token_b)
+        assert extract_seller_id(token_a) == extract_seller_id(token_b)
 
-    def test_same_sid_different_tokens_share_fingerprint(self):
-        """Two tokens of the same seller (different iid/exp) collide — the point of F-10."""
+    def test_same_sid_different_tokens_share_id(self):
+        """Two tokens of the same seller (different iid/exp) share the same sid."""
         token_a = _make_jwt({'sid': 'seller-uuid-1', 'iid': 111, 'exp': 1000})
         token_b = _make_jwt({'sid': 'seller-uuid-1', 'iid': 222, 'exp': 9000})
-        assert compute_seller_fingerprint(token_a) == compute_seller_fingerprint(token_b)
+        assert extract_seller_id(token_a) == extract_seller_id(token_b) == 'seller-uuid-1'
 
     def test_distinct_sid_differ(self):
         token_a = _make_jwt({'sid': 'seller-uuid-1'})
         token_b = _make_jwt({'sid': 'seller-uuid-2'})
-        assert compute_seller_fingerprint(token_a) != compute_seller_fingerprint(token_b)
+        assert extract_seller_id(token_a) != extract_seller_id(token_b)
 
-    def test_seller_fingerprint_differs_from_token_fingerprint(self):
-        """sid-keyed fingerprint must NOT collide with plain token fingerprint."""
-        token = _make_jwt({'sid': 'abc'})
-        assert compute_seller_fingerprint(token) != compute_token_fingerprint(token)
-
-    def test_malformed_jwt_falls_back_to_token_fingerprint(self):
-        """Non-JWT string → fallback to token fingerprint (degrade gracefully)."""
+    def test_malformed_jwt_returns_none(self):
+        """Non-JWT string → None (no graceful fallback to a fingerprint;
+        the caller is responsible for handling missing seller_id."""
         not_a_jwt = 'just-some-opaque-token-string'
-        assert (
-            compute_seller_fingerprint(not_a_jwt)
-            == compute_token_fingerprint(not_a_jwt)
-        )
+        assert extract_seller_id(not_a_jwt) is None
 
-    def test_jwt_missing_sid_falls_back(self):
-        """JWT without `sid` claim falls back to token fingerprint."""
+    def test_jwt_missing_sid_returns_none(self):
         token = _make_jwt({'iid': 1, 'uid': 2})  # no sid
-        assert compute_seller_fingerprint(token) == compute_token_fingerprint(token)
+        assert extract_seller_id(token) is None
 
-    def test_jwt_sid_non_string_falls_back(self):
-        """JWT with non-string sid falls back."""
+    def test_jwt_sid_non_string_returns_none(self):
         token = _make_jwt({'sid': 123})
-        assert compute_seller_fingerprint(token) == compute_token_fingerprint(token)
+        assert extract_seller_id(token) is None
 
-    def test_jwt_malformed_payload_falls_back(self):
-        """JWT with unparseable middle segment falls back without raising."""
+    def test_jwt_malformed_payload_returns_none(self):
+        """JWT with unparseable middle segment returns None without raising."""
         token = 'header.!!notbase64!!.sig'
-        assert compute_seller_fingerprint(token) == compute_token_fingerprint(token)
+        assert extract_seller_id(token) is None
+
+    def test_empty_string_sid_returns_none(self):
+        token = _make_jwt({'sid': ''})
+        assert extract_seller_id(token) is None
 
 
 class TestSharedRateLimiterInit:
@@ -476,78 +472,6 @@ class TestSharedRateLimiterFallback:
         warnings = [r for r in caplog.records
                     if 'Shared rate limiter DB unavailable' in r.message]
         assert len(warnings) == 1
-
-
-class TestSellerCooldownLock:
-    """F-13: TTL-based lock persisting WB-reported seller cooldowns."""
-
-    def _reset_fallback_flag(self):
-        rate_limiter_module._FALLBACK_WARNED = False
-
-    def test_read_empty_returns_none(self, tmp_path):
-        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
-        assert lock.read_remaining('seller-x') is None
-
-    def test_record_then_read(self, tmp_path):
-        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
-        lock.record('seller-x', cooldown_seconds=30.0)
-        remaining = lock.read_remaining('seller-x')
-        assert remaining is not None
-        # Allow small slippage for test execution
-        assert 29.0 < remaining <= 30.0
-
-    def test_expired_row_reads_none(self, tmp_path, monkeypatch):
-        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
-        import wb.core.rate_limiter as mod
-        now = mod.time.time()
-        # Fabricate an already-expired row via direct DB write
-        import sqlite3
-        conn = sqlite3.connect(str(tmp_path / 'rl.db'))
-        conn.execute(
-            'INSERT OR REPLACE INTO seller_cooldown VALUES (?, ?)',
-            ('seller-x', now - 10.0),
-        )
-        conn.commit()
-        conn.close()
-        assert lock.read_remaining('seller-x') is None
-
-    def test_record_upserts(self, tmp_path):
-        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
-        lock.record('seller-x', cooldown_seconds=60.0)
-        lock.record('seller-x', cooldown_seconds=5.0)  # shorter override
-        remaining = lock.read_remaining('seller-x')
-        assert remaining is not None and remaining <= 5.0
-
-    def test_per_seller_isolation(self, tmp_path):
-        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
-        lock.record('seller-a', cooldown_seconds=30.0)
-        assert lock.read_remaining('seller-b') is None
-
-    def test_record_zero_or_negative_ignored(self, tmp_path):
-        lock = SellerCooldownLock(db_path=tmp_path / 'rl.db')
-        lock.record('seller-x', cooldown_seconds=0)
-        lock.record('seller-x', cooldown_seconds=-5)
-        assert lock.read_remaining('seller-x') is None
-
-    def test_corrupt_db_falls_back_at_init(self, tmp_path, caplog):
-        """Corrupt DB file → in-memory fallback dict at construction time."""
-        self._reset_fallback_flag()
-        db = tmp_path / 'rl.db'
-        db.write_bytes(b'not a sqlite db')
-        with caplog.at_level('WARNING', logger='wb.core.rate_limiter'):
-            lock = SellerCooldownLock(db_path=db)
-        assert lock._fallback is not None
-        # Record/read still works through the fallback
-        lock.record('seller-x', cooldown_seconds=15.0)
-        assert lock.read_remaining('seller-x') is not None
-
-    def test_cross_process_coordination(self, tmp_path):
-        """Two locks sharing the DB file see each other's records."""
-        db = tmp_path / 'rl.db'
-        writer = SellerCooldownLock(db_path=db)
-        reader = SellerCooldownLock(db_path=db)
-        writer.record('seller-x', cooldown_seconds=45.0)
-        assert reader.read_remaining('seller-x') is not None
 
 
 class TestEndpointBudgetFactory:

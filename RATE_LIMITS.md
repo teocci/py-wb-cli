@@ -2,12 +2,19 @@
 
 > **For AI agents:** Use this file to plan call sequences. Exceeding a limit returns
 > HTTP 429 (exit code 5). The CLI enforces these limits preemptively — you do not need
-> to add sleeps between calls. Limits are coordinated **per-token across all concurrent
-> `wb` processes** through a shared SQLite file at `~/.wb-cli/rate_limits.db` (WAL mode),
-> so parallel invocations serialise cleanly. Set `WB_RATE_LIMITER=memory` to opt out and
-> use an in-process limiter instead; the shared coordinator also auto-falls-back to
-> in-process if the DB is unavailable (permissions, corruption, locked), logging a
-> single warning per process.
+> to add sleeps between calls. Limits are coordinated **per-(token, endpoint) across
+> all concurrent `wb` processes** through a shared SQLite file at
+> `~/.wb-cli/rate_limits.db` (WAL mode), so parallel invocations serialise cleanly.
+> Set `WB_RATE_LIMITER=memory` to opt out and use an in-process limiter instead; the
+> shared coordinator also auto-falls-back to in-process if the DB is unavailable
+> (permissions, corruption, locked), logging a single warning per process.
+>
+> Since R-1..R-4 (v0.28.0–0.30.0) the runtime authority for "may I call this endpoint
+> right now?" is **WB's own `X-Ratelimit-*` response headers**, not the static numbers
+> in this file. The `ENDPOINT_LIMITS` map is now a *bootstrap prior* used only until
+> the first WB response is observed for a given (token, endpoint) bucket; after that,
+> `EndpointBudget.reserve(...)` blocks based on the live `remaining` / `reset_at` /
+> `retry-after` values written by `EndpointBudget.observe(...)`.
 
 ---
 
@@ -103,27 +110,50 @@ These endpoints are most likely to cause 429 errors in automated workflows:
 
 ---
 
-## Implementation Details
+## How throttling works (since R-1..R-4)
 
-Rate limits are enforced preemptively in `src/wb/core/rate_limiter.py` using a
-sliding-window algorithm. Two interchangeable classes implement the same
-`acquire()` contract:
+The runtime authority is `EndpointBudget` in
+[src/wb/core/endpoint_budget.py](src/wb/core/endpoint_budget.py). Every WB
+response (200 or 4xx) feeds its `X-Ratelimit-*` headers back into a row keyed
+by `(token_fingerprint, endpoint)` in the `endpoint_budget` SQLite table.
+Before each request, the HTTP client calls `budget.reserve(...)` which
+inspects that row and blocks only as long as WB's own `remaining` /
+`reset_at` / `retry-after` values say it must.
 
-- **`SharedRateLimiter` (default)** — SQLite WAL at `~/.wb-cli/rate_limits.db`.
-  Each `acquire()` runs a `BEGIN IMMEDIATE` transaction that prunes expired
-  rows, counts in-window rows for `(token_fingerprint, endpoint)`, and either
-  inserts a new row or sleeps until the oldest row ages out (sleep happens
-  outside the transaction so other processes aren't starved).
-- **`RateLimiter` (fallback)** — in-process `threading.Lock` + deque. Used
-  when `WB_RATE_LIMITER=memory` is set, or transparently when the shared DB
-  cannot be used (missing parent dir, locked, corrupt).
+**Two layers, in order:**
 
-The `ENDPOINT_LIMITS` map in `src/wb/core/rate_limits.py` maps each endpoint
-path to `(calls, period_seconds)`. The HTTP client acquires a slot before
-sending — no sleep after 429 (the reactive retry in `http.py` remains as
-backup).
+1. **`EndpointBudget` (header-driven, runtime authority).** When a row
+   exists for `(token, endpoint)` and `remaining > 0`, the call goes
+   through immediately and `remaining` is decremented in place. When
+   `remaining == 0`, `reserve` sleeps until the larger of `reset_at`
+   (derived from `X-Ratelimit-Retry`) and a conservative interval
+   fallback (`prior_period / prior_calls`). A 429 on one endpoint locks
+   only that endpoint's bucket — other endpoints under the same token
+   stay reachable.
+2. **`SharedRateLimiter` (static prior, bootstrap window).** When no row
+   has been observed yet (or the previous window has expired), the
+   bootstrap path acquires a slot from the per-(token, endpoint)
+   sliding-window limiter using the static `ENDPOINT_LIMITS` numbers
+   below. Once WB responds, `observe()` writes the real header values
+   and subsequent calls hit the header-driven path instead.
 
-**Sliding window interpretation of burst:**
+The `ENDPOINT_LIMITS` map in [src/wb/core/rate_limits.py](src/wb/core/rate_limits.py)
+is therefore a **bootstrap prior**, not the runtime cap. It seeds the
+budget for cold starts and is also used as the interval-fallback when WB
+sends `remaining=0` without a `Retry-After` header. The numbers below in
+the Quick Reference still match the documented swagger limits — they
+just no longer override what WB itself tells us at runtime.
+
+**Diagnostic surfaces:**
+
+- `wb rate status` — read the full `endpoint_budget` table grouped by
+  `(seller_id, token_fp, endpoint)`. Shows `remaining`, `bucket_limit`,
+  `reset_in_s`, `last_seen_ago_s`, `locked`. No HTTP call.
+- `wb rate probe` — make exactly one GET to `/adv/v1/balance`, observe
+  the response headers into the budget, and report the outcome. Use
+  this to confirm a clean state when no rows exist yet.
+
+**Sliding window interpretation of burst (still used by the bootstrap layer):**
 - `burst = 1` → all calls must be spaced by `period / limit` → stored as `(1, interval)`
 - `burst = limit` → full burst allowed, then wait → stored as `(limit, period)`
 

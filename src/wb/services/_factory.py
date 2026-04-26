@@ -112,10 +112,13 @@ class _Container:
         key = (base_url, token)
         if key not in cls._http_clients:
             if with_rate_limits:
-                from wb.core.rate_limiter import compute_token_fingerprint
+                from wb.core.rate_limiter import (
+                    compute_token_fingerprint,
+                    extract_seller_id,
+                )
                 budget = cls.endpoint_budget()
                 token_fp = compute_token_fingerprint(token)
-                seller_id = _extract_seller_id(token)
+                seller_id = extract_seller_id(token)
             else:
                 budget = None
                 token_fp = None
@@ -186,39 +189,6 @@ class _Container:
 
 #: Public alias for ``_Container`` — use in tests and SDK code.
 ServiceContainer = _Container
-
-
-def _extract_seller_id(token: str) -> str | None:
-    """Extract the plaintext ``sid`` (seller UUID) from a JWT bearer token.
-
-    Returns ``None`` when the token isn't a 3-part JWT, the payload
-    can't be base64url-decoded, the JSON is malformed, or there's no
-    string ``sid`` claim. Used by :class:`EndpointBudget.observe` as a
-    non-key column so :command:`wb rate status` can group rows by
-    plaintext seller ID instead of an opaque hash.
-
-    Args:
-        token: Bearer token (never stored on disk).
-
-    Returns:
-        The seller UUID as a string, or ``None`` when not extractable.
-    """
-    import base64
-    import binascii
-    import json
-
-    parts = token.split('.')
-    if len(parts) != 3:
-        return None
-    payload_b64 = parts[1]
-    padding = '=' * (-len(payload_b64) % 4)
-    try:
-        payload_bytes = base64.urlsafe_b64decode(payload_b64 + padding)
-        payload = json.loads(payload_bytes)
-    except (ValueError, binascii.Error, json.JSONDecodeError):
-        return None
-    sid = payload.get('sid') if isinstance(payload, dict) else None
-    return sid if isinstance(sid, str) and sid else None
 
 
 # ── Token resolution ──────────────────────────────────────────────────────────

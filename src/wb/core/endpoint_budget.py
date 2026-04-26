@@ -1,9 +1,9 @@
 """Per-(token, endpoint) rate-limit budget driven by WB response headers.
 
 The :class:`EndpointBudget` is the single source of truth for "may I call
-this endpoint right now, and if not, how long must I wait?" It supersedes
-the F-13 ``SellerCooldownLock`` (seller-wide short-circuit) and the static
-seller-global limiter, replacing both with state derived from WB's own
+this endpoint right now, and if not, how long must I wait?" It replaced
+the F-13 seller-wide cooldown short-circuit and the static seller-global
+limiter (both removed in R-2/R-4) with state derived from WB's own
 ``x-ratelimit-limit`` / ``x-ratelimit-remaining`` / ``x-ratelimit-reset``
 headers as observed on every response.
 
@@ -27,9 +27,8 @@ Design summary
   (``wb rate status``).
 
 On any ``sqlite3.Error`` at construction or during read/write, the
-instance flips to an in-memory fallback dict — same pattern as
-:class:`SellerCooldownLock`. A single module-level warning is emitted on
-the first fallback per process.
+instance flips to an in-memory fallback dict. A single module-level
+warning is emitted on the first fallback per process.
 """
 
 from __future__ import annotations
@@ -589,8 +588,7 @@ class EndpointBudget:
     def _activate_fallback(self, exc: Exception) -> None:
         """Swap to an in-memory dict after a DB failure.
 
-        Mirrors :meth:`SellerCooldownLock._activate_fallback`. One
-        process-wide warning is emitted on the first fallback.
+        One process-wide warning is emitted on the first fallback.
         """
         global _FALLBACK_WARNED
         with self._fallback_lock:

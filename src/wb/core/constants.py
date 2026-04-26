@@ -19,8 +19,6 @@ __all__ = [
     'RATE_LIMIT_DB_FILE',
     'RATE_LIMITER_ENV_VAR',
     'RATE_LIMITER_MEMORY_VALUE',
-    'SELLER_GLOBAL_BUDGET',
-    'SELLER_GLOBAL_SCOPE_KEY',
     'PROFILES_FILE',
     'DEFAULT_TIMEOUT',
     'DEFAULT_MAX_RETRIES',
@@ -123,15 +121,6 @@ RESPONSE_CACHE_RETENTION_DAYS = 90
 RATE_LIMIT_DB_FILE = 'rate_limits.db'
 RATE_LIMITER_ENV_VAR = 'WB_RATE_LIMITER'
 RATE_LIMITER_MEMORY_VALUE = 'memory'
-
-# Seller-scope global rate limit. WB's gateway enforces a per-seller budget
-# that cuts across every advert + analytics endpoint, separate from the
-# per-endpoint documented limits. Conservative fixed default until empirical
-# measurement refines it; can be overridden per-deployment if needed.
-SELLER_GLOBAL_BUDGET: tuple[int, float] = (30, 60.0)  # 30 calls per 60 s
-# Synthetic "endpoint" key used for the seller-scope row in rate_limits.db;
-# the leading underscore cannot collide with any real API path.
-SELLER_GLOBAL_SCOPE_KEY = '_seller_global'
 
 PROFILES_FILE = 'profiles.json'
 

@@ -261,26 +261,34 @@ class TestRateStatus:
 
 
 class TestRateProbe:
-    """I-14: single-call probe that respects the F-13 cooldown lock."""
+    """I-14 + R-4: single-call probe that respects per-endpoint cooldowns
+    recorded in the ``endpoint_budget`` table by every WB response.
+    """
 
     PROBE_URL = 'https://advert-api.wildberries.ru/adv/v1/balance'
+    PROBE_ENDPOINT = '/adv/v1/balance'
+
+    def _token_fp(self) -> str:
+        from wb.core.rate_limiter import compute_token_fingerprint
+        return compute_token_fingerprint(TOKEN)
 
     def test_help(self, isolated_home):
         result = runner.invoke(app, ['rate', 'probe', '--help'])
         assert result.exit_code == 0
         assert 'probe' in result.output.lower()
 
-    def test_skips_network_when_lock_active(self, isolated_home):
-        """Active lock → no HTTP call, outcome='lock-active', exit 5."""
-        from wb.core.rate_limiter import (
-            SellerCooldownLock, compute_seller_fingerprint,
-        )
-
+    def test_skips_network_when_endpoint_locked(self, isolated_home):
+        """``remaining=0`` + ``reset_at`` in the future → no HTTP, exit 5."""
         db = isolated_home / '.wb-cli' / 'rate_limits.db'
-        db.parent.mkdir(parents=True, exist_ok=True)
-        lock = SellerCooldownLock(db_path=db)
-        fp = compute_seller_fingerprint(TOKEN)
-        lock.record(fp, cooldown_seconds=60.0)
+        _seed_budget_row(
+            db,
+            token_fp=self._token_fp(),
+            endpoint=self.PROBE_ENDPOINT,
+            seller_id='seller-under-test',
+            bucket_limit=1,
+            remaining=0,
+            reset_in_s=60.0,
+        )
 
         with respx.mock:
             route = respx.get(self.PROBE_URL).mock(
@@ -293,7 +301,36 @@ class TestRateProbe:
         payload = json.loads(result.output)
         assert payload['outcome'] == 'lock-active'
         assert payload['locked'] is True
+        assert payload['seller_id'] == 'seller-under-test'
+        assert payload['token_fingerprint'] == self._token_fp()
         assert 59.0 < payload['cooldown_seconds'] <= 60.0
+
+    def test_unrelated_endpoint_lock_does_not_block_probe(self, isolated_home):
+        """A lock on a different endpoint must NOT block ``rate probe``."""
+        db = isolated_home / '.wb-cli' / 'rate_limits.db'
+        _seed_budget_row(
+            db,
+            token_fp=self._token_fp(),
+            endpoint='/adv/v3/fullstats',  # different endpoint
+            seller_id='seller-under-test',
+            bucket_limit=3,
+            remaining=0,
+            reset_in_s=600.0,
+        )
+
+        with respx.mock:
+            route = respx.get(self.PROBE_URL).mock(
+                return_value=httpx.Response(
+                    200, json={'balance': 1}, headers={'x-ratelimit-remaining': '5'},
+                )
+            )
+            result = runner.invoke(app, ['--json', 'rate', 'probe'])
+
+        assert result.exit_code == 0
+        assert route.call_count == 1
+        payload = json.loads(result.output)
+        assert payload['outcome'] == 'ok'
+        assert payload['calls_remaining'] == 5
 
     def test_200_reports_calls_remaining(self, isolated_home):
         """Clear state + 200 with `x-ratelimit-remaining` → outcome='ok'."""
@@ -313,6 +350,7 @@ class TestRateProbe:
         assert payload['locked'] is False
         assert payload['calls_remaining'] == 27
         assert payload['http_status'] == 200
+        assert payload['seller_id'] == 'seller-under-test'
 
     def test_200_without_remaining_header(self, isolated_home):
         """200 without the header → calls_remaining=null, still exit 0."""
@@ -327,18 +365,14 @@ class TestRateProbe:
         assert payload['outcome'] == 'ok'
         assert payload['calls_remaining'] is None
 
-    def test_429_updates_lock_and_exits(self, isolated_home):
-        """429 → reset written to lock, outcome='429', exit 5."""
-        from wb.core.rate_limiter import (
-            SellerCooldownLock, compute_seller_fingerprint,
-        )
-
+    def test_429_writes_endpoint_budget_and_exits(self, isolated_home):
+        """429 → ``endpoint_budget`` row upserted with reset_at, exit 5."""
         with respx.mock:
             respx.get(self.PROBE_URL).mock(
                 return_value=httpx.Response(
                     429,
-                    headers={'x-ratelimit-reset': '120'},
-                    json={'detail': 'Limited by global limiter'},
+                    headers={'x-ratelimit-retry': '120'},
+                    json={'detail': 'too many requests'},
                 )
             )
             result = runner.invoke(app, ['--json', 'rate', 'probe'])
@@ -349,19 +383,27 @@ class TestRateProbe:
         assert payload['locked'] is True
         assert payload['cooldown_seconds'] == 120.0
 
-        # Lock was persisted
+        # Budget row was persisted under the (token, endpoint) key
         db = isolated_home / '.wb-cli' / 'rate_limits.db'
-        lock = SellerCooldownLock(db_path=db)
-        fp = compute_seller_fingerprint(TOKEN)
-        remaining = lock.read_remaining(fp)
-        assert remaining is not None and 119.0 < remaining <= 120.0
+        conn = sqlite3.connect(str(db))
+        try:
+            row = conn.execute(
+                'SELECT remaining, reset_at, seller_id FROM endpoint_budget '
+                'WHERE token_fp = ? AND endpoint = ?',
+                (self._token_fp(), self.PROBE_ENDPOINT),
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row is not None
+        remaining, reset_at, seller_id = row
+        # observe() decrements via remaining=int(headers); 429 here doesn't
+        # send x-ratelimit-remaining so the row stores remaining=None.
+        assert remaining is None
+        assert reset_at - time.time() > 119.0
+        assert seller_id == 'seller-under-test'
 
-    def test_500_does_not_touch_lock(self, isolated_home):
-        """Non-429 error → lock not written, outcome='error', exit 6."""
-        from wb.core.rate_limiter import (
-            SellerCooldownLock, compute_seller_fingerprint,
-        )
-
+    def test_500_does_not_touch_budget(self, isolated_home):
+        """Non-429 error → no budget row written (no rate-limit headers)."""
         with respx.mock:
             respx.get(self.PROBE_URL).mock(
                 return_value=httpx.Response(500, text='boom')
@@ -373,12 +415,27 @@ class TestRateProbe:
         assert payload['outcome'] == 'error'
         assert payload['locked'] is False
 
-        # Lock unchanged
+        # Budget table either doesn't exist or has no row for this endpoint
         db = isolated_home / '.wb-cli' / 'rate_limits.db'
         if db.exists():
-            lock = SellerCooldownLock(db_path=db)
-            fp = compute_seller_fingerprint(TOKEN)
-            assert lock.read_remaining(fp) is None
+            conn = sqlite3.connect(str(db))
+            try:
+                # The table is created on EndpointBudget init even when no
+                # rows are written, so check for the absence of a row not
+                # the absence of the table.
+                rows = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name='endpoint_budget'"
+                ).fetchall()
+                if rows:
+                    row = conn.execute(
+                        'SELECT * FROM endpoint_budget WHERE token_fp = ? '
+                        'AND endpoint = ?',
+                        (self._token_fp(), self.PROBE_ENDPOINT),
+                    ).fetchone()
+                    assert row is None
+            finally:
+                conn.close()
 
     def test_no_token_exits_config_error(self, tmp_path, monkeypatch):
         """No token → outcome='no-token', exit 7 (CONFIG_ERROR)."""
@@ -386,12 +443,14 @@ class TestRateProbe:
         monkeypatch.delenv('WB_API_TOKEN', raising=False)
         monkeypatch.delenv('WB_ANALYTICS_TOKEN', raising=False)
         monkeypatch.chdir(tmp_path)
+        ServiceContainer.reset()
 
         with respx.mock:
             route = respx.get(self.PROBE_URL).mock(
                 return_value=httpx.Response(200)
             )
             result = runner.invoke(app, ['--json', 'rate', 'probe'])
+        ServiceContainer.reset()
 
         assert result.exit_code == 7
         assert route.call_count == 0

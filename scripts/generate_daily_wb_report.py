@@ -118,11 +118,14 @@ def read_rate_status() -> dict:
 
     ``wb rate status`` reads ``~/.wb-cli/rate_limits.db`` only — it does not
     make any HTTP call, so it does not consume seller-budget calls. Use this
-    as a pre-flight "am I already locked?" check.
+    as a pre-flight "is any endpoint already locked?" check.
 
-    If our local DB has not yet seen a WB-side 429, ``locked`` will be False
-    even when WB is in fact about to trip us. That's fine: the first real
-    fetch will short-circuit via F-13 once WB reports the cooldown.
+    Since R-3 the payload is ``{now_epoch, profile, sellers: [...]}``. Walk
+    ``find_active_lock`` to flatten it down to a single "longest active
+    cooldown" reading. If our local DB has not yet seen a WB-side 429, no
+    endpoint will be marked locked even when WB is in fact about to trip
+    us — the first real fetch will refresh state once WB reports the
+    cooldown via the response headers.
 
     Returns an empty dict when the command output cannot be parsed.
     """
@@ -143,6 +146,27 @@ def read_rate_status() -> dict:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def find_active_lock(status: dict) -> tuple[bool, float, str | None]:
+    """Walk the sellers→tokens→endpoints tree and find the longest lock.
+
+    Returns ``(is_locked, cooldown_seconds, endpoint_path)``. A lock is
+    counted only when the endpoint row has ``locked: true``; the
+    ``cooldown_seconds`` is the largest ``reset_in_s`` among locked rows.
+    """
+    longest = 0.0
+    locked_endpoint: str | None = None
+    for seller in status.get("sellers", []) or []:
+        for token in seller.get("tokens", []) or []:
+            for endpoint in token.get("endpoints", []) or []:
+                if not endpoint.get("locked"):
+                    continue
+                reset_in = float(endpoint.get("reset_in_s") or 0.0)
+                if reset_in > longest:
+                    longest = reset_in
+                    locked_endpoint = endpoint.get("endpoint")
+    return locked_endpoint is not None, longest, locked_endpoint
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -409,19 +433,20 @@ def acquire_payloads(
 ) -> tuple[list[dict], dict]:
     """Acquire orders + spend payloads for ``report_date``.
 
-    Reads ``wb rate status`` (no HTTP) first. When the seller is already
+    Reads ``wb rate status`` (no HTTP) first. When any endpoint is already
     locked, falls back to the persisted raw artifacts if they exist; otherwise
     exits with the rate-limit code. On the normal path, each fetch catches
     its own :class:`RateLimitedError` and falls back to persisted artifacts
     if available.
     """
     status = read_rate_status()
+    is_locked, cooldown, locked_endpoint = find_active_lock(status)
 
-    if status.get("locked") is True:
-        cooldown = status.get("seller_cooldown_seconds")
+    if is_locked:
         if orders_raw_path.exists() and spend_raw_path.exists():
             print(
-                f"wb rate status: locked ({cooldown}s). Rebuilding CSVs from persisted artifacts.",
+                f"wb rate status: {locked_endpoint} locked ({cooldown:.0f}s). "
+                "Rebuilding CSVs from persisted artifacts.",
                 file=sys.stderr,
             )
             return (
@@ -429,8 +454,8 @@ def acquire_payloads(
                 load_spend_payload(spend_raw_path),
             )
         print(
-            f"wb rate status: locked ({cooldown}s) and no persisted artifacts exist for "
-            f"{report_date}.",
+            f"wb rate status: {locked_endpoint} locked ({cooldown:.0f}s) and no "
+            f"persisted artifacts exist for {report_date}.",
             file=sys.stderr,
         )
         raise SystemExit(EXIT_RATE_LIMITED)
