@@ -8,7 +8,13 @@ from pathlib import Path
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
+from wb.cli._helpers import (
+    confirm_or_abort,
+    get_fields,
+    get_profile,
+    get_renderer,
+    resolve_profile_name,
+)
 from wb.core.constants import ExitCode
 from wb.domain.models import ClusterBidMutation
 
@@ -24,18 +30,18 @@ minus_app = typer.Typer(
 cluster_app.add_typer(minus_app, name='minus', help='Minus phrase management')
 
 
-def _log_mutation(profile: str | None, command: str, result) -> None:
+def _log_mutation(profile: str, command: str, result) -> None:
     """Write an audit entry for a completed mutation.
 
     Args:
-        profile: Active profile name.
+        profile: Resolved profile name.
         command: CLI command that was invoked.
         result: MutationResult from the service call.
     """
     from wb.services._factory import create_audit_logger
     audit = create_audit_logger(profile)
     audit.log(
-        profile=profile or 'default',
+        profile=profile,
         command=command,
         target_id=result.target_id,
         payload={'action': result.action},
@@ -243,7 +249,7 @@ def cluster_set_bids(
     result = svc.set_cluster_bids(campaign_id, [mutation], dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'cluster set-bids', result)
+        _log_mutation(resolve_profile_name(ctx), 'cluster set-bids', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -276,7 +282,7 @@ def cluster_set_bids_file(
     result = svc.set_cluster_bids(campaign_id, mutations, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'cluster set-bids-file', result)
+        _log_mutation(resolve_profile_name(ctx), 'cluster set-bids-file', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -310,7 +316,7 @@ def cluster_delete_bids(
     result = svc.delete_cluster_bids(campaign_id, [mutation], dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'cluster delete-bids', result)
+        _log_mutation(resolve_profile_name(ctx), 'cluster delete-bids', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -347,7 +353,7 @@ def cluster_delete_bids_file(
 
     if not dry_run:
         _log_mutation(
-            get_profile(ctx), 'cluster delete-bids-file', result,
+            resolve_profile_name(ctx), 'cluster delete-bids-file', result,
         )
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
@@ -413,7 +419,7 @@ def minus_set(
     )
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'cluster minus set', result)
+        _log_mutation(resolve_profile_name(ctx), 'cluster minus set', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -440,7 +446,7 @@ def minus_clear(
     )
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'cluster minus clear', result)
+        _log_mutation(resolve_profile_name(ctx), 'cluster minus clear', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')

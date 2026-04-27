@@ -12,7 +12,13 @@ import typer
 from wb.core.output import OutputRenderer
 from wb.domain.enums import OutputFormat, VerbosityLevel
 
-__all__ = ['get_renderer', 'get_profile', 'get_fields', 'confirm_or_abort']
+__all__ = [
+    'get_renderer',
+    'get_profile',
+    'resolve_profile_name',
+    'get_fields',
+    'confirm_or_abort',
+]
 
 
 def get_renderer(ctx: typer.Context) -> OutputRenderer:
@@ -42,6 +48,28 @@ def get_profile(ctx: typer.Context) -> str | None:
         Profile name or None.
     """
     return (ctx.obj or {}).get('profile')
+
+
+def resolve_profile_name(ctx: typer.Context) -> str:
+    """Return the effective profile name: --profile flag, or active from ProfileStore.
+
+    Used by CLI commands that need a concrete profile name for cache scoping
+    or user-visible prompts. Mirrors ProfileStore's own active-profile fallback
+    so commands never invent the literal 'default'.
+
+    Args:
+        ctx: Typer context carrying global options.
+
+    Returns:
+        Profile name from --profile flag, or the active profile name from
+        ~/.wb-cli/profiles.json.
+    """
+    explicit = get_profile(ctx)
+    if explicit:
+        return explicit
+    from wb.auth.profiles import ProfileStore
+    from wb.services._factory import _Container
+    return ProfileStore(_Container.settings().config_dir).active_profile_name
 
 
 def get_fields(ctx: typer.Context) -> list[str] | None:

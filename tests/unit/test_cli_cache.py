@@ -59,6 +59,37 @@ class TestCacheList:
         assert result.exit_code == 0
 
     @patch(SVC_PATH)
+    def test_list_summary_table_renders_full_table_names(
+            self, mock_factory: MagicMock,
+    ) -> None:
+        """Summary rows must contain full table names, not per-character columns.
+
+        Regression for F-17: passing the dict instead of the rows list to
+        renderer.display() made Rich unpack each table-name string into
+        single-character cells (c | a | m | p | a | i | g | n | s).
+        """
+        mock_factory.return_value = _make_svc()
+        result = runner.invoke(app, ['cache', 'list'])
+        assert result.exit_code == 0
+        assert 'campaign_stats' in result.output
+        assert 'cluster_snapshots' in result.output
+        assert 'budget_events' in result.output
+
+    @patch(SVC_PATH)
+    def test_list_summary_json(self, mock_factory: MagicMock) -> None:
+        """JSON output preserves the dict shape."""
+        mock_factory.return_value = _make_svc()
+        result = runner.invoke(app, ['--json', 'cache', 'list'])
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload == {
+            'campaigns': 2,
+            'campaign_stats': 10,
+            'cluster_snapshots': 30,
+            'budget_events': 5,
+        }
+
+    @patch(SVC_PATH)
     def test_list_with_campaign(self, mock_factory: MagicMock) -> None:
         svc = _make_svc()
         svc.history_campaigns.return_value = [

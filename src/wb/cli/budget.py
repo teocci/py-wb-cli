@@ -7,7 +7,13 @@ from datetime import datetime, timezone
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
+from wb.cli._helpers import (
+    confirm_or_abort,
+    get_fields,
+    get_profile,
+    get_renderer,
+    resolve_profile_name,
+)
 
 budget_app = typer.Typer(
     help='Budget and balance management',
@@ -80,7 +86,7 @@ def budget_topup(
     if not dry_run:
         audit = create_audit_logger(get_profile(ctx))
         audit.log(
-            profile=get_profile(ctx) or 'default',
+            profile=resolve_profile_name(ctx),
             command='budget topup',
             target_id=result.target_id,
             payload={'action': result.action},
@@ -89,7 +95,7 @@ def budget_topup(
 
     if not dry_run:
         _record_topup_event(
-            profile=get_profile(ctx) or 'default',
+            profile=resolve_profile_name(ctx),
             campaign_id=campaign_id,
             amount=amount,
         )
@@ -136,7 +142,7 @@ def budget_history(
     from wb.services._factory import create_cache_store
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
     store = create_cache_store(profile)
     events = store.list_budget_events(profile, campaign_id, limit)
     data = [asdict(e) for e in events]

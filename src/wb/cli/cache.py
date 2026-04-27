@@ -6,7 +6,7 @@ from dataclasses import asdict
 
 import typer
 
-from wb.cli._helpers import get_fields, get_profile, get_renderer
+from wb.cli._helpers import get_fields, get_renderer, resolve_profile_name
 
 cache_app = typer.Typer(
     help='Local snapshot cache',
@@ -35,13 +35,16 @@ def cache_list(
     from wb.services._factory import create_cache_service
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
     svc = create_cache_service(profile)
 
     if campaign_id is None:
         counts = svc.summary(profile)
+        if renderer.is_json:
+            renderer.display(counts, fields=get_fields(ctx))
+            return
         rows = [[k, str(v)] for k, v in counts.items()]
-        renderer.display(counts, headers=['Table', 'Rows'], title='Cache Summary', fields=get_fields(ctx))
+        renderer.display(rows, headers=['Table', 'Rows'], title='Cache Summary', fields=get_fields(ctx))
     else:
         snaps = svc.history_campaigns(profile, campaign_id, limit)
         data = [asdict(s) for s in snaps]
@@ -73,7 +76,7 @@ def cache_snapshot(
     from wb.services._factory import create_cache_service
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
     svc = create_cache_service(profile)
 
     counts = svc.snapshot_campaign(
@@ -101,7 +104,7 @@ def cache_snapshot_all(ctx: typer.Context) -> None:
     from wb.services._factory import create_cache_service
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
     svc = create_cache_service(profile)
 
     counts = svc.snapshot_all(profile)
@@ -122,7 +125,7 @@ def cache_clear(
     from wb.services._factory import create_cache_service
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
 
     scope = f'campaign {campaign_id}' if campaign_id else 'all campaigns'
     if not (yes or renderer.is_json):
@@ -153,7 +156,7 @@ def history_campaigns(
     from wb.services._factory import create_cache_service
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
     svc = create_cache_service(profile)
 
     snaps = svc.history_campaigns(profile, campaign_id, limit)
@@ -184,7 +187,7 @@ def history_stats(
     from wb.services._factory import create_cache_service
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
     svc = create_cache_service(profile)
 
     records = svc.history_stats(profile, campaign_id, date_from, date_to, limit)
@@ -212,7 +215,7 @@ def history_clusters(
     from wb.services._factory import create_cache_service
 
     renderer = get_renderer(ctx)
-    profile = get_profile(ctx) or 'default'
+    profile = resolve_profile_name(ctx)
     svc = create_cache_service(profile)
 
     records = svc.history_clusters(profile, campaign_id, nm_id, limit)

@@ -8,7 +8,13 @@ from pathlib import Path
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
+from wb.cli._helpers import (
+    confirm_or_abort,
+    get_fields,
+    get_profile,
+    get_renderer,
+    resolve_profile_name,
+)
 from wb.core.constants import ExitCode
 from wb.domain.models import BidMutation
 
@@ -99,18 +105,18 @@ def bid_get_items(
     renderer.display(data, headers=headers, title='Item Bids', fields=get_fields(ctx))
 
 
-def _log_bid_mutation(profile: str | None, command: str, result) -> None:
+def _log_bid_mutation(profile: str, command: str, result) -> None:
     """Write an audit entry for a bid mutation.
 
     Args:
-        profile: Active profile name.
+        profile: Resolved profile name.
         command: CLI command invoked.
         result: MutationResult from the service.
     """
     from wb.services._factory import create_audit_logger
     audit = create_audit_logger(profile)
     audit.log(
-        profile=profile or 'default',
+        profile=profile,
         command=command,
         target_id=result.target_id,
         payload={'action': result.action},
@@ -140,7 +146,7 @@ def bid_set_item(
     result = svc.set_item_bid(campaign_id, mutation, dry_run=dry_run)
 
     if not dry_run:
-        _log_bid_mutation(get_profile(ctx), 'bid set-item', result)
+        _log_bid_mutation(resolve_profile_name(ctx), 'bid set-item', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -218,7 +224,7 @@ def bid_set_items(
     if not dry_run:
         for result in results:
             if result.success:
-                _log_bid_mutation(get_profile(ctx), 'bid set-items', result)
+                _log_bid_mutation(resolve_profile_name(ctx), 'bid set-items', result)
 
     if renderer.is_json:
         from dataclasses import asdict as _asdict

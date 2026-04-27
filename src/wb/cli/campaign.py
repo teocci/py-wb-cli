@@ -6,7 +6,13 @@ from dataclasses import asdict
 
 import typer
 
-from wb.cli._helpers import confirm_or_abort, get_fields, get_profile, get_renderer
+from wb.cli._helpers import (
+    confirm_or_abort,
+    get_fields,
+    get_profile,
+    get_renderer,
+    resolve_profile_name,
+)
 from wb.core.constants import ExitCode
 from wb.core.output import OutputRenderer, _stdout_console, render_table
 from wb.domain.enums import CampaignStatus, CampaignType
@@ -66,7 +72,7 @@ def _render_batch_results(
     if not dry_run:
         for r in results:
             if r.success:
-                _log_mutation(get_profile(ctx), command, r)
+                _log_mutation(resolve_profile_name(ctx), command, r)
     if renderer.is_json:
         from dataclasses import asdict as _asdict
         renderer.display([_asdict(r) for r in results], fields=get_fields(ctx))
@@ -241,18 +247,18 @@ def campaign_eligible_items(
 
 
 
-def _log_mutation(profile: str | None, command: str, result) -> None:
+def _log_mutation(profile: str, command: str, result) -> None:
     """Write an audit entry for a completed mutation.
 
     Args:
-        profile: Active profile name.
+        profile: Resolved profile name.
         command: CLI command that was invoked.
         result: MutationResult from the service call.
     """
     from wb.services._factory import create_audit_logger
     audit = create_audit_logger(profile)
     audit.log(
-        profile=profile or 'default',
+        profile=profile,
         command=command,
         target_id=result.target_id,
         payload={'action': result.action},
@@ -303,7 +309,7 @@ def campaign_create(
     result = svc.create_campaign(params, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign create', result)
+        _log_mutation(resolve_profile_name(ctx), 'campaign create', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -347,7 +353,7 @@ def campaign_clone(
     result = svc.create_campaign(params, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign clone', result)
+        _log_mutation(resolve_profile_name(ctx), 'campaign clone', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -435,7 +441,7 @@ def campaign_rename(
     result = svc.rename_campaign(campaign_id, name, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign rename', result)
+        _log_mutation(resolve_profile_name(ctx), 'campaign rename', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -488,7 +494,7 @@ def campaign_add_items(
     result = svc.add_items(campaign_id, nm_list, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign add-items', result)
+        _log_mutation(resolve_profile_name(ctx), 'campaign add-items', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -520,7 +526,7 @@ def campaign_remove_items(
     result = svc.remove_items(campaign_id, nm_list, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign remove-items', result)
+        _log_mutation(resolve_profile_name(ctx), 'campaign remove-items', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')
@@ -550,7 +556,7 @@ def campaign_set_placements(
     result = svc.set_placements(campaign_id, config, dry_run=dry_run)
 
     if not dry_run:
-        _log_mutation(get_profile(ctx), 'campaign set-placements', result)
+        _log_mutation(resolve_profile_name(ctx), 'campaign set-placements', result)
 
     prefix = '[DRY-RUN] ' if result.dry_run else ''
     renderer.success(f'{prefix}{result.message}')

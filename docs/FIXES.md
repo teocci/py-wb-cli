@@ -22,6 +22,7 @@ Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases
 | F-14 | `rate status` misses seller cooldown (astronomic compounded cooldowns) | ✅ DONE | core/endpoint_budget.py, cli/rate.py, client/http.py | 0.30.0 | [detail](phases/F-14-rate-status-misses-cooldown.md) — resolved by metadata-driven redesign R-1..R-4 |
 | F-15 | Base tokens trip 30-min penalty — uniform-rate assumption | ✅ DONE | core/rate_limits.py, auth/profiles.py, cli/auth.py, cli/rate.py, client/http.py, services/_factory.py, .claude/skills/wb-rate-*, RATE_LIMITS.md | 0.31.0 | [detail](phases/F-15-rate-base-token-blindspot.md) — resolved by R-5 |
 | F-16 | `generate_daily_wb_report.py` — `/api/advert/v2/adverts` 1-hour lockout on Base tokens | ✅ DONE | scripts/generate_daily_wb_report.py | 0.32.1 | [detail](phases/F-16-product-spend-rate-handling.md) — resolved by I-15 + script hygiene |
+| F-17 | CLI hardcoded `'default'` profile fallback + `cache list` table render | ✅ DONE | cli/_helpers.py, cli/cache.py, cli/budget.py, cli/bid.py, cli/campaign.py, cli/cluster.py | 0.32.2 | [detail](phases/F-17-profile-fallback.md) |
 
 ### In Progress
 
