@@ -93,7 +93,9 @@
       "Bash(echo \"exit=$?\")",
       "Bash(.venv/Scripts/python -c \"from pathlib import Path; print\\(len\\(Path\\('src/wb/cli/rate.py'\\).read_text\\(encoding='utf-8'\\).splitlines\\(\\)\\)\\)\")",
       "Bash(.venv/Scripts/python -c \"from wb.cli.rate import rate_app; print\\('imports ok'\\)\")",
-      "Bash(.venv/Scripts/python -c \"from pathlib import Path; print\\(len\\(Path\\('tests/unit/test_cli_rate.py'\\).read_text\\(encoding='utf-8'\\).splitlines\\(\\)\\)\\)\")"
+      "Bash(.venv/Scripts/python -c \"from pathlib import Path; print\\(len\\(Path\\('tests/unit/test_cli_rate.py'\\).read_text\\(encoding='utf-8'\\).splitlines\\(\\)\\)\\)\")",
+      "Bash(git stash *)",
+      "Bash(git mv *)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
