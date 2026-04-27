@@ -19,6 +19,9 @@ __all__ = [
     'RATE_LIMIT_DB_FILE',
     'RATE_LIMITER_ENV_VAR',
     'RATE_LIMITER_MEMORY_VALUE',
+    'REQUEST_CACHE_DB_FILE',
+    'REQUEST_CACHE_ENV_VAR',
+    'REQUEST_CACHE_DISABLED_VALUE',
     'PROFILES_FILE',
     'DEFAULT_TIMEOUT',
     'DEFAULT_MAX_RETRIES',
@@ -123,6 +126,14 @@ RESPONSE_CACHE_RETENTION_DAYS = 90
 RATE_LIMIT_DB_FILE = 'rate_limits.db'
 RATE_LIMITER_ENV_VAR = 'WB_RATE_LIMITER'
 RATE_LIMITER_MEMORY_VALUE = 'memory'
+
+# I-15 — request cache filename and bypass env var.
+# The cache lives at <config_dir>/request_cache.db (SQLite WAL). TTL is
+# tied to each endpoint's `period / calls` rate-limit interval, so the
+# cache horizon never exceeds what WB lets us refresh.
+REQUEST_CACHE_DB_FILE = 'request_cache.db'
+REQUEST_CACHE_ENV_VAR = 'WB_REQUEST_CACHE'
+REQUEST_CACHE_DISABLED_VALUE = 'disabled'
 
 PROFILES_FILE = 'profiles.json'
 

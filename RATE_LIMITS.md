@@ -121,6 +121,9 @@ For deeper recovery, invoke the `wb-rate-recover` skill.
 - **`wb rate status`** — pure read of the `endpoint_budget` table. Shows
   `remaining`, `bucket_limit`, `reset_in_s`, `last_seen_ago_s`, `locked` per
   `(seller_id, token, endpoint)`. Also shows `token_type` per token group.
+- **`wb api-cache status`** — pure read of the `request_cache` table (I-15).
+  Shows row count, total bytes, oldest `cached_at`, and soonest `expires_at`
+  per `(seller_id, token, endpoint)`.
 - **`wb auth ping`** — single GET to `/ping` for connectivity and token
   validity. Uniform 3/30s rate (not Base-stratified), so safe to call on any
   token type without burning an advert bucket.
@@ -129,6 +132,41 @@ R-5 removed `wb rate probe`. It made sense before R-1..R-4 when the only way
 to know cooldown state was to make a call, but the header-driven runtime now
 populates `endpoint_budget` from every real WB response automatically. To
 refresh visibility on a specific endpoint, just run any command that hits it.
+
+---
+
+## Request cache (I-15)
+
+Every cacheable read endpoint's response is stored in a per-(token, endpoint,
+params-hash) SQLite cache at `~/.wb-cli/request_cache.db` (WAL, cross-process).
+The TTL on each entry equals the rate-limit interval (`period / calls`) for
+the current token type. So a Base `EP_CAMPAIGN_INFO` entry lives for 3600 s —
+exactly the window WB will refuse a refresh in. The cache can never serve data
+staler than what a real refresh would deliver, because no real refresh is
+possible inside that window.
+
+For Personal tokens the TTL is sub-second on most endpoints, so the cache
+effectively no-ops — Personal rate budgets remain the dominant control.
+
+**Mutations auto-invalidate related read caches.** A successful
+`wb campaign start` drops cached `EP_CAMPAIGN_INFO` entries for the acting
+token, so the next `wb campaign list` reflects the new state. The full map
+lives in `src/wb/core/cache_policy.py::MUTATION_INVALIDATES`.
+
+**Bypass for live data:**
+
+```bash
+wb --no-cache stats product-spend ...   # one-off bypass
+WB_REQUEST_CACHE=disabled wb assess     # env var (CI / scripts)
+wb api-cache clear --endpoint /api/advert/v2/adverts   # surgical wipe
+wb api-cache clear --all --yes          # full wipe
+```
+
+The cache is on by default. Only 200–299 responses are cached — wrong-params
+400s and 429s never poison the store.
+
+For a full design rationale see
+[docs/phases/I-15-request-cache.md](docs/phases/I-15-request-cache.md).
 
 ---
 

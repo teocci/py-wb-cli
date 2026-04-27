@@ -26,6 +26,7 @@ from wb.core.exceptions import (
 
 if TYPE_CHECKING:
     from wb.core.endpoint_budget import EndpointBudget
+    from wb.storage.request_cache import RequestCache
 
 __all__ = ['WbHttpClient']
 
@@ -134,6 +135,8 @@ class WbHttpClient:
             token_fp: str | None = None,
             seller_id: str | None = None,
             token_type: str = DEFAULT_TOKEN_TYPE,
+            request_cache: 'RequestCache | None' = None,
+            no_cache: bool = False,
     ) -> None:
         self._base_url = base_url.rstrip('/')
         self._token = token
@@ -144,6 +147,8 @@ class WbHttpClient:
         self._token_fp: str | None = token_fp
         self._seller_id: str | None = seller_id
         self._token_type: str = token_type
+        self._request_cache: RequestCache | None = request_cache
+        self._no_cache: bool = no_cache
         self._client = httpx.Client(
             base_url=self._base_url,
             headers={
@@ -181,6 +186,110 @@ class WbHttpClient:
             seller_id=self._seller_id,
             max_wait_seconds=_RETRY_AFTER_BAIL_OUT_SECONDS,
         )
+
+    # ── Request cache integration (I-15) ──────────────────────────────
+
+    def _cache_eligible(self, method: str, path: str) -> bool:
+        """Return True when this request may consult or populate the cache.
+
+        A request is eligible when (a) the cache is wired in, (b) the
+        ``--no-cache`` flag isn't set, (c) we have a token fingerprint
+        to scope the entry, (d) the method is GET or POST (PUT / PATCH /
+        DELETE are mutations whose responses are never cached), and
+        (e) the endpoint is in :data:`CACHEABLE_ENDPOINTS`.
+        """
+        if self._request_cache is None or self._no_cache or self._token_fp is None:
+            return False
+        if method.upper() not in ('GET', 'POST'):
+            return False
+        from wb.core.cache_policy import is_cacheable
+        return is_cacheable(path)
+
+    def _cache_get(
+            self,
+            method: str,
+            path: str,
+            params_hash: str,
+    ) -> Any | None:
+        """Look up a cached response. Returns parsed JSON or ``None``.
+
+        The TTL passed to ``RequestCache.get`` is the policy TTL —
+        ``period / calls`` for the current token type — so cache
+        validity is bounded by the rate-limit interval regardless of
+        whether the row was written with a different prior in the past.
+        """
+        if not self._cache_eligible(method, path):
+            return None
+        from wb.core.cache_policy import cache_ttl_seconds
+        ttl = cache_ttl_seconds(path, self._token_type)
+        if ttl <= 0:
+            return None
+        cached = self._request_cache.get(  # type: ignore[union-attr]
+            self._token_fp,  # type: ignore[arg-type]
+            path,
+            params_hash,
+            max_age_seconds=ttl,
+        )
+        if cached is None:
+            return None
+        try:
+            import json
+            return json.loads(cached.decode('utf-8'))
+        except (UnicodeDecodeError, ValueError):
+            return None
+
+    def _cache_put(
+            self,
+            method: str,
+            path: str,
+            params_hash: str,
+            response: 'httpx.Response',
+    ) -> None:
+        """Write a 2xx response to the cache when the endpoint is cacheable.
+
+        Non-2xx responses are never written. Empty bodies (e.g. 204) are
+        skipped — there's nothing useful to cache and decoding would
+        return ``None`` on the next get.
+        """
+        if not self._cache_eligible(method, path):
+            return
+        if not (200 <= response.status_code < 300):
+            return
+        if not response.content:
+            return
+        from wb.core.cache_policy import cache_ttl_seconds
+        ttl = cache_ttl_seconds(path, self._token_type)
+        if ttl <= 0:
+            return
+        self._request_cache.put(  # type: ignore[union-attr]
+            self._token_fp,  # type: ignore[arg-type]
+            path,
+            params_hash,
+            response.content,
+            ttl_seconds=ttl,
+        )
+
+    def _cache_invalidate_for_mutation(
+            self,
+            path: str,
+            response: 'httpx.Response',
+    ) -> None:
+        """Drop downstream cached reads after a successful mutation.
+
+        Looks up :data:`MUTATION_INVALIDATES` for ``path``; when present,
+        and the response is 2xx, calls ``RequestCache.invalidate`` for
+        each related read endpoint scoped to the acting token.
+        """
+        if self._request_cache is None or self._token_fp is None:
+            return
+        if not (200 <= response.status_code < 300):
+            return
+        from wb.core.cache_policy import MUTATION_INVALIDATES
+        targets = MUTATION_INVALIDATES.get(path)
+        if not targets:
+            return
+        for ep in targets:
+            self._request_cache.invalidate(self._token_fp, ep)
 
     def _observe(self, path: str, response: 'httpx.Response') -> None:
         """Upsert bucket state from the response's ``X-Ratelimit-*`` headers.
@@ -221,7 +330,14 @@ class WbHttpClient:
             params: dict[str, Any] | None = None,
             json_body: Any | None = None,
     ) -> Any:
-        """Make an HTTP request with retry logic.
+        """Make an HTTP request with retry logic and request-cache integration.
+
+        For cacheable endpoints (see :data:`CACHEABLE_ENDPOINTS`), the
+        cache is consulted before any network call and after any
+        :class:`RateLimitError` from the budget layer. 2xx responses are
+        written back. Mutations on endpoints in
+        :data:`MUTATION_INVALIDATES` drop related cached reads after
+        their own 2xx response.
 
         Args:
             method: HTTP method (GET, POST, etc.).
@@ -238,6 +354,13 @@ class WbHttpClient:
             ApiError: On other non-success responses after retries.
         """
         last_exception: Exception | None = None
+        params_hash: str | None = None
+        if self._cache_eligible(method, path):
+            from wb.core.cache_policy import canonical_hash
+            params_hash = canonical_hash(params, json_body)
+            cached = self._cache_get(method, path, params_hash)
+            if cached is not None:
+                return cached
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -249,8 +372,17 @@ class WbHttpClient:
                     json=json_body,
                 )
                 self._observe(path, response)
-                return self._handle_response(response)
+                result = self._handle_response(response)
+                if params_hash is not None:
+                    self._cache_put(method, path, params_hash, response)
+                self._cache_invalidate_for_mutation(path, response)
+                return result
             except RateLimitError as exc:
+                # Double-check: another process may have just published.
+                if params_hash is not None:
+                    cached = self._cache_get(method, path, params_hash)
+                    if cached is not None:
+                        return cached
                 last_exception = exc
                 self._retry_or_raise(
                     attempt, exc, exc.retry_after, 'Rate limited'

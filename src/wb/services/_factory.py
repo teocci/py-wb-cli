@@ -18,6 +18,9 @@ from wb.core.constants import (
     RATE_LIMIT_DB_FILE,
     RATE_LIMITER_ENV_VAR,
     RATE_LIMITER_MEMORY_VALUE,
+    REQUEST_CACHE_DB_FILE,
+    REQUEST_CACHE_DISABLED_VALUE,
+    REQUEST_CACHE_ENV_VAR,
     RESPONSE_CACHE_DB_FILE,
     RESPONSE_CACHE_RETENTION_DAYS,
     STATISTICS_BASE_URL,
@@ -28,6 +31,7 @@ from wb.storage.response_cache import ResponseCache
 
 if TYPE_CHECKING:
     from wb.core.endpoint_budget import EndpointBudget
+    from wb.storage.request_cache import RequestCache
 
 __all__ = [
     'ServiceContainer',
@@ -75,6 +79,7 @@ class _Container:
     _http_clients: dict[tuple[str, str], WbHttpClient] = {}
     _response_cache: ResponseCache | None = None
     _endpoint_budget: 'EndpointBudget | None' = None
+    _request_cache: 'RequestCache | None' = None
 
     @classmethod
     def settings(cls) -> Settings:
@@ -105,9 +110,11 @@ class _Container:
             with_rate_limits: When True, inject the shared
                 :class:`EndpointBudget` so every request consumes /
                 writes per-(token, endpoint) state in
-                ``~/.wb-cli/rate_limits.db``. Only advert + analytics
-                clients need this; statistics/prices clients skip it
-                since they use different base URLs.
+                ``~/.wb-cli/rate_limits.db``. Also wires the
+                :class:`RequestCache` (I-15) so cacheable read
+                endpoints share responses across processes. Only
+                advert + analytics clients need this; statistics/prices
+                clients skip it since they use different base URLs.
             token_type: Drives bootstrap rate-limit prior selection in
                 :func:`wb.core.rate_limits.select_prior`. Defaults to
                 :data:`DEFAULT_TOKEN_TYPE` (``'base'``) — the safer
@@ -127,10 +134,12 @@ class _Container:
                 budget = cls.endpoint_budget()
                 token_fp = compute_token_fingerprint(token)
                 seller_id = extract_seller_id(token)
+                request_cache = cls.request_cache()
             else:
                 budget = None
                 token_fp = None
                 seller_id = None
+                request_cache = None
             cls._http_clients[key] = WbHttpClient(
                 base_url=base_url,
                 token=token,
@@ -138,8 +147,23 @@ class _Container:
                 token_fp=token_fp,
                 seller_id=seller_id,
                 token_type=token_type,
+                request_cache=request_cache,
+                no_cache=cls._no_cache_active(),
             )
         return cls._http_clients[key]
+
+    @classmethod
+    def _no_cache_active(cls) -> bool:
+        """Return True when the request cache should be bypassed.
+
+        Reads :data:`REQUEST_CACHE_ENV_VAR` (``WB_REQUEST_CACHE``) — any
+        case-insensitive match of :data:`REQUEST_CACHE_DISABLED_VALUE`
+        disables caching for this process. The CLI ``--no-cache`` flag
+        sets the env var before constructing the client, so this single
+        accessor handles both code paths.
+        """
+        env_value = (os.environ.get(REQUEST_CACHE_ENV_VAR) or '').lower()
+        return env_value == REQUEST_CACHE_DISABLED_VALUE
 
     @classmethod
     def endpoint_budget(cls):
@@ -161,6 +185,24 @@ class _Container:
                 db_path=db_path, force_memory=force_memory,
             )
         return cls._endpoint_budget
+
+    @classmethod
+    def request_cache(cls) -> 'RequestCache':
+        """Return the shared :class:`RequestCache`, creating on first call.
+
+        Lives at ``<config_dir>/request_cache.db`` (SQLite WAL). Shared
+        across every rate-limited HTTP client in this process and with
+        sibling ``wb`` processes via the WAL file. The cache is wired
+        in regardless of the ``--no-cache`` flag — that flag flips a
+        per-client ``no_cache`` switch, not the cache instance itself.
+        """
+        if cls._request_cache is None:
+            from wb.storage.request_cache import RequestCache
+            settings = cls.settings()
+            cls._request_cache = RequestCache(
+                db_path=settings.config_dir / REQUEST_CACHE_DB_FILE,
+            )
+        return cls._request_cache
 
     @classmethod
     def response_cache(cls) -> ResponseCache:
@@ -194,6 +236,7 @@ class _Container:
         cls._http_clients.clear()
         cls._response_cache = None
         cls._endpoint_budget = None
+        cls._request_cache = None
 
 
 #: Public alias for ``_Container`` — use in tests and SDK code.

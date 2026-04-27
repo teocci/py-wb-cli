@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 
 import typer
 
 from wb import __version__
 from wb.cli.analytics import analytics_app
+from wb.cli.api_cache import api_cache_app
 from wb.cli.assess import assess_command
 from wb.cli.auth import auth_app
 from wb.cli.cache import cache_app
@@ -25,6 +27,10 @@ from wb.cli.pulse import pulse_command
 from wb.cli.rate import rate_app
 from wb.cli.report import report_app
 from wb.cli.stats import stats_app
+from wb.core.constants import (
+    REQUEST_CACHE_DISABLED_VALUE,
+    REQUEST_CACHE_ENV_VAR,
+)
 from wb.core.exceptions import WbCliError
 
 app = typer.Typer(
@@ -48,6 +54,7 @@ app.add_typer(report_app, name='report', help='Reports (warehouse, orders, sales
 app.add_typer(cache_app, name='cache', help='Local snapshot cache')
 app.add_typer(product_app, name='product', help='Product summary and analysis')
 app.add_typer(rate_app, name='rate', help='Rate-limit diagnostic (read-only)')
+app.add_typer(api_cache_app, name='api-cache', help='HTTP response cache diagnostic (I-15)')
 app.command('assess', help='Morning account snapshot: balance, campaigns, 7-day spend')(
     assess_command,
 )
@@ -81,6 +88,10 @@ def main_callback(
             False, '--compact',
             help='Output JSON as a single line (reduces token count for agents)',
         ),
+        no_cache: bool = typer.Option(
+            False, '--no-cache',
+            help='Bypass the HTTP response cache for this invocation (I-15).',
+        ),
 ) -> None:
     """WB CLI global options."""
     _configure_logging(verbose)
@@ -91,6 +102,12 @@ def main_callback(
     ctx.obj['profile'] = profile
     ctx.obj['fields'] = [f.strip() for f in fields.split(',')] if fields else None
     ctx.obj['compact'] = compact
+    ctx.obj['no_cache'] = no_cache
+    # Surface --no-cache to the factory via the env var so every code
+    # path that constructs a WbHttpClient (CLI, SDK, scripts) sees the
+    # same signal.
+    if no_cache:
+        os.environ[REQUEST_CACHE_ENV_VAR] = REQUEST_CACHE_DISABLED_VALUE
 
 
 @app.command()
