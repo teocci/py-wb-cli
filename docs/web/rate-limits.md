@@ -46,4 +46,4 @@ X-Ratelimit-Limit: 10
 
 In addition to the header-driven rate limiter, the CLI keeps a local response cache for cacheable read endpoints at `~/.wb-cli/request_cache.db`. The TTL on each entry equals the rate-limit interval (`period / calls`) for the active token type, so cache validity is bounded by the same window WB lets you refresh in. For Base tokens this turns 1/h endpoints into 1/h refreshes that subsequent CLI invocations can reuse without ever hitting the network.
 
-Bypass for one invocation: `wb --no-cache <command>`. Bypass for a whole session: `WB_REQUEST_CACHE=disabled`. Diagnostics: `wb api-cache status` / `wb api-cache clear`. See [`RATE_LIMITS.md`](../../RATE_LIMITS.md#request-cache-i-15) for the full contract.
+Bypass for one invocation: `wb --no-cache <command>`. Bypass for a whole session: `WB_REQUEST_CACHE=disabled`. Diagnostics: `wb cache status` / `wb cache clear`. See [`RATE_LIMITS.md`](../../RATE_LIMITS.md#request-cache-i-15) for the full contract.

@@ -2,6 +2,8 @@
 
 **Date:** 2026-04-03 | **Tests:** 604 passed (+65)
 
+> **Renamed in I-16 (v0.33.0):** the `wb cache ...` group described below moved to `wb snapshot ...`, and the `snapshot` / `snapshot-all` subcommands became `capture` / `capture-all`. The original `wb cache` namespace is now occupied by the I-15 HTTP response cache. See [I-16 phase doc](I-16-rename-cache-snapshot.md).
+
 ## What Was Built
 
 - `domain/cache_models.py`: `CampaignSnapshot`, `StatsRecord`, `ClusterRecord`, `BudgetEvent` (`@dataclass(slots=True)`)

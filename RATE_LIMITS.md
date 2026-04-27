@@ -121,7 +121,7 @@ For deeper recovery, invoke the `wb-rate-recover` skill.
 - **`wb rate status`** — pure read of the `endpoint_budget` table. Shows
   `remaining`, `bucket_limit`, `reset_in_s`, `last_seen_ago_s`, `locked` per
   `(seller_id, token, endpoint)`. Also shows `token_type` per token group.
-- **`wb api-cache status`** — pure read of the `request_cache` table (I-15).
+- **`wb cache status`** — pure read of the `request_cache` table (I-15).
   Shows row count, total bytes, oldest `cached_at`, and soonest `expires_at`
   per `(seller_id, token, endpoint)`.
 - **`wb auth ping`** — single GET to `/ping` for connectivity and token
@@ -158,8 +158,8 @@ lives in `src/wb/core/cache_policy.py::MUTATION_INVALIDATES`.
 ```bash
 wb --no-cache stats product-spend ...   # one-off bypass
 WB_REQUEST_CACHE=disabled wb assess     # env var (CI / scripts)
-wb api-cache clear --endpoint /api/advert/v2/adverts   # surgical wipe
-wb api-cache clear --all --yes          # full wipe
+wb cache clear --endpoint /api/advert/v2/adverts   # surgical wipe
+wb cache clear --all --yes          # full wipe
 ```
 
 The cache is on by default. Only 200–299 responses are cached — wrong-params

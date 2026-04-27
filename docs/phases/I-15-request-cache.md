@@ -206,9 +206,15 @@ the 1-hour lockout class of bugs that motivated F-16.
 ## Naming note
 
 The plan originally proposed `wb cache status / clear` for the diagnostic
-commands. That namespace is taken by the existing snapshot-cache CLI from
-phase 7 (`wb cache list / snapshot / clear`), which manages a different
-concern (manually-triggered campaign-state snapshots for time-series tracking).
-I-15 ships its commands under `wb api-cache status / clear` to avoid the
-clash and to make the layer explicit (HTTP API response cache vs. campaign
-snapshot cache).
+commands. That namespace was taken at I-15 ship time by the existing
+snapshot-cache CLI from phase 7 (`wb cache list / snapshot / clear`), which
+manages a different concern (manually-triggered campaign-state snapshots for
+time-series tracking). I-15 therefore shipped its commands under
+`wb api-cache status / clear` to avoid the clash.
+
+**Renamed in I-16 (v0.33.0):** the I-15 HTTP cache commands moved to their
+preferred namespace `wb cache status / clear`; the phase-7 snapshot CLI moved
+to `wb snapshot ...` (with the `snapshot` / `snapshot-all` subcommands renamed
+to `capture` / `capture-all`). All references to `wb api-cache` in this
+document describe the original I-15 ship; the live commands are now `wb cache`.
+See [I-16 phase doc](I-16-rename-cache-snapshot.md).

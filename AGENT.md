@@ -221,11 +221,22 @@ wb report warehouse list --no-cache    # force fresh API call
 wb --json portal products --limit 100
 ```
 
-### `wb cache`
+### `wb snapshot`
+
+Local domain snapshots — campaign configs, daily stats, clusters, budget events. Captured explicitly with `wb snapshot capture`; queried via `wb snapshot history ...`.
 
 ```bash
-wb --json cache campaigns
-wb --json cache stats --from 2026-04-01
+wb --json snapshot history campaigns
+wb --json snapshot history stats --campaign 12345 --from 2026-04-01
+```
+
+### `wb cache`
+
+HTTP response cache diagnostics (transparent perf layer; populated automatically). Read `~/.wb-cli/request_cache.db` directly — no network calls.
+
+```bash
+wb --json cache status
+wb cache clear --endpoint /api/advert/v2/adverts
 ```
 
 ---

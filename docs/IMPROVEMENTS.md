@@ -37,7 +37,8 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.29.0 | R-3  | ✅ DONE | `wb rate status` overhaul — [detail](phases/R-3-rate-status-overhaul.md) |
 | 0.30.0 | R-4  | ✅ DONE | Cleanup + docs (deletes `SellerCooldownLock`) — [detail](phases/R-4-cleanup-docs.md) |
 | 0.31.0 | R-5  | ✅ DONE | Token-type-aware rate handling + `wb rate probe` removal + skill refresh — [detail](phases/R-5-token-type-aware-rates.md) |
-| 0.32.0 | I-15 | ✅ DONE | Cooldown-tied HTTP-layer request cache + `wb api-cache` diag — [detail](phases/I-15-request-cache.md) |
+| 0.32.0 | I-15 | ✅ DONE | Cooldown-tied HTTP-layer request cache + `wb api-cache` diag (renamed to `wb cache` in I-16) — [detail](phases/I-15-request-cache.md) |
+| 0.33.0 | I-16 | ✅ DONE | Rename `cache` → `snapshot` and `api-cache` → `cache` (BREAKING) — [detail](phases/I-16-rename-cache-snapshot.md) |
 | TBD    | A-1  | 🔲 PLANNED | `wb auth login --profile NAME` env bootstrap — [detail](phases/A-1-auth-login-env-bootstrap.md) |
 | TBD    | A-2  | 🔲 PLANNED | Drop runtime env fallback (BREAKING) — [detail](phases/A-2-drop-runtime-env-fallback.md) |
 | TBD    | A-3  | 🔲 PLANNED | `wb auth whoami` + docs sweep — [detail](phases/A-3-auth-whoami-docs.md) |

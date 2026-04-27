@@ -333,7 +333,7 @@ class RequestCache:
     def read_all(self) -> list[CacheRow]:
         """Return every persisted cache row.
 
-        Used by ``wb api-cache status``. Expired rows are still returned
+        Used by ``wb cache status``. Expired rows are still returned
         — the caller decides how to display them. Bounded by the
         opportunistic prune in :meth:`get`.
 
