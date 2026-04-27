@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.32.0 |
-| **Tests Passing** | 1275/1276 (1 pre-existing env test in `test_auth_list_empty`) |
-| **Phases Complete** | 46 |
+| **Current Version** | 0.32.1 |
+| **Tests Passing** | 1293/1294 (1 pre-existing env test in `test_auth_list_empty`) |
+| **Phases Complete** | 47 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -62,7 +62,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-15 | `wb rate` + skills assume uniform endpoint limits — Base tokens trip 30-min penalty | ✅ DONE | 0.31.0 |
 | R-5 | Token-type-aware rate handling + `wb rate probe` removal + skill refresh | ✅ DONE | 0.31.0 |
 | I-15 | Cooldown-tied HTTP-layer request cache + `wb api-cache` diag | ✅ DONE | 0.32.0 |
-| F-16 | `generate_daily_wb_report.py` rate-limit handling — depends on I-15 | 🔲 PLANNED | TBD |
+| F-16 | `generate_daily_wb_report.py` rate-limit handling — depends on I-15 | ✅ DONE | 0.32.1 |
 | A-1 | `wb auth login --profile NAME` env bootstrap (non-breaking) | 🔲 PLANNED | TBD |
 | A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | 🔲 PLANNED | TBD |
 | A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |

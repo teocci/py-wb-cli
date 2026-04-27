@@ -1,6 +1,7 @@
 # Fix F-16 — `generate_daily_wb_report.py` rate-limit handling
 
-**Status:** 🔲 PLANNED · **Depends on:** I-15 (request cache eliminates the structural cause; F-16 closes the operator-experience gaps)
+**Status:** ✅ DONE · **Version:** 0.32.1 · **Date:** 2026-04-27 · **Tests:** +18 (1293 total)
+**Depends on:** I-15 (request cache eliminates the structural cause; F-16 closes the operator-experience gaps)
 **Bug:** `bugs/2026-04-27-product-spend-endpoint-lock.md`
 **Plan:** [happy-exploring-fox.md](../../../../Users/teocci/.claude/plans/happy-exploring-fox.md)
 
@@ -82,3 +83,32 @@ I-15 lands first and removes the architectural fragility. F-16 then closes the o
 ## Sequencing
 
 F-16 lands after I-15. With I-15 in place, the architectural cause is gone; F-16 is purely operator-experience cleanup. If shipped without I-15, F-16's mid-run re-check still helps but the script remains structurally fragile against any Base-token endpoint cooldown.
+
+## Live test results (2026-04-27)
+
+Verified end-to-end against the operator's local Base-token profile, with `/adv/v3/fullstats` already exhausted (Base 1/h budget burned earlier in the session):
+
+```
+$ python scripts/generate_daily_wb_report.py --date 2026-04-26
+wb stats product-spend rate-limited (~3040s cooldown); no persisted artifact for 2026-04-26 to fall back to.
+$ echo $?
+5
+```
+
+Single-line message with the WB-supplied cooldown surfaced, exit code 5, no Python traceback. Pre-fix the same scenario produced an ugly traceback after ~80 s of doomed `[20, 60]` retries.
+
+Other behaviors verified along the way:
+
+- **HOME unification:** `wb rate status` from the operator's interactive shell shows the same observations the script wrote (no longer "No state recorded yet"). `<repo>/.home` directory is no longer created or used.
+- **Single-invocation spend:** the script fires one `wb stats product-spend --nms <all>` call instead of N chunks; the I-15 cache reuses `list_campaigns` across any subsequent invocation.
+- **Test suite:** 1293 passed (1275 from v0.32.0 + 18 new F-16 unit tests in `tests/unit/test_daily_report_script.py`). One pre-existing env-related test deselected as documented.
+
+## Cleanup
+
+After upgrading, the operator can safely:
+
+```bash
+rm -rf <repo>/.home
+```
+
+The directory is no longer referenced by the script.

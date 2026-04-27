@@ -1,11 +1,8 @@
 import argparse
 import csv
 import json
-import os
-import shutil
 import subprocess
 import sys
-import time
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -14,11 +11,16 @@ from pathlib import Path
 DATE_FMT = "%Y-%m-%d"
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = ROOT / "reports" / "daily"
-WB_HOME_DIR = ROOT / ".home"
-WB_CONFIG_DIR = WB_HOME_DIR / ".wb-cli"
-SPEND_CHUNK_SIZE = 80
 
 EXIT_RATE_LIMITED = 5
+
+# F-16: spend-relevant endpoints. The script's mid-run rate-status check
+# scopes its lock detection to these — locks on unrelated endpoints
+# (like sales-funnel) shouldn't abort the spend phase.
+SPEND_RELEVANT_ENDPOINTS = frozenset({
+    '/api/advert/v2/adverts',
+    '/adv/v3/fullstats',
+})
 
 MERGED_FIELDNAMES = [
     "article_number",
@@ -41,7 +43,19 @@ MERGED_FIELDNAMES = [
 
 
 class RateLimitedError(RuntimeError):
-    """Raised when `wb` exits with the RATE_LIMITED code (5) after retries."""
+    """Raised when `wb` exits with the RATE_LIMITED code (5).
+
+    Attributes:
+        retry_after: Cooldown seconds parsed from the CLI's JSON error
+            envelope (``error.retry_after``), or ``None`` when the
+            envelope was missing or unparseable. Surfaces the WB-supplied
+            cooldown so logs and operators see how long to wait without
+            having to re-run.
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,89 +68,97 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_wb_env() -> dict[str, str]:
-    env = os.environ.copy()
-    WB_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    source_config_dir = Path.home() / ".wb-cli"
-    for filename in ("profiles.json", "audit.jsonl"):
-        source = source_config_dir / filename
-        target = WB_CONFIG_DIR / filename
-        if source.exists() and not target.exists():
-            shutil.copy2(source, target)
-
-    env["HOME"] = str(WB_HOME_DIR)
-    env["USERPROFILE"] = str(WB_HOME_DIR)
-    return env
-
-
-def run_wb_command(command: list[str], *, retry_waits: list[int]) -> tuple[object, str]:
+def run_wb_command(command: list[str]) -> tuple[object, str]:
     """Run a `wb` CLI command that emits JSON on stdout.
 
+    The CLI is the authority on rate-limit waits — it consults
+    ``EndpointBudget`` and the I-15 ``RequestCache`` and bails fast with
+    ``error.retry_after`` when WB-side cooldowns exceed the in-process
+    threshold. Re-running with hardcoded waits on top would only fight
+    that authority, so this helper does NOT retry rate-limited calls;
+    it parses ``retry_after`` from the JSON envelope and raises
+    immediately.
+
     Returns ``(parsed_payload, raw_stdout_text)`` when wb exits 0.
-    Raises :class:`RateLimitedError` after retries exhaust on exit 5.
+    Raises :class:`RateLimitedError` on exit code 5, with ``retry_after``
+    populated when available.
     Raises ``RuntimeError`` for any other non-zero exit.
     """
-    env = build_wb_env()
-    last_error = ""
-    for attempt in range(len(retry_waits) + 1):
-        proc = subprocess.run(
-            command,
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=env,
-        )
-        stdout = proc.stdout.strip()
-        stderr = proc.stderr.strip()
+    proc = subprocess.run(
+        command,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    stdout = proc.stdout.strip()
+    stderr = proc.stderr.strip()
 
-        if proc.returncode == 0:
-            if not stdout:
-                raise RuntimeError(f"Empty stdout for command: {' '.join(command)}")
-            return json.loads(stdout), stdout
+    if proc.returncode == 0:
+        if not stdout:
+            raise RuntimeError(f"Empty stdout for command: {' '.join(command)}")
+        return json.loads(stdout), stdout
 
-        if proc.returncode == EXIT_RATE_LIMITED:
-            last_error = (
-                f"Rate limited for command: {' '.join(command)}\n"
-                f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
-            )
-            if attempt < len(retry_waits):
-                time.sleep(retry_waits[attempt])
-                continue
-            raise RateLimitedError(last_error)
-
-        raise RuntimeError(
-            f"wb CLI failed (exit={proc.returncode}) for command: {' '.join(command)}\n"
+    if proc.returncode == EXIT_RATE_LIMITED:
+        retry_after = _parse_retry_after_from_envelope(stdout, stderr)
+        msg = (
+            f"Rate limited for command: {' '.join(command)}\n"
             f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
         )
-    raise RateLimitedError(last_error)
+        raise RateLimitedError(msg, retry_after=retry_after)
+
+    raise RuntimeError(
+        f"wb CLI failed (exit={proc.returncode}) for command: {' '.join(command)}\n"
+        f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
+
+
+def _parse_retry_after_from_envelope(stdout: str, stderr: str) -> float | None:
+    """Extract ``error.retry_after`` from the CLI's JSON error envelope.
+
+    The CLI emits the envelope to stdout in ``--json`` mode; in human
+    mode it goes to stderr. Try both, fall back to ``None`` when the
+    payload doesn't parse or doesn't carry ``retry_after``.
+    """
+    for raw in (stdout, stderr):
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        error = payload.get("error")
+        if not isinstance(error, dict):
+            continue
+        value = error.get("retry_after")
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def read_rate_status() -> dict:
     """Run ``wb rate status`` and return the parsed payload.
 
-    ``wb rate status`` reads ``~/.wb-cli/rate_limits.db`` only — it does not
-    make any HTTP call, so it does not consume seller-budget calls. Use this
-    as a pre-flight "is any endpoint already locked?" check.
-
-    Since R-3 the payload is ``{now_epoch, profile, sellers: [...]}``. Walk
-    ``find_active_lock`` to flatten it down to a single "longest active
-    cooldown" reading. If our local DB has not yet seen a WB-side 429, no
-    endpoint will be marked locked even when WB is in fact about to trip
-    us — the first real fetch will refresh state once WB reports the
-    cooldown via the response headers.
+    Reads ``~/.wb-cli/rate_limits.db`` only — no HTTP, no rate-limit
+    consumption. With HOME isolation dropped (F-16), the script and
+    the operator's interactive shell now share one DB, so any
+    observation visible here is also visible to ``wb rate status`` from
+    a separate terminal.
 
     Returns an empty dict when the command output cannot be parsed.
     """
-    env = build_wb_env()
     proc = subprocess.run(
         ["wb", "--json", "rate", "status"],
         cwd=ROOT,
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=env,
     )
     text = (proc.stdout or proc.stderr).strip()
     if not text:
@@ -155,6 +177,29 @@ def find_active_lock(status: dict) -> tuple[bool, float, str | None]:
     counted only when the endpoint row has ``locked: true``; the
     ``cooldown_seconds`` is the largest ``reset_in_s`` among locked rows.
     """
+    return find_active_lock_for(status, endpoints=None)
+
+
+def find_active_lock_for(
+        status: dict,
+        endpoints: frozenset[str] | None,
+) -> tuple[bool, float, str | None]:
+    """Filtered variant of :func:`find_active_lock`.
+
+    When ``endpoints`` is provided, only locks on those paths are
+    counted. Used by :func:`acquire_payloads` to scope the mid-run
+    re-check to the spend phase's endpoint family
+    (:data:`SPEND_RELEVANT_ENDPOINTS`) — a lock on, say, sales-funnel
+    after orders fetch shouldn't abort spend.
+
+    Args:
+        status: Parsed payload from :func:`read_rate_status`.
+        endpoints: Set of endpoint paths to consider, or ``None`` for
+            all endpoints (matches :func:`find_active_lock`).
+
+    Returns:
+        ``(is_locked, cooldown_seconds, endpoint_path)``.
+    """
     longest = 0.0
     locked_endpoint: str | None = None
     for seller in status.get("sellers", []) or []:
@@ -162,10 +207,13 @@ def find_active_lock(status: dict) -> tuple[bool, float, str | None]:
             for endpoint in token.get("endpoints", []) or []:
                 if not endpoint.get("locked"):
                     continue
+                path = endpoint.get("endpoint")
+                if endpoints is not None and path not in endpoints:
+                    continue
                 reset_in = float(endpoint.get("reset_in_s") or 0.0)
                 if reset_in > longest:
                     longest = reset_in
-                    locked_endpoint = endpoint.get("endpoint")
+                    locked_endpoint = path
     return locked_endpoint is not None, longest, locked_endpoint
 
 
@@ -316,8 +364,9 @@ def build_spend_rows(
 def fetch_orders_payload(report_date: str) -> list[dict]:
     """Fetch the full sales-funnel payload for the date.
 
-    Relies on the CLI's ``--all`` flag (I-10) for auto-pagination and on the
-    shared rate limiter (I-12) for throttling — no script-level sleeps needed.
+    Relies on the CLI's ``--all`` flag (I-10) for auto-pagination and on
+    the shared rate limiter (I-12) + I-15 request cache for throttling
+    and cross-process reuse — no script-level retries needed.
     """
     payload, _ = run_wb_command(
         [
@@ -333,7 +382,6 @@ def fetch_orders_payload(report_date: str) -> list[dict]:
             report_date,
             "--all",
         ],
-        retry_waits=[60, 120, 180],
     )
     if not isinstance(payload, list):
         raise RuntimeError("Orders payload is not a list")
@@ -341,48 +389,45 @@ def fetch_orders_payload(report_date: str) -> list[dict]:
 
 
 def fetch_spend_payload(report_date: str, nm_ids: list[str]) -> dict:
-    """Fetch product-spend in chunks of ``SPEND_CHUNK_SIZE`` NM IDs.
+    """Fetch product-spend in a single ``wb`` invocation.
 
-    The shared rate limiter preempts per-endpoint limits across chunks; no
-    manual sleeps between chunks.
+    The CLI internally chunks campaign-stats batches at ``FULLSTATS_BATCH_SIZE``
+    and (since I-15) caches ``list_campaigns`` so repeated invocations
+    share the campaign list. Splitting NMs into outer chunks added no
+    value and turned every chunk into its own subprocess + rate-limit
+    bucket consumer. One invocation passes them all and lets the CLI
+    aggregate.
     """
-    chunk_payloads: list[dict] = []
-    aggregated_results: dict[str, dict] = {}
-    for start in range(0, len(nm_ids), SPEND_CHUNK_SIZE):
-        chunk_nm_ids = nm_ids[start : start + SPEND_CHUNK_SIZE]
-        chunk_payload, _ = run_wb_command(
-            [
-                "wb",
-                "--json",
-                "--compact",
-                "stats",
-                "product-spend",
-                "--nms",
-                ",".join(chunk_nm_ids),
-                "--from",
-                report_date,
-                "--to",
-                report_date,
-            ],
-            retry_waits=[20, 60],
-        )
-        if not isinstance(chunk_payload, list):
-            raise RuntimeError("Spend payload chunk is not a list")
-        chunk_results = {str(item["nm_id"]): item for item in chunk_payload}
-        normalized_payload = {"results": chunk_results, "errors": []}
-        chunk_payloads.append(
-            {
-                "requested_nm_ids": chunk_nm_ids,
-                "payload": normalized_payload,
-            }
-        )
-        aggregated_results.update(chunk_results)
+    if not nm_ids:
+        return {
+            "source": "wb stats product-spend",
+            "date": report_date,
+            "results": {},
+            "errors": [],
+        }
+    chunk_payload, _ = run_wb_command(
+        [
+            "wb",
+            "--json",
+            "--compact",
+            "stats",
+            "product-spend",
+            "--nms",
+            ",".join(nm_ids),
+            "--from",
+            report_date,
+            "--to",
+            report_date,
+        ],
+    )
+    if not isinstance(chunk_payload, list):
+        raise RuntimeError("Spend payload is not a list")
+    results = {str(item["nm_id"]): item for item in chunk_payload}
     return {
         "source": "wb stats product-spend",
         "date": report_date,
-        "chunk_size": SPEND_CHUNK_SIZE,
-        "chunks": chunk_payloads,
-        "results": aggregated_results,
+        "requested_nm_ids": list(nm_ids),
+        "results": results,
         "errors": [],
     }
 
@@ -433,41 +478,47 @@ def acquire_payloads(
 ) -> tuple[list[dict], dict]:
     """Acquire orders + spend payloads for ``report_date``.
 
-    Reads ``wb rate status`` (no HTTP) first. When any endpoint is already
-    locked, falls back to the persisted raw artifacts if they exist; otherwise
-    exits with the rate-limit code. On the normal path, each fetch catches
-    its own :class:`RateLimitedError` and falls back to persisted artifacts
+    Reads ``wb rate status`` (no HTTP) before each phase and walks
+    :func:`find_active_lock_for` scoped to the relevant endpoint family.
+    When a phase's endpoints are locked, falls back to the persisted
+    raw artifact if it exists; otherwise exits with the rate-limit
+    code. On the normal path, each fetch catches its own
+    :class:`RateLimitedError` and falls back to persisted artifacts
     if available.
     """
-    status = read_rate_status()
-    is_locked, cooldown, locked_endpoint = find_active_lock(status)
-
-    if is_locked:
-        if orders_raw_path.exists() and spend_raw_path.exists():
-            print(
-                f"wb rate status: {locked_endpoint} locked ({cooldown:.0f}s). "
-                "Rebuilding CSVs from persisted artifacts.",
-                file=sys.stderr,
-            )
-            return (
-                load_orders_payload(orders_raw_path),
-                load_spend_payload(spend_raw_path),
-            )
-        print(
-            f"wb rate status: {locked_endpoint} locked ({cooldown:.0f}s) and no "
-            f"persisted artifacts exist for {report_date}.",
-            file=sys.stderr,
-        )
-        raise SystemExit(EXIT_RATE_LIMITED)
-
+    # Phase 1: orders.
     try:
         orders_payload = fetch_orders_payload(report_date)
         write_json(orders_raw_path, orders_payload)
     except RateLimitedError as exc:
         if not orders_raw_path.exists():
             raise
-        print(f"Orders fetch rate-limited: {exc}. Using persisted artifact.", file=sys.stderr)
+        _log_rate_limited('Orders fetch', exc)
         orders_payload = load_orders_payload(orders_raw_path)
+
+    # Phase 2: product-spend. Re-check rate status between phases —
+    # orders touched the analytics endpoint family, but a spend-phase
+    # lock could have been observed by a parallel `wb` invocation in
+    # the gap. Skip re-check if a persisted artifact would let us
+    # rebuild without firing more HTTP anyway.
+    spend_status = read_rate_status()
+    is_locked, cooldown, locked_endpoint = find_active_lock_for(
+        spend_status, endpoints=SPEND_RELEVANT_ENDPOINTS,
+    )
+    if is_locked:
+        if spend_raw_path.exists():
+            print(
+                f"wb rate status: {locked_endpoint} locked ({cooldown:.0f}s). "
+                "Rebuilding spend CSV from persisted artifact.",
+                file=sys.stderr,
+            )
+            return orders_payload, load_spend_payload(spend_raw_path)
+        print(
+            f"wb rate status: {locked_endpoint} locked ({cooldown:.0f}s) and no "
+            f"persisted spend artifact exists for {report_date}.",
+            file=sys.stderr,
+        )
+        raise SystemExit(EXIT_RATE_LIMITED)
 
     nm_ids = [str(item["nm_id"]) for item in orders_payload]
     try:
@@ -476,10 +527,25 @@ def acquire_payloads(
     except RateLimitedError as exc:
         if not spend_raw_path.exists():
             raise
-        print(f"Spend fetch rate-limited: {exc}. Using persisted artifact.", file=sys.stderr)
+        _log_rate_limited('Spend fetch', exc)
         spend_payload = load_spend_payload(spend_raw_path)
 
     return orders_payload, spend_payload
+
+
+def _log_rate_limited(phase: str, exc: RateLimitedError) -> None:
+    """Surface the WB-supplied cooldown when falling back to an artifact."""
+    if exc.retry_after is not None:
+        print(
+            f"{phase} rate-limited (~{exc.retry_after:.0f}s cooldown). "
+            f"Using persisted artifact.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"{phase} rate-limited: {exc}. Using persisted artifact.",
+            file=sys.stderr,
+        )
 
 
 def main() -> int:
@@ -493,9 +559,25 @@ def main() -> int:
     orders_csv_path = REPORTS_DIR / f"orders_{report_date}_by_nm.csv"
     merged_csv_path = REPORTS_DIR / f"ad_costs_{report_date}_merged.csv"
 
-    orders_payload, spend_payload = acquire_payloads(
-        report_date, orders_raw_path, spend_raw_path,
-    )
+    try:
+        orders_payload, spend_payload = acquire_payloads(
+            report_date, orders_raw_path, spend_raw_path,
+        )
+    except RateLimitedError as exc:
+        # Bubbled past acquire_payloads' fallback (no persisted artifact
+        # to use). Convert to a clean exit-5 with the WB-supplied
+        # cooldown so the operator / cron logs see a single line, not
+        # a Python traceback.
+        cooldown = (
+            f' (~{exc.retry_after:.0f}s cooldown)'
+            if exc.retry_after is not None else ''
+        )
+        print(
+            f'wb stats product-spend rate-limited{cooldown}; '
+            f'no persisted artifact for {report_date} to fall back to.',
+            file=sys.stderr,
+        )
+        return EXIT_RATE_LIMITED
 
     orders_rows = build_orders_rows(orders_payload)
     write_csv(
