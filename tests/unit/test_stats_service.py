@@ -124,3 +124,58 @@ class TestGetCampaignsStats:
         assert result == []
 
 
+class TestProductSpendStatusFilter:
+    """Tests for status-filter branch in get_product_spend / _find_campaign_ids_for_nms."""
+
+    _NM = 111111
+
+    def _make_campaign(self, cid: int, status: int) -> dict:
+        return {
+            'id': cid,
+            'status': status,
+            'nm_settings': [{'nm_id': self._NM}],
+        }
+
+    def test_stopped_campaign_excluded_from_fullstats(
+        self, service: StatsService, mock_client: MagicMock,
+    ) -> None:
+        """get_product_spend only sends running (9) and paused (11) campaigns to fullstats.
+
+        A stopped campaign (status 7) sharing the same NM IDs must not be
+        included — it contributes no spend and wastes a fullstats rate-limit
+        slot on Base tokens.
+        """
+        running_id = 10
+        paused_id = 11
+        stopped_id = 99
+
+        mock_client.list_campaigns.return_value = [
+            self._make_campaign(running_id, 9),
+            self._make_campaign(paused_id, 11),
+            self._make_campaign(stopped_id, 7),
+        ]
+        mock_client.get_campaign_stats.return_value = []
+
+        service.get_product_spend([self._NM], '2026-01-01', '2026-01-01')
+
+        called_ids = mock_client.get_campaign_stats.call_args[0][0]
+        assert stopped_id not in called_ids
+        assert running_id in called_ids
+        assert paused_id in called_ids
+
+    def test_only_stopped_campaigns_returns_zeros(
+        self, service: StatsService, mock_client: MagicMock,
+    ) -> None:
+        """get_product_spend returns zero-spend NmStats when all matching campaigns are stopped."""
+        mock_client.list_campaigns.return_value = [
+            self._make_campaign(99, 7),
+        ]
+
+        result = service.get_product_spend([self._NM], '2026-01-01', '2026-01-01')
+
+        mock_client.get_campaign_stats.assert_not_called()
+        assert len(result) == 1
+        assert result[0].nm_id == self._NM
+        assert result[0].spend == 0
+
+

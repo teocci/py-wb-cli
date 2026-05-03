@@ -179,7 +179,7 @@ class TestGetProductSpend:
     def test_returns_spend_for_matching_nm(self) -> None:
         client = _make_client(
             campaigns=[
-                {'id': 1, 'nm_settings': [{'nm_id': 100}]},
+                {'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]},
             ],
             fullstats=[_fullstats_payload(advert_id=1, nm_id=100, spend=500.0)],
         )
@@ -198,8 +198,8 @@ class TestGetProductSpend:
     def test_aggregates_across_campaigns(self) -> None:
         client = _make_client(
             campaigns=[
-                {'id': 1, 'nm_settings': [{'nm_id': 100}]},
-                {'id': 2, 'nm_settings': [{'nm_id': 100}]},
+                {'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]},
+                {'id': 2, 'status': 11, 'nm_settings': [{'nm_id': 100}]},
             ],
             fullstats=[
                 _fullstats_payload(advert_id=1, nm_id=100, spend=300.0),
@@ -256,7 +256,7 @@ class TestGetProductSpend:
             ],
         }
         client2 = _make_client(
-            campaigns=[{'id': 1, 'nm_settings': [{'nm_id': 10}, {'nm_id': 20}]}],
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 10}, {'nm_id': 20}]}],
             fullstats=[raw_fullstats],
         )
         svc = StatsService(client2)
@@ -287,7 +287,7 @@ class TestGetProductSpend:
             }],
         }
         client = _make_client(
-            campaigns=[{'id': 1, 'nm_settings': [{'nm_id': 100}]}],
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]}],
             fullstats=[raw_fullstats],
         )
         svc = StatsService(client)
@@ -298,7 +298,7 @@ class TestGetProductSpend:
     def test_chunks_campaigns_when_over_batch_size(self) -> None:
         """get_campaigns_stats sends multiple API calls for >50 campaign IDs."""
         campaigns = [
-            {'id': i, 'nm_settings': [{'nm_id': 100}]} for i in range(1, 52)
+            {'id': i, 'status': 9, 'nm_settings': [{'nm_id': 100}]} for i in range(1, 52)
         ]
         client = _make_client(campaigns=campaigns, fullstats=[])
         svc = StatsService(client)
@@ -315,7 +315,7 @@ class TestGetProductSpend:
     def test_cache_write_through_called(self) -> None:
         """When CacheStore is injected, save_stats is called per day."""
         client = _make_client(
-            campaigns=[{'id': 1, 'nm_settings': [{'nm_id': 100}]}],
+            campaigns=[{'id': 1, 'status': 9, 'nm_settings': [{'nm_id': 100}]}],
             fullstats=[_fullstats_payload(advert_id=1, nm_id=100, spend=100.0)],
         )
         cache = MagicMock()

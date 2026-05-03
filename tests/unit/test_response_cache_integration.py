@@ -41,6 +41,7 @@ class TestStatsCaching:
         client.list_campaigns.return_value = [
             {
                 'id': 1001,
+                'status': 9,
                 'nm_settings': [{'nm_id': 42}],
             },
         ]

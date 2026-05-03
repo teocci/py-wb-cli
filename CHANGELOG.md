@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.34.0 (2026-05-04)
+- I-17: `_find_campaign_ids_for_nms` now filters to running (9) + paused (11) campaigns before building the fullstats batch, preventing stopped/archived legacy campaigns from burning `EP_CAMPAIGN_FULLSTATS` rate-limit slots on Base tokens.
+
 ## v0.33.1 (2026-05-04)
 - F-18: `FunnelHistoryDay.from_api` now reads the `date` key (real WB API field) with `dt` as fallback, fixing always-empty `dt` on live funnel-history responses.
 

@@ -222,7 +222,7 @@ class StatsService:
         """
         nm_set = set(nm_ids)
         campaign_ids = self._find_campaign_ids_for_nms(
-            nm_set, raw_campaigns=raw_campaigns,
+            nm_set, raw_campaigns=raw_campaigns, statuses=[9, 11],
         )
         if not campaign_ids:
             return [NmStats(nm_id=nm) for nm in nm_ids]
@@ -317,6 +317,7 @@ class StatsService:
             nm_set: set[int],
             *,
             raw_campaigns: list[dict] | None = None,
+            statuses: list[int] | None = None,
     ) -> list[int]:
         """Return IDs of campaigns that contain at least one of the given NMs.
 
@@ -325,14 +326,21 @@ class StatsService:
             raw_campaigns: Pre-fetched list of campaign dicts. When ``None``
                 (default), fetches from the API; when provided, uses the
                 pre-fetched list to avoid a duplicate ``list_campaigns`` call.
+            statuses: When provided, only campaigns whose ``status`` value is
+                in this list are considered. ``None`` disables the filter
+                (default), preserving behaviour for callers that do not need
+                status filtering.
 
         Returns:
             List of matching campaign IDs.
         """
         if raw_campaigns is None:
             raw_campaigns = self._client.list_campaigns()
+        status_set = set(statuses) if statuses is not None else None
         result: list[int] = []
         for c in raw_campaigns:
+            if status_set is not None and c.get('status') not in status_set:
+                continue
             campaign_nms = {
                 item['nm_id']
                 for item in (c.get('nm_settings') or [])
