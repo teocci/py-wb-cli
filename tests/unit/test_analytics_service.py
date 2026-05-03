@@ -83,7 +83,7 @@ class TestGetProductHistory:
     def test_returns_history(self, service, mock_client):
         mock_client.get_funnel_history.return_value = [{
             'product': {'nmId': 1, 'title': 'Test'},
-            'history': [{'dt': '2025-01-01', 'openCount': 10}],
+            'history': [{'date': '2025-01-01', 'openCount': 10}],
             'currency': 'RUB',
         }]
         result = service.get_product_history('2025-01-01', '2025-01-07', [1])

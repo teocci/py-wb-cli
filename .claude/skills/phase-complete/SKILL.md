@@ -67,7 +67,17 @@ git add -A
 git commit -m "release: vX.Y.Z — <theme>"
 ```
 
-Do NOT tag — the user pushes and tags manually per `docs/RELEASE.md`.
+## Step 6 — Tag and push
+
+Create the version tag on the release commit and push both the branch and the tag:
+
+```bash
+git tag vX.Y.Z
+git push origin main
+git push origin vX.Y.Z
+```
+
+This triggers the GitHub Release workflow (`.github/workflows/release.yml`), which builds the bundles and publishes the release.
 
 ## Verification checklist
 
@@ -79,6 +89,8 @@ Do NOT tag — the user pushes and tags manually per `docs/RELEASE.md`.
 - [ ] `src/wb/__init__.py` `__version__` matches new version
 - [ ] `pyproject.toml` `version` matches new version
 - [ ] Commit message format: `release: vX.Y.Z — <theme>`
+- [ ] Tag `vX.Y.Z` created and pushed
+- [ ] Branch pushed to `origin/main`
 
 ## Notes
 

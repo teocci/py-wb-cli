@@ -51,7 +51,10 @@
       "Bash(curl:*)",
       "Bash(.venv/Scripts/python -m *)",
       "Bash(gh run *)",
-      "Bash(gh workflow *)"
+      "Bash(gh workflow *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); skills=[k for k in d.get\\('commandSkills',{}\\).keys\\(\\)]; print\\('\\\\n'.join\\(skills\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,':',v[:80] if isinstance\\(v,str\\) else str\\(v\\)[:80]\\) for k,v in d.items\\(\\)]\")",
+      "Bash(python3 -c \"import sys,json; runs=json.load\\(sys.stdin\\); [print\\(r['headBranch'], r['status'], r['conclusion'], r['createdAt'][:16], r['displayTitle'][:50]\\) for r in runs]\")"
     ]
   }
 }

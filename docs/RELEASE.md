@@ -24,7 +24,7 @@
    ```
 5. The [Release workflow](../.github/workflows/release.yml) triggers on the tag, builds bundles for all three OSes, and publishes a GitHub Release with the zips attached.
 
-> Use the `phase-complete` skill to handle steps 1–3 automatically after a phase ships.
+> Use the `phase-complete` skill to handle steps 1–4 automatically after a phase ships.
 
 ## Release History
 

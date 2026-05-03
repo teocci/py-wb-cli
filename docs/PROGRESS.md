@@ -6,8 +6,8 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.33.0 |
-| **Tests Passing** | 1295/1296 (1 pre-existing env test in `test_auth_list_empty`) |
+| **Current Version** | 0.33.1 |
+| **Tests Passing** | 1298/1299 (1 pre-existing env test in `test_auth_list_empty`) |
 | **Phases Complete** | 49 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
@@ -65,6 +65,10 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-16 | `generate_daily_wb_report.py` rate-limit handling — depends on I-15 | ✅ DONE | 0.32.1 |
 | F-17 | CLI hardcoded `'default'` profile fallback + `cache list` table render | ✅ DONE | 0.32.2 |
 | I-16 | Rename `cache` → `snapshot` and `api-cache` → `cache` (BREAKING) | ✅ DONE | 0.33.0 |
+| F-18 | `funnel-history` `dt` field parser reads wrong key | ✅ DONE | 0.33.1 |
+| I-17 | Status filter on campaign discovery for `product-spend` (Base cooldown reduction) | 🔲 PLANNED | TBD |
+| I-18 | `wb stats daily-report` — rich default shape + `--from`/`--to`/`--days` filters | 🔲 PLANNED | TBD |
+| I-19 | `generate_daily_wb_report.py` switches to `wb stats daily-report` | 🔲 PLANNED | TBD |
 | A-1 | `wb auth login --profile NAME` env bootstrap (non-breaking) | 🔲 PLANNED | TBD |
 | A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | 🔲 PLANNED | TBD |
 | A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |

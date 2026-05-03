@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.33.1 (2026-05-04)
+- F-18: `FunnelHistoryDay.from_api` now reads the `date` key (real WB API field) with `dt` as fallback, fixing always-empty `dt` on live funnel-history responses.
+
 ## v0.33.0 (2026-04-28) — BREAKING
 - I-16: rename `wb cache` → `wb snapshot` (Phase 7 domain snapshots) and `wb api-cache` → `wb cache` (I-15 HTTP response cache). The two namespaces were backwards from common usage of "cache" (transparent perf layer) vs. "snapshot" (explicit point-in-time captures); the I-15 phase doc explicitly *wanted* `wb cache` for the HTTP layer but couldn't take it because Phase 7 owned the namespace. Hard rename, no aliases — old commands return `No such command` (Typer's auto-suggester catches `api-cache` → `cache` for free). The capture verb avoids the `snapshot snapshot` noun-noun stutter: `wb cache snapshot --campaign N` becomes `wb snapshot capture --campaign N`, and `wb cache snapshot-all` becomes `wb snapshot capture-all`. `wb cache clear` and `wb snapshot clear` coexist cleanly under their respective groups (mirrors `git branch -d` vs `git tag -d`). Source files renamed via `git mv` to preserve blame: `src/wb/cli/cache.py` → `src/wb/cli/snapshot.py` (with `cache_app` → `snapshot_app` + verb / function renames), `src/wb/cli/api_cache.py` → `src/wb/cli/cache.py` (with `api_cache_app` → `cache_app`). Test files renamed and argv lists updated to match. Docs sweep: `AGENT.md` rewritten with two distinct sections, `RATE_LIMITS.md` and `docs/web/rate-limits.md` updated, `docs/phases/7-cache.md` and `docs/phases/I-15-request-cache.md` annotated with rename notes (originals kept for historical accuracy). Storage layer untouched — `cache.db` and `request_cache.db` paths and schemas are CLI-facing only. No agent skills in `.claude/skills/` reference these commands, so the breaking change has zero impact on shipped automation. 1295 tests still passing.
 

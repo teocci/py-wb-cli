@@ -1,5 +1,7 @@
 """Tests for wb.domain.analytics_models."""
 
+import pytest
+
 from wb.domain.analytics_models import (
     AggregationLevel,
     CsvReportStatus,
@@ -96,7 +98,7 @@ class TestFunnelHistoryDay:
 
     def test_from_api(self):
         data = {
-            'dt': '2025-12-01',
+            'date': '2025-12-01',
             'openCount': 50,
             'cartCount': 20,
             'orderCount': 10,
@@ -111,6 +113,14 @@ class TestFunnelHistoryDay:
         assert result.dt == ''
         assert result.open_count == 0
 
+    @pytest.mark.parametrize('payload,expected', [
+        ({'date': '2025-12-01'}, '2025-12-01'),
+        ({'dt': '2025-12-01'}, '2025-12-01'),
+        ({'date': '2025-12-01', 'dt': '1999-01-01'}, '2025-12-01'),
+    ])
+    def test_date_field_fallback(self, payload, expected):
+        assert FunnelHistoryDay.from_api(payload).dt == expected
+
 
 class TestProductFunnelHistory:
     """Tests for ProductFunnelHistory.from_api."""
@@ -119,8 +129,8 @@ class TestProductFunnelHistory:
         data = {
             'product': {'nmId': 456, 'title': 'Boots'},
             'history': [
-                {'dt': '2025-12-01', 'openCount': 10},
-                {'dt': '2025-12-02', 'openCount': 20},
+                {'date': '2025-12-01', 'openCount': 10},
+                {'date': '2025-12-02', 'openCount': 20},
             ],
             'currency': 'EUR',
         }

@@ -150,7 +150,7 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 | Promotion `/adv/v3/fullstats` | Campaigns with no data | Returns empty list | Returns HTTP 400 — don't call for never-started campaigns |
 | Promotion `/adv/v3/fullstats` | Rate limit | Relaxed | 3/min, burst=1 → CLI enforces 1 call/20 s |
 | Normquery `/adv/v0/normquery/list` | `items` field | Always a list | Can be `null` — use `(raw.get('items') or [])` |
-| Analytics v3 `sales-funnel/products/history` | `dt` field | ISO date string | Returns empty string `""` |
+| Analytics v3 `sales-funnel/products/history` | `dt` date field | `dt` key | Returns date in `date` key — `FunnelHistoryDay.from_api` reads `date` with `dt` fallback (F-18) |
 | Promotion `/api/advert/v0/bids/recommendations` | Paused campaigns | Returns bid data | Returns HTTP 400 for non-running campaigns |
 | Analytics `search-report` | Any API token | Works with standard token | Requires `Analytics/Advanced` scope — returns HTTP 403 |
 | Promotion `/adv/v1/budget/deposit` | `sum` field unit | Kopecks | Rubles — minimum 1000, must be multiple of 50 |

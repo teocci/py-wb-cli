@@ -153,7 +153,7 @@ class FunnelHistoryDay:
             data: Raw dict with dt and metric fields.
         """
         return cls(
-            dt=data.get('dt', ''),
+            dt=data.get('date') or data.get('dt') or '',
             open_count=data.get('openCount', 0),
             cart_count=data.get('cartCount', 0),
             order_count=data.get('orderCount', 0),
