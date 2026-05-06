@@ -54,7 +54,7 @@ wb stats daily-report --date YYYY-MM-DD
 
 ## Running the skill
 
-1. **Pre-flight rate check.** This workflow makes 3+ API calls across two services. Before starting, run `wb --json rate status`:
+1. **Pre-flight rate check.** This workflow makes 3 API calls. Before starting, run `wb --json rate status`:
    - If any endpoint shows `locked: true`, sleep `reset_in_s + 5` and retry; do NOT start the workflow during an active cooldown.
    - If everything shows `locked: false`, proceed directly.
 2. Resolve yesterday's date: `python -c "from datetime import date, timedelta; print(date.today() - timedelta(days=1))"`
@@ -63,16 +63,31 @@ wb stats daily-report --date YYYY-MM-DD
    - Orders: `wb --json --compact analytics sales-funnel products --from YYYY-MM-DD --to YYYY-MM-DD --all`
    - Spend (same NM IDs): `wb --json --compact stats product-spend --nms <ids> --from YYYY-MM-DD --to YYYY-MM-DD`
 5. Immediately save each raw response before further parsing:
-   - `reports/daily/orders_YYYY-MM-DD_raw.json`
-   - `reports/daily/product_spend_YYYY-MM-DD_raw.json`
-   - `reports/daily/daily_report_YYYY-MM-DD_raw.json` containing both payloads plus artifact metadata
+   - `reports/daily/daily_report_YYYY-MM-DD_full.json` (single-date) or `daily_report_FROM_to_TO_full.json` (range)
 6. If the same date/report request is repeated, check for these saved artifacts first and reuse them unless the user explicitly asks for a fresh pull.
-7. On rate-limit failures after one side has already been saved, reuse the saved raw JSON instead of restarting the whole workflow.
-8. Merge on `nm_id` only; never merge by product name.
-9. Verify the merged `orders` exactly match the raw `order_count` payload and `spend` exactly matches the raw spend payload before presenting results.
-10. Label the output so the user can tell that `orders` means `sales-funnel order_count`.
-11. Parse and format as a markdown table ranked by `spend` descending.
-12. Flag any products where `spend > 0` but `orders == 0` — these may indicate budget waste or attribution lag.
+7. On rate-limit failures, reuse the saved raw JSON instead of restarting the whole workflow.
+8. Label the output so the user can tell that `orders` means `sales-funnel order_count`.
+9. Parse and format as a markdown table ranked by `spend` descending.
+10. Flag any products where `spend > 0` but `orders == 0` — these may indicate budget waste or attribution lag.
+
+## Backfill (missed days)
+
+The script supports multi-day backfill in a single run — total WB calls stay at 3 regardless of range width (within the 7-day cap).
+
+```bash
+# Last 3 days (relative, ending yesterday)
+python scripts/generate_daily_wb_report.py --days 3
+
+# Absolute range
+python scripts/generate_daily_wb_report.py --from 2025-04-29 --to 2025-05-05
+```
+
+Range-named artifacts and CSVs are written:
+- `reports/daily/daily_report_FROM_to_TO_full.json`
+- `reports/daily/orders_FROM_to_TO_by_nm.csv`
+- `reports/daily/ad_costs_FROM_to_TO_merged.csv`
+
+Range CSVs aggregate metrics across all days in the period — one row per campaign-NM pair, not one per day. If you need per-date breakdowns, run per-date (with N×cooldown cost on Base).
 
 ## What it returns
 

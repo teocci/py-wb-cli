@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.35.1 (2026-05-06)
+- I-19: `generate_daily_wb_report.py` rewritten to use a single `wb stats daily-report --from X --to Y` call; adds `--days N` and `--from`/`--to` backfill modes (max 7 days); drops dual-subprocess orchestration and mid-run rate-status check; range-aware CSV and artifact naming; 634 → 296 lines.
+
 ## v0.35.0 (2026-05-06) — BREAKING
 - I-18: `wb stats daily-report` default JSON shape expanded to 11 fields (spend side: `views`, `clicks`, `ad_orders`, `spend`, `avg_position`; funnel side: `opens`, `cart_adds`, `orders`, `order_sum`, `buyouts`). Adds `--days N`, `--from/--to` date-range modes (max 7 days). **Breaking**: `ad_spend` renamed to `spend`, `total_orders` renamed to `orders` — callers using `--fields` narrow-path must update to `--fields nm_id,name,spend,orders`. Old response-cache entries with the old schema auto-degrade to a fresh fetch.
 
