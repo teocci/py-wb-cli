@@ -1025,11 +1025,27 @@ class DailyReportRow:
     Attributes:
         nm_id: WB nomenclature ID.
         name: Product display name.
-        ad_spend: Total advertising spend in rubles (from Promotion API).
-        total_orders: Total platform orders from all channels (from Analytics funnel).
+        views: Ad impressions (Promotion API).
+        clicks: Ad clicks (Promotion API).
+        ad_orders: Orders attributed to advertising (Promotion API).
+        spend: Total advertising spend in rubles (Promotion API).
+        avg_position: Average search position from ad booster stats (0 = unknown).
+        opens: Product page opens (Analytics funnel).
+        cart_adds: Adds to cart (Analytics funnel).
+        orders: Total platform orders from all channels (Analytics funnel).
+        order_sum: Total order value in rubles (Analytics funnel).
+        buyouts: Items purchased / bought out (Analytics funnel).
     """
 
     nm_id: int
     name: str = ''
-    ad_spend: float = 0.0
-    total_orders: int = 0
+    views: int = 0
+    clicks: int = 0
+    ad_orders: int = 0
+    spend: float = 0.0
+    avg_position: float = 0.0
+    opens: int = 0
+    cart_adds: int = 0
+    orders: int = 0
+    order_sum: int = 0
+    buyouts: int = 0

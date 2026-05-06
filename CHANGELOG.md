@@ -2,6 +2,12 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.35.0 (2026-05-06) — BREAKING
+- I-18: `wb stats daily-report` default JSON shape expanded to 11 fields (spend side: `views`, `clicks`, `ad_orders`, `spend`, `avg_position`; funnel side: `opens`, `cart_adds`, `orders`, `order_sum`, `buyouts`). Adds `--days N`, `--from/--to` date-range modes (max 7 days). **Breaking**: `ad_spend` renamed to `spend`, `total_orders` renamed to `orders` — callers using `--fields` narrow-path must update to `--fields nm_id,name,spend,orders`. Old response-cache entries with the old schema auto-degrade to a fresh fetch.
+
+### Breaking
+- `DailyReportRow` field `ad_spend` → `spend`; field `total_orders` → `orders`. Update any `--fields` projection or downstream script that referenced these key names.
+
 ## v0.34.0 (2026-05-04)
 - I-17: `_find_campaign_ids_for_nms` now filters to running (9) + paused (11) campaigns before building the fullstats batch, preventing stopped/archived legacy campaigns from burning `EP_CAMPAIGN_FULLSTATS` rate-limit slots on Base tokens.
 

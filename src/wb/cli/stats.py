@@ -21,6 +21,81 @@ _STATUS_MAP: dict[str, list[int]] = {
     'active':  [9, 11],
 }
 
+_MAX_RANGE_DAYS = 7
+
+
+def _resolve_daily_range(
+        report_date: str | None,
+        days: int | None,
+        date_from: str | None,
+        date_to: str | None,
+) -> tuple[str, str]:
+    """Resolve mutually-exclusive date-filter options to an inclusive (from, to) range.
+
+    Args:
+        report_date: Single date from ``--date``.
+        days: Relative window from ``--days``.
+        date_from: Range start from ``--from``.
+        date_to: Range end from ``--to``.
+
+    Returns:
+        Tuple of (from_date, to_date) YYYY-MM-DD strings.
+
+    Raises:
+        typer.BadParameter: On mutual exclusion, future dates, missing pair,
+            inverted range, or range wider than 7 days.
+    """
+    today = _date.today()
+    yesterday = today - timedelta(days=1)
+
+    modes_active = sum([
+        report_date is not None,
+        days is not None,
+        date_from is not None or date_to is not None,
+    ])
+    if modes_active > 1:
+        raise typer.BadParameter(
+            '--date, --days, and --from/--to are mutually exclusive; use exactly one.'
+        )
+
+    if date_from is not None or date_to is not None:
+        if date_from is None or date_to is None:
+            raise typer.BadParameter('--from and --to must be used together.')
+        from_d = _date.fromisoformat(date_from)
+        to_d = _date.fromisoformat(date_to)
+        if from_d > to_d:
+            raise typer.BadParameter(f'--from {date_from} is after --to {date_to}.')
+        if to_d >= today:
+            raise typer.BadParameter(
+                f'--to {date_to} must be before today ({today}) — 24-hour settle window.'
+            )
+        if (to_d - from_d).days >= _MAX_RANGE_DAYS:
+            raise typer.BadParameter(
+                f'Date range exceeds {_MAX_RANGE_DAYS}-day limit '
+                f'({(to_d - from_d).days + 1} days requested).'
+            )
+        return date_from, date_to
+
+    if days is not None:
+        if days < 1:
+            raise typer.BadParameter('--days must be >= 1.')
+        if days > _MAX_RANGE_DAYS:
+            raise typer.BadParameter(
+                f'--days {days} exceeds the {_MAX_RANGE_DAYS}-day limit.'
+            )
+        from_d = yesterday - timedelta(days=days - 1)
+        return str(from_d), str(yesterday)
+
+    if report_date is not None:
+        d = _date.fromisoformat(report_date)
+        if d >= today:
+            raise typer.BadParameter(
+                f'--date {report_date} must be before today ({today}) — 24-hour settle window.'
+            )
+        return report_date, report_date
+
+    return str(yesterday), str(yesterday)
+
 
 def _parse_ids(ids_str: str) -> list[int]:
     """Parse comma-separated IDs to a list of integers.
@@ -180,17 +255,35 @@ def stats_campaigns(
 def stats_daily_report(
         ctx: typer.Context,
         report_date: str | None = typer.Option(
-            None, '--date', help='Report date YYYY-MM-DD (default: yesterday)',
+            None, '--date',
+            help='Single past date YYYY-MM-DD (default: yesterday)',
+        ),
+        days: int | None = typer.Option(
+            None, '--days',
+            help='Relative range: last N days ending yesterday (1–7)',
+        ),
+        date_from: str | None = typer.Option(
+            None, '--from',
+            help='Range start YYYY-MM-DD (use with --to)',
+        ),
+        date_to_opt: str | None = typer.Option(
+            None, '--to',
+            help='Range end YYYY-MM-DD (use with --from)',
         ),
         status: str = typer.Option(
             'active', '--status',
             help='Campaign status filter: running, paused, active (running+paused)',
         ),
 ) -> None:
-    """Show per-product ad spend and total orders for a single date.
+    """Show per-product ad spend and funnel metrics for a date or range.
 
-    Combines Promotion API spend data with Analytics funnel order counts.
-    Requires an analytics token for total orders; falls back to 0 if unavailable.
+    Combines Promotion API spend data with Analytics funnel metrics.
+    Requires an analytics token for funnel fields; falls back to 0 if unavailable.
+
+    Date modes (mutually exclusive, default = yesterday):
+      --date YYYY-MM-DD         single past date
+      --days N                  last N days (1-7) ending yesterday
+      --from YYYY-MM-DD --to YYYY-MM-DD  absolute range (max 7 days)
     """
     from wb.services._factory import create_analytics_service, create_stats_service
 
@@ -198,7 +291,9 @@ def stats_daily_report(
         valid = ', '.join(_STATUS_MAP)
         raise typer.BadParameter(f'--status must be one of: {valid}')
 
-    resolved_date = report_date or str(_date.today() - timedelta(days=1))
+    resolved_from, resolved_to = _resolve_daily_range(
+        report_date, days, date_from, date_to_opt,
+    )
     profile = get_profile(ctx)
     renderer = get_renderer(ctx)
     svc = create_stats_service(profile)
@@ -208,36 +303,50 @@ def stats_daily_report(
     try:
         analytics_svc = create_analytics_service(profile)
     except Exception:
-        analytics_note = ' (analytics token unavailable — total orders set to 0)'
+        analytics_note = ' (analytics token unavailable — funnel fields set to 0)'
 
+    date_to_arg = None if resolved_from == resolved_to else resolved_to
     rows = svc.get_daily_report(
-        resolved_date,
+        resolved_from,
+        date_to=date_to_arg,
         statuses=_STATUS_MAP[status],
         analytics_svc=analytics_svc,
     )
 
+    date_label = (
+        resolved_from if resolved_from == resolved_to
+        else f'{resolved_from} to {resolved_to}'
+    )
     if not rows:
-        renderer.success(f'No active campaigns found for {resolved_date}.')
+        renderer.success(f'No active campaigns found for {date_label}.')
         return
 
     if renderer.is_json:
-        typer.echo(json.dumps(
-            [asdict(r) for r in rows],
-            indent=2,
-            ensure_ascii=False,
-        ))
+        renderer.display([asdict(r) for r in rows], fields=get_fields(ctx))
         return
 
     from wb.core.output import render_table
-    headers = ['SKU', 'Product Name', 'Ad Spend ₽', 'Total Orders']
+    headers = [
+        'SKU', 'Product Name',
+        'Spend ₽', 'Views', 'Clicks', 'Ad Orders', 'Avg Pos',
+        'Opens', 'Cart', 'Orders', 'Order Sum', 'Buyouts',
+    ]
     table_rows = [
         [
             str(r.nm_id),
             r.name or '—',
-            f'{r.ad_spend:.2f}',
-            str(r.total_orders),
+            f'{r.spend:.2f}',
+            str(r.views),
+            str(r.clicks),
+            str(r.ad_orders),
+            f'{r.avg_position:.1f}' if r.avg_position else '—',
+            str(r.opens),
+            str(r.cart_adds),
+            str(r.orders),
+            str(r.order_sum),
+            str(r.buyouts),
         ]
         for r in rows
     ]
-    title = f'Daily Report — {resolved_date}{analytics_note}'
+    title = f'Daily Report — {date_label}{analytics_note}'
     render_table(headers, table_rows, title=title)

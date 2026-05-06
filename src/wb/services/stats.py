@@ -235,45 +235,54 @@ class StatsService:
             self,
             date: str,
             *,
+            date_to: str | None = None,
             statuses: list[int] | None = None,
             analytics_svc: AnalyticsService | None = None,
     ) -> list[DailyReportRow]:
-        """Build a per-product daily report combining ad spend and total orders.
+        """Build a per-product daily report combining ad spend and funnel metrics.
 
         Discovers products automatically from campaigns matching the given
         statuses, retrieves ad spend via the Promotion API, and enriches with
-        total platform orders from the Analytics funnel API when available.
+        full funnel metrics from the Analytics funnel API when available.
 
-        When a response cache is configured and ``date`` is strictly in
+        Supports single-date and date-range modes. For range mode pass
+        ``date_to``; the result aggregates across ``[date, date_to]``.
+
+        When a response cache is configured and the date range is strictly in
         the past, results are cached across invocations.
 
         Args:
-            date: Report date in YYYY-MM-DD format.
+            date: Report start date in YYYY-MM-DD format (also used as the
+                single date when ``date_to`` is None).
+            date_to: Report end date in YYYY-MM-DD format. When None, the
+                report covers only ``date``.
             statuses: CampaignStatus integer values to include (default: active
                 = [9, 11]).
-            analytics_svc: Optional AnalyticsService for total order counts.
-                If None or if the call fails (e.g. 403 missing scope), total
-                orders default to 0 for all rows.
+            analytics_svc: Optional AnalyticsService for funnel metrics.
+                If None or if the call fails (e.g. 403 missing scope), all
+                funnel fields default to 0 for all rows.
 
         Returns:
-            List of DailyReportRow sorted by ad_spend descending.
+            List of DailyReportRow sorted by spend descending.
 
         Raises:
             ValidationError: If date format is invalid.
         """
         _validate_date(date, '--date')
+        resolved_to = date_to or date
         resolved_statuses = statuses if statuses is not None else [9, 11]
         return self._cached_or_fetch(
             method_name='stats.get_daily_report',
             cache_params={
                 'date': date,
+                'date_to': resolved_to,
                 'statuses': list(resolved_statuses),
                 'with_analytics': analytics_svc is not None,
             },
             date_from=date,
-            date_to=date,
+            date_to=resolved_to,
             fetcher=lambda: self._get_daily_report_fresh(
-                date, resolved_statuses, analytics_svc,
+                date, resolved_to, resolved_statuses, analytics_svc,
             ),
             serialize=lambda result: [asdict(row) for row in result],
             deserialize=lambda raw: [DailyReportRow(**row) for row in raw],
@@ -282,6 +291,7 @@ class StatsService:
     def _get_daily_report_fresh(
             self,
             date: str,
+            date_to: str,
             statuses: list[int],
             analytics_svc: AnalyticsService | None,
     ) -> list[DailyReportRow]:
@@ -296,19 +306,27 @@ class StatsService:
         if not nm_ids:
             return []
         spend_rows = self._get_product_spend_fresh(
-            nm_ids, date, date, raw_campaigns=raw_campaigns,
+            nm_ids, date, date_to, raw_campaigns=raw_campaigns,
         )
-        funnel_by_nm = self._fetch_funnel_orders(nm_ids, date, analytics_svc)
-        rows = [
-            DailyReportRow(
+        funnel_by_nm = self._fetch_funnel_rows(nm_ids, date, date_to, analytics_svc)
+        rows = []
+        for s in spend_rows:
+            f = funnel_by_nm.get(s.nm_id)
+            rows.append(DailyReportRow(
                 nm_id=s.nm_id,
                 name=s.name,
-                ad_spend=s.spend,
-                total_orders=funnel_by_nm.get(s.nm_id, 0),
-            )
-            for s in spend_rows
-        ]
-        return sorted(rows, key=lambda r: r.ad_spend, reverse=True)
+                views=s.views,
+                clicks=s.clicks,
+                ad_orders=s.orders,
+                spend=s.spend,
+                avg_position=s.avg_position,
+                opens=f.open_count if f else 0,
+                cart_adds=f.cart_count if f else 0,
+                orders=f.order_count if f else 0,
+                order_sum=f.order_sum if f else 0,
+                buyouts=f.buyout_count if f else 0,
+            ))
+        return sorted(rows, key=lambda r: r.spend, reverse=True)
 
     # ── Private helpers ────────────────────────────────────────────────
 
@@ -418,32 +436,34 @@ class StatsService:
                     nm_set.add(item['nm_id'])
         return list(nm_set)
 
-    def _fetch_funnel_orders(
+    def _fetch_funnel_rows(
             self,
             nm_ids: list[int],
-            date: str,
+            date_from: str,
+            date_to: str,
             analytics_svc: AnalyticsService | None,
-    ) -> dict[int, int]:
-        """Fetch total platform order counts from the analytics funnel.
+    ) -> dict[int, object]:
+        """Fetch full funnel stats per NM ID from the analytics funnel.
 
         Returns an empty dict if analytics_svc is None or the call fails
         (e.g. missing analytics token → 403).
 
         Args:
             nm_ids: Product NM IDs to query.
-            date: Report date (YYYY-MM-DD).
+            date_from: Period start (YYYY-MM-DD).
+            date_to: Period end (YYYY-MM-DD).
             analytics_svc: Analytics service instance, or None.
 
         Returns:
-            Dict mapping nm_id → total order count (0 if unavailable).
+            Dict mapping nm_id → ProductFunnelStats (empty dict if unavailable).
         """
         if analytics_svc is None:
             return {}
         try:
             funnel_rows = analytics_svc.get_product_funnel(
-                date, date, nm_ids=nm_ids,
+                date_from, date_to, nm_ids=nm_ids,
             )
-            return {r.nm_id: r.order_count for r in funnel_rows}
+            return {r.nm_id: r for r in funnel_rows}
         except Exception:
             return {}
 
@@ -477,7 +497,10 @@ class StatsService:
         key = make_cache_key(method_name, self._cache_token, cache_params)
         cached = self._response_cache.get(key)
         if cached is not None:
-            return deserialize(cached)
+            try:
+                return deserialize(cached)
+            except (TypeError, KeyError):
+                pass  # stale schema — fall through to fresh fetch
         result = fetcher()
         self._response_cache.put(key, serialize(result))
         return result

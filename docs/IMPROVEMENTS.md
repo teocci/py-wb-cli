@@ -40,7 +40,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.32.0 | I-15 | ✅ DONE | Cooldown-tied HTTP-layer request cache + `wb api-cache` diag (renamed to `wb cache` in I-16) — [detail](phases/I-15-request-cache.md) |
 | 0.33.0 | I-16 | ✅ DONE | Rename `cache` → `snapshot` and `api-cache` → `cache` (BREAKING) — [detail](phases/I-16-rename-cache-snapshot.md) |
 | 0.34.0 | I-17 | ✅ DONE    | Status filter on campaign discovery for `product-spend` (Base cooldown reduction) — [detail](phases/I-17-product-spend-status-filter.md) |
-| TBD    | I-18 | 🔲 PLANNED | `wb stats daily-report` — rich default shape + `--from`/`--to`/`--days` filters — [detail](phases/I-18-daily-report-rich-default.md) |
+| 0.35.0 | I-18 | ✅ DONE    | `wb stats daily-report` — rich 11-field shape + `--days`/`--from`/`--to` date filters (BREAKING: `ad_spend`→`spend`, `total_orders`→`orders`) — [detail](phases/I-18-daily-report-rich-default.md) |
 | TBD    | I-19 | 🔲 PLANNED | `generate_daily_wb_report.py` switches to `wb stats daily-report` — [detail](phases/I-19-script-uses-daily-report.md) |
 | TBD    | A-1  | 🔲 PLANNED | `wb auth login --profile NAME` env bootstrap — [detail](phases/A-1-auth-login-env-bootstrap.md) |
 | TBD    | A-2  | 🔲 PLANNED | Drop runtime env fallback (BREAKING) — [detail](phases/A-2-drop-runtime-env-fallback.md) |

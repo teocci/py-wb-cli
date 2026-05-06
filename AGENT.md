@@ -151,6 +151,9 @@ wb --json stats campaigns --from 2026-04-01 --to 2026-04-07
 wb --json stats campaigns --status running --from 2026-04-01 --to 2026-04-07
 wb --json stats product-spend --nms 100525085,227403075 --from 2026-04-01 --to 2026-04-07
 wb --json stats daily-report --date 2026-04-21
+wb --json stats daily-report --days 7
+wb --json stats daily-report --from 2026-04-28 --to 2026-05-04
+wb --json stats daily-report --date 2026-04-21 --fields nm_id,name,spend,orders
 ```
 
 ### `wb analytics sales-funnel`
