@@ -119,7 +119,10 @@
       "Bash(./.venv/Scripts/python.exe -m wb auth --help)",
       "Bash(./.venv/Scripts/python.exe -m pytest tests/unit/test_cli_auth.py::TestAuthWhoami -v --tb=short)",
       "Bash(git -C d:/teocci/code/python/py-wb-cli diff src/wb/core/constants.py)",
-      "Bash(git -C d:/teocci/code/python/py-wb-cli add AGENT.md CHANGELOG.md CLAUDE.md docs/IMPROVEMENTS.md docs/PROGRESS.md docs/phases/A-3-auth-whoami-docs.md pyproject.toml src/wb/__init__.py src/wb/cli/auth.py tests/unit/test_cli_auth.py .claude/settings.json)"
+      "Bash(git -C d:/teocci/code/python/py-wb-cli add AGENT.md CHANGELOG.md CLAUDE.md docs/IMPROVEMENTS.md docs/PROGRESS.md docs/phases/A-3-auth-whoami-docs.md pyproject.toml src/wb/__init__.py src/wb/cli/auth.py tests/unit/test_cli_auth.py .claude/settings.json)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli commit -m \"release: v0.39.0 — A-3: wb auth whoami + post-A-2 docs sweep\")",
+      "Bash(.venv/Scripts/python -c \"from wb.cli.portal import portal_app; print\\('ok'\\)\")",
+      "Bash(.venv/Scripts/python -c \"import wb; print\\(wb.__version__\\)\")"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
