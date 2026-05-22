@@ -74,6 +74,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-20 | `wb auth login` / `login-portal` help & docs — official API vs portal scraping | ✅ DONE | 0.37.1 |
 | A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | ✅ DONE | 0.38.0 |
 | A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |
+| F-21 | `wb portal bids` — CPC/CPM bid recommendations from seller portal + empiric portal docs | 🔲 PLANNED | TBD |
 
 Phase detail files: [docs/phases/](phases/)
 

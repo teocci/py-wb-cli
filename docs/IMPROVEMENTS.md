@@ -45,6 +45,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.36.0 | A-1  | ✅ DONE    | `wb auth login` JWT-driven profile bootstrap (`oid`/`exp`/`t`, auto-name `{oid}_{type}`) — [detail](phases/A-1-auth-login-env-bootstrap.md) |
 | 0.38.0 | A-2  | ✅ DONE    | Drop runtime env fallback (BREAKING) — profile becomes mandatory at runtime; env vars become bootstrap material for `wb auth login` only — [detail](phases/A-2-drop-runtime-env-fallback.md) |
 | TBD    | A-3  | 🔲 PLANNED | `wb auth whoami` + docs sweep — [detail](phases/A-3-auth-whoami-docs.md) |
+| TBD    | F-21 | 🔲 PLANNED | `wb portal bids` — CPC/CPM bid recommendations + empiric portal docs — [detail](phases/F-21-portal-bids.md) |
 
 ---
 
