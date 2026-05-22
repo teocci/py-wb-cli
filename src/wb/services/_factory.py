@@ -246,13 +246,36 @@ ServiceContainer = _Container
 # ── Token resolution ──────────────────────────────────────────────────────────
 
 
+_NO_PROFILE_HINT = (
+    "Run 'wb auth login --profile <name>' to register one. "
+    'If WB_API_TOKEN is in env, it will be picked up automatically.'
+)
+
+
+def _bootstrap_required_error(detail: str) -> ConfigError:
+    """Build the canonical ConfigError raised when no credential is resolvable.
+
+    Args:
+        detail: Short phrase describing what's missing (e.g.
+            ``'no active profile and no --token flag'``).
+
+    Returns:
+        :class:`ConfigError` suitable for raising — message includes the
+        bootstrap migration hint that points users at
+        :command:`wb auth login`.
+    """
+    return ConfigError(f'{detail}. {_NO_PROFILE_HINT}')
+
+
 def _get_promotion_token(
         profile_name: str | None = None,
         cli_token: str | None = None,
 ) -> str:
-    """Retrieve the promotion token using the unified priority chain.
+    """Retrieve the promotion token from CLI flag or the active profile.
 
-    Priority: CLI flag > WB_API_TOKEN env var/.env > profiles.json
+    Priority chain (post A-2): ``CLI flag → profile → ConfigError``.
+    Environment variables / ``.env`` files are no longer consulted at
+    runtime — they are bootstrap material for ``wb auth login`` only.
 
     Args:
         profile_name: Profile name, or None for active profile.
@@ -260,14 +283,21 @@ def _get_promotion_token(
 
     Returns:
         Promotion API token string.
+
+    Raises:
+        ConfigError: When neither a CLI flag nor a registered profile
+            provides a promotion token.
     """
     if cli_token:
         return cli_token
     settings = _Container.settings()
-    if settings.api_token:
-        return settings.api_token
-    store = ProfileStore(settings.config_dir)
-    profile = store.get_profile(profile_name)
+    try:
+        store = ProfileStore(settings.config_dir)
+        profile = store.get_profile(profile_name)
+    except ConfigError as exc:
+        raise _bootstrap_required_error(
+            'no active profile and no --token flag',
+        ) from exc
     return profile.get_token('promotion')
 
 
@@ -298,9 +328,12 @@ def create_portal_client(
         cli_authorizev3: str | None = None,
         cli_cookie: str | None = None,
 ):
-    """Create a PortalClient using the unified priority chain.
+    """Create a PortalClient from a CLI flag or the active profile.
 
-    Priority: CLI flags > WB_AUTHORIZEV3/WB_PORTAL_COOKIE env vars/.env > profiles.json
+    Priority chain (post A-2): ``CLI flags → profile portal session →
+    ConfigError``. Environment variables / ``.env`` files are no longer
+    consulted at runtime — they are bootstrap material for
+    :command:`wb auth login-portal` only.
 
     Both authorizev3 and cookie are required for portal auth.
 
@@ -313,32 +346,29 @@ def create_portal_client(
         Configured PortalClient instance.
 
     Raises:
-        ConfigError: If no portal credentials found at any level.
-        ValidationError: If cookie is missing (required for portal auth).
+        ConfigError: If no portal credentials are found in the CLI flags
+            or the active profile.
     """
     from wb.client.portal import PortalClient
-    from wb.core.exceptions import ConfigError
 
-    # Priority 1: CLI flags
     if cli_authorizev3 and cli_cookie:
         return PortalClient(authorizev3=cli_authorizev3, cookie=cli_cookie)
 
-    # Priority 2: Env vars / .env (handled by pydantic-settings)
     settings = _Container.settings()
-    if settings.authorizev3 and settings.portal_cookie:
-        return PortalClient(
-            authorizev3=settings.authorizev3,
-            cookie=settings.portal_cookie,
-        )
-
-    # Priority 3: profiles.json
-    store = ProfileStore(settings.config_dir)
-    profile = store.get_profile(profile_name)
+    try:
+        store = ProfileStore(settings.config_dir)
+        profile = store.get_profile(profile_name)
+    except ConfigError as exc:
+        raise _bootstrap_required_error(
+            'no active profile and no --authorizev3/--cookie flags',
+        ) from exc
     session = profile.get_portal_session()
     if not session:
         raise ConfigError(
-            'No portal credentials found. Set WB_AUTHORIZEV3 + WB_PORTAL_COOKIE '
-            'env vars, add them to .env, or run `wb auth login-portal`.'
+            f'Profile {profile.name!r} has no portal session. '
+            "Run 'wb auth login-portal --profile <name>' to register one. "
+            'If WB_AUTHORIZEV3 and WB_PORTAL_COOKIE are in env, they will be '
+            'picked up automatically.'
         )
     cookie = session.get('cookie')
     if not cookie:
@@ -459,9 +489,11 @@ def _get_analytics_token(
         profile_name: str | None = None,
         cli_token: str | None = None,
 ) -> str:
-    """Retrieve the analytics token using the unified priority chain.
+    """Retrieve the analytics token from a CLI flag or the active profile.
 
-    Priority: CLI flag > WB_ANALYTICS_TOKEN env var/.env > profiles.json
+    Priority chain (post A-2): ``CLI flag → profile → ConfigError``.
+    Environment variables / ``.env`` files are no longer consulted at
+    runtime — they are bootstrap material for ``wb auth login`` only.
 
     Args:
         profile_name: Profile name, or None for active profile.
@@ -469,16 +501,21 @@ def _get_analytics_token(
 
     Returns:
         Analytics API token string.
+
+    Raises:
+        ConfigError: When neither a CLI flag nor a registered profile
+            provides an analytics token.
     """
     if cli_token:
         return cli_token
     settings = _Container.settings()
-    if settings.analytics_token:
-        return settings.analytics_token
-    if settings.api_token:
-        return settings.api_token
-    store = ProfileStore(settings.config_dir)
-    profile = store.get_profile(profile_name)
+    try:
+        store = ProfileStore(settings.config_dir)
+        profile = store.get_profile(profile_name)
+    except ConfigError as exc:
+        raise _bootstrap_required_error(
+            'no active profile and no --token flag',
+        ) from exc
     return profile.get_token('analytics')
 
 

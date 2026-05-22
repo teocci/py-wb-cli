@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+from wb.auth.bootstrap_env import BootstrapEnv
 from wb.auth.profiles import ProfileStore
 from wb.auth.token_utils import extract_token_claims
 from wb.auth.token_validation import validate_promotion_token
@@ -18,7 +19,7 @@ from wb.core.constants import (
     TOKEN_CATEGORIES,
     TOKEN_TYPES,
 )
-from wb.core.exceptions import ValidationError, WbCliError
+from wb.core.exceptions import ConfigError, ValidationError, WbCliError
 from wb.core.output import _stdout_console
 
 auth_app = typer.Typer(
@@ -40,6 +41,27 @@ def _get_profile_store() -> ProfileStore:
     settings = Settings()
     settings.ensure_config_dir()
     return ProfileStore(settings.config_dir)
+
+
+def _bootstrap_token_from_env(category: str) -> str | None:
+    """Resolve a JWT from env / ``.env`` for ``wb auth login`` bootstrap.
+
+    Analytics-only profiles prefer ``WB_ANALYTICS_TOKEN`` so a seller
+    who keeps that env var separate isn't forced to alias it into
+    ``WB_API_TOKEN`` first. Every other category (and the ``all``
+    meta-category) falls back to ``WB_API_TOKEN``.
+
+    Args:
+        category: ``--category`` value from the CLI.
+
+    Returns:
+        Token string when env has one, otherwise ``None`` (the caller
+        translates that into a :data:`ExitCode.CONFIG_ERROR`).
+    """
+    env = BootstrapEnv()
+    if category == 'analytics':
+        return env.analytics_token or env.api_token
+    return env.api_token
 
 
 def _validate_slug(name: str) -> None:
@@ -103,11 +125,23 @@ def auth_login(
                 'from the JWT.'
             ),
         ),
-        category: str = typer.Option(
-            'promotion', '--category', '-c',
-            help='Token category (run `wb auth categories` to list valid values)',
+        category: str | None = typer.Option(
+            None, '--category', '-c',
+            help=(
+                'Token category (run `wb auth categories` to list valid '
+                "values). Default: 'promotion' when --token is passed, "
+                "'all' when bootstrapping from env (single full-scope "
+                'token covers every category)'
+            ),
         ),
-        token: str = typer.Option(..., '--token', '-t', help='WB API token'),
+        token: str | None = typer.Option(
+            None, '--token', '-t',
+            help=(
+                'WB API token. When omitted, falls back to WB_API_TOKEN '
+                '(or WB_ANALYTICS_TOKEN for --category analytics) from '
+                'env / .env — the rare single-seller bootstrap case.'
+            ),
+        ),
         token_type: str | None = typer.Option(
             None, '--token-type',
             help=(
@@ -139,8 +173,39 @@ def auth_login(
         - ``oid``  → ``Profile.seller_id``
         - ``exp``  → ``Profile.token_expires_at``
         - ``t``    → auto-detects ``token_type='test'`` when true
+
+    When ``--token`` is omitted, ``WB_API_TOKEN`` is read from the
+    environment / ``.env`` and used as if it had been passed. For
+    ``--category analytics`` the lookup falls back to
+    ``WB_ANALYTICS_TOKEN`` before ``WB_API_TOKEN``. In this bootstrap
+    mode ``--category`` defaults to ``'all'`` (a single full-scope env
+    token is the common case); pass ``--category`` explicitly to scope
+    it down. The explicit-``--token`` path keeps the historical
+    ``'promotion'`` default.
+
+    This bootstrap path matters only for single-seller setups;
+    multi-profile users should pass ``--token`` explicitly.
     """
     store = _get_profile_store()
+
+    bootstrapped_from_env = token is None
+    if bootstrapped_from_env:
+        # Resolve category early because the env lookup may want to honor
+        # an explicit --category analytics override.
+        env_category = category or ALL_CATEGORY
+        token = _bootstrap_token_from_env(env_category)
+        if token is None:
+            typer.secho(
+                'No --token flag and no WB_API_TOKEN in env / .env. '
+                'Pass --token <JWT> or set WB_API_TOKEN before running '
+                '`wb auth login`.',
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=ExitCode.CONFIG_ERROR)
+        category = env_category
+    else:
+        category = category or 'promotion'
 
     if token_type is not None and token_type not in TOKEN_TYPES:
         typer.secho(
@@ -408,13 +473,19 @@ def auth_categories(ctx: typer.Context) -> None:
 @auth_app.command('login-portal')
 def auth_login_portal(
         profile: str = typer.Option('default', '--profile', '-p', help='Profile name'),
-        authorizev3: str = typer.Option(
-            ..., '--authorizev3', '-a',
-            help='authorizev3 header value from browser DevTools',
+        authorizev3: str | None = typer.Option(
+            None, '--authorizev3', '-a',
+            help=(
+                'authorizev3 header value from browser DevTools. When '
+                'omitted, falls back to WB_AUTHORIZEV3 from env / .env.'
+            ),
         ),
-        cookie: str = typer.Option(
-            ..., '--cookie', '-c',
-            help='Browser cookie string (required for portal auth)',
+        cookie: str | None = typer.Option(
+            None, '--cookie', '-c',
+            help=(
+                'Browser cookie string (required for portal auth). When '
+                'omitted, falls back to WB_PORTAL_COOKIE from env / .env.'
+            ),
         ),
         skip_auth: bool = typer.Option(
             False, '--skip-auth',
@@ -446,11 +517,28 @@ def auth_login_portal(
         3. Network tab → pick any request → Headers → copy
            ``authorizev3``.
 
-    Both ``--authorizev3`` and ``--cookie`` are required.
+    Both values are required — either via ``--authorizev3`` / ``--cookie``
+    or via ``WB_AUTHORIZEV3`` / ``WB_PORTAL_COOKIE`` in env / ``.env``.
+    The env path is the rare single-seller bootstrap case;
+    multi-profile users should pass the flags explicitly.
     """
     from wb.client.portal import PortalClient
 
     store = _get_profile_store()
+
+    if authorizev3 is None or cookie is None:
+        env = BootstrapEnv()
+        authorizev3 = authorizev3 or env.authorizev3
+        cookie = cookie or env.portal_cookie
+    if not authorizev3 or not cookie:
+        typer.secho(
+            'Portal auth requires both --authorizev3 and --cookie '
+            '(or WB_AUTHORIZEV3 + WB_PORTAL_COOKIE in env / .env). '
+            'Run `wb auth login-portal --help` for details.',
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR)
 
     try:
         client = PortalClient(authorizev3=authorizev3, cookie=cookie)

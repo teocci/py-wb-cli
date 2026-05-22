@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.37.1 |
-| **Tests Passing** | 1398/1399 (1 pre-existing env test in `test_auth_list_empty`) |
-| **Phases Complete** | 52 |
+| **Current Version** | 0.38.0 |
+| **Tests Passing** | 1418/1419 (1 pre-existing env test in `test_auth_list_empty`) |
+| **Phases Complete** | 53 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -72,7 +72,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | A-1 | `wb auth login` JWT-driven profile bootstrap (oid/exp/test + auto-name) | ✅ DONE | 0.36.0 |
 | F-19 | `bid recommend / minimum / get-items` real implementation (was always 400) | ✅ DONE | 0.37.0 |
 | F-20 | `wb auth login` / `login-portal` help & docs — official API vs portal scraping | ✅ DONE | 0.37.1 |
-| A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | 🔲 PLANNED | TBD |
+| A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | ✅ DONE | 0.38.0 |
 | A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |
 
 Phase detail files: [docs/phases/](phases/)

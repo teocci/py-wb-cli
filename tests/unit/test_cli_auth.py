@@ -22,8 +22,12 @@ PATCH_VALIDATE = 'wb.cli.auth.validate_promotion_token'
 def isolated_home(tmp_path, monkeypatch):
     """Redirect ~/.wb-cli to a temp dir; clear any inherited env tokens."""
     monkeypatch.setattr(Path, 'home', lambda: tmp_path)
-    for var in ('WB_API_TOKEN', 'WB_ANALYTICS_TOKEN'):
+    for var in (
+        'WB_API_TOKEN', 'WB_ANALYTICS_TOKEN',
+        'WB_AUTHORIZEV3', 'WB_PORTAL_COOKIE',
+    ):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(tmp_path)
     yield tmp_path
 
 
@@ -243,3 +247,117 @@ class TestAuthLoginAutoNaming:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert any(e['name'] == 'p' and e['seller_id'] == '8888' for e in data)
+
+
+# ── auth login env-bootstrap (A-2) ────────────────────────────────────
+
+
+class TestAuthLoginEnvBootstrap:
+    """`wb auth login` without --token reads WB_API_TOKEN from env / .env.
+
+    This is the rare single-seller fallback. Multi-profile users should
+    keep passing --token explicitly.
+    """
+
+    def test_no_flag_no_env_exits_with_config_error(self, isolated_home):
+        """No --token and no env → exit code 7 (CONFIG_ERROR)."""
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(app, ['auth', 'login'])
+
+        assert result.exit_code == 7
+        assert 'WB_API_TOKEN' in result.output
+
+    def test_env_bootstrap_creates_profile(self, isolated_home, monkeypatch):
+        """WB_API_TOKEN in env materializes a profile when --token omitted."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        monkeypatch.setenv('WB_API_TOKEN', TOKEN_PROD_BASE)
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(app, ['auth', 'login'])
+
+        assert result.exit_code == 0, result.output
+        store = ProfileStore(isolated_home / '.wb-cli')
+        profile = store.get_profile('668554_base')
+        # No --category passed → bootstrap defaults to 'all'.
+        assert set(profile.tokens.keys()) >= {'promotion', 'analytics'}
+        assert profile.tokens['promotion'] == TOKEN_PROD_BASE
+
+    def test_env_bootstrap_default_category_is_all(self, isolated_home, monkeypatch):
+        """Bootstrap path defaults --category to 'all' (single full-scope token)."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        monkeypatch.setenv('WB_API_TOKEN', TOKEN_PROD_BASE)
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(app, ['auth', 'login'])
+
+        assert result.exit_code == 0
+        assert 'all 11 categories' in result.output
+
+    def test_explicit_token_flag_keeps_promotion_default(self, isolated_home):
+        """--token without --category keeps the historical 'promotion' default."""
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(
+                app, ['auth', 'login', '--token', 'tok', '--profile', 'p'],
+            )
+
+        assert result.exit_code == 0
+        store = ProfileStore(isolated_home / '.wb-cli')
+        profile = store.get_profile('p')
+        assert list(profile.tokens.keys()) == ['promotion']
+
+    def test_env_bootstrap_explicit_category_honored(
+            self, isolated_home, monkeypatch,
+    ):
+        """Bootstrap path still honors --category overrides."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        monkeypatch.setenv('WB_API_TOKEN', TOKEN_PROD_BASE)
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(
+                app, ['auth', 'login', '--category', 'promotion'],
+            )
+
+        assert result.exit_code == 0
+        store = ProfileStore(isolated_home / '.wb-cli')
+        profile = store.get_profile('668554_base')
+        assert list(profile.tokens.keys()) == ['promotion']
+
+    def test_analytics_env_used_when_category_analytics(
+            self, isolated_home, monkeypatch,
+    ):
+        """``--category analytics`` (no --token) prefers WB_ANALYTICS_TOKEN."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        monkeypatch.setenv('WB_ANALYTICS_TOKEN', TOKEN_PROD_BASE)
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(
+                app, ['auth', 'login', '--category', 'analytics', '--profile', 'p'],
+            )
+
+        assert result.exit_code == 0, result.output
+        store = ProfileStore(isolated_home / '.wb-cli')
+        assert store.get_profile('p').tokens['analytics'] == TOKEN_PROD_BASE
+
+
+class TestAuthLoginPortalEnvBootstrap:
+    """`wb auth login-portal` mirrors the env-bootstrap pattern."""
+
+    def test_no_flags_no_env_exits_with_config_error(self, isolated_home):
+        result = runner.invoke(app, ['auth', 'login-portal'])
+        assert result.exit_code == 7
+        assert 'WB_AUTHORIZEV3' in result.output
+
+    def test_env_bootstrap_skip_auth(self, isolated_home, monkeypatch):
+        """``--skip-auth`` with env creds writes a profile without WB calls."""
+        monkeypatch.setenv('WB_AUTHORIZEV3', 'env-authv3')
+        monkeypatch.setenv('WB_PORTAL_COOKIE', 'env-cookie')
+
+        result = runner.invoke(
+            app, ['auth', 'login-portal', '--skip-auth', '--profile', 'p'],
+        )
+        assert result.exit_code == 0, result.output
+        store = ProfileStore(isolated_home / '.wb-cli')
+        session = store.get_profile('p').get_portal_session()
+        assert session is not None
+        assert session['authorizev3'] == 'env-authv3'
+        assert session['cookie'] == 'env-cookie'

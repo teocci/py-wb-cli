@@ -103,7 +103,18 @@
       "PowerShell(ls -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\docs\\\\phases\\\\\" | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object { $_.FullName })",
       "Bash(python -c \"import sys, json; data = json.load\\(sys.stdin\\); ids = {36384182, 30863759}; matches = [c for c in \\(data if isinstance\\(data, list\\) else []\\) if c.get\\('id'\\) in ids]; print\\(json.dumps\\(matches, indent=2, ensure_ascii=False\\)\\)\")",
       "Bash(python -c \"import sys, json; data = json.load\\(sys.stdin\\); rows = data if isinstance\\(data, list\\) else []; print\\('total:', len\\(rows\\)\\); print\\('sample id keys:', [list\\(r.keys\\(\\)\\)[:6] for r in rows[:2]]\\); print\\('ids:', [r.get\\('id'\\) for r in rows[:20]]\\)\")",
-      "Bash(python -c \"import sys; out = sys.stdin.read\\(\\); print\\('len:', len\\(out\\)\\); print\\('head:', repr\\(out[:400]\\)\\)\")"
+      "Bash(python -c \"import sys; out = sys.stdin.read\\(\\); print\\('len:', len\\(out\\)\\); print\\('head:', repr\\(out[:400]\\)\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/unit/test_config.py tests/unit/test_cli_auth.py -x --tb=short)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/unit/ --tb=line -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/unit/test_factory.py -v --tb=short)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/unit/test_cli_auth.py -v --tb=short)",
+      "Bash(.venv/Scripts/python d:\\\\tmp\\\\probe_bids_cpc.py)",
+      "Bash(.venv/Scripts/python d:/tmp/probe_bids_cpc.py)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli status)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli diff .claude/settings.json)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli add CHANGELOG.md docs/IMPROVEMENTS.md docs/PROGRESS.md docs/phases/A-2-drop-runtime-env-fallback.md pyproject.toml src/wb/__init__.py src/wb/cli/auth.py src/wb/core/config.py src/wb/services/_factory.py src/wb/auth/bootstrap_env.py tests/unit/test_cli_auth.py tests/unit/test_factory.py)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli status --short)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli add .claude/settings.json)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

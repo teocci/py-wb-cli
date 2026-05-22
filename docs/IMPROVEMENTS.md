@@ -43,7 +43,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.35.0 | I-18 | ✅ DONE    | `wb stats daily-report` — rich 11-field shape + `--days`/`--from`/`--to` date filters (BREAKING: `ad_spend`→`spend`, `total_orders`→`orders`) — [detail](phases/I-18-daily-report-rich-default.md) |
 | 0.35.1 | I-19 | ✅ DONE    | `generate_daily_wb_report.py` switches to `wb stats daily-report` — [detail](phases/I-19-script-uses-daily-report.md) |
 | 0.36.0 | A-1  | ✅ DONE    | `wb auth login` JWT-driven profile bootstrap (`oid`/`exp`/`t`, auto-name `{oid}_{type}`) — [detail](phases/A-1-auth-login-env-bootstrap.md) |
-| TBD    | A-2  | 🔲 PLANNED | Drop runtime env fallback (BREAKING) — [detail](phases/A-2-drop-runtime-env-fallback.md) |
+| 0.38.0 | A-2  | ✅ DONE    | Drop runtime env fallback (BREAKING) — profile becomes mandatory at runtime; env vars become bootstrap material for `wb auth login` only — [detail](phases/A-2-drop-runtime-env-fallback.md) |
 | TBD    | A-3  | 🔲 PLANNED | `wb auth whoami` + docs sweep — [detail](phases/A-3-auth-whoami-docs.md) |
 
 ---
