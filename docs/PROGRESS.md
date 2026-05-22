@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.38.0 |
-| **Tests Passing** | 1418/1419 (1 pre-existing env test in `test_auth_list_empty`) |
-| **Phases Complete** | 53 |
+| **Current Version** | 0.39.0 |
+| **Tests Passing** | 1424/1425 (1 pre-existing env test in `test_auth_list_empty`) |
+| **Phases Complete** | 54 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -73,7 +73,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-19 | `bid recommend / minimum / get-items` real implementation (was always 400) | ✅ DONE | 0.37.0 |
 | F-20 | `wb auth login` / `login-portal` help & docs — official API vs portal scraping | ✅ DONE | 0.37.1 |
 | A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | ✅ DONE | 0.38.0 |
-| A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |
+| A-3 | `wb auth whoami` + docs sweep for new auth model | ✅ DONE | 0.39.0 |
 | F-21 | `wb portal bids` — CPC/CPM bid recommendations from seller portal + empiric portal docs | 🔲 PLANNED | TBD |
 
 Phase detail files: [docs/phases/](phases/)

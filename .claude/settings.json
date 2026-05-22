@@ -114,7 +114,12 @@
       "Bash(git -C d:/teocci/code/python/py-wb-cli diff .claude/settings.json)",
       "Bash(git -C d:/teocci/code/python/py-wb-cli add CHANGELOG.md docs/IMPROVEMENTS.md docs/PROGRESS.md docs/phases/A-2-drop-runtime-env-fallback.md pyproject.toml src/wb/__init__.py src/wb/cli/auth.py src/wb/core/config.py src/wb/services/_factory.py src/wb/auth/bootstrap_env.py tests/unit/test_cli_auth.py tests/unit/test_factory.py)",
       "Bash(git -C d:/teocci/code/python/py-wb-cli status --short)",
-      "Bash(git -C d:/teocci/code/python/py-wb-cli add .claude/settings.json)"
+      "Bash(git -C d:/teocci/code/python/py-wb-cli add .claude/settings.json)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli commit -m \"release: v0.38.0 — A-2: drop runtime env fallback \\(BREAKING\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m wb auth --help)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/unit/test_cli_auth.py::TestAuthWhoami -v --tb=short)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli diff src/wb/core/constants.py)",
+      "Bash(git -C d:/teocci/code/python/py-wb-cli add AGENT.md CHANGELOG.md CLAUDE.md docs/IMPROVEMENTS.md docs/PROGRESS.md docs/phases/A-3-auth-whoami-docs.md pyproject.toml src/wb/__init__.py src/wb/cli/auth.py tests/unit/test_cli_auth.py .claude/settings.json)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

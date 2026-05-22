@@ -89,12 +89,26 @@ Idempotent past-day responses from `stats product-spend`, `stats daily-report`, 
 
 ## Authentication
 
-### Credential Resolution Priority
+### Credential Resolution Priority (post A-2)
 
-All credentials follow the same chain (highest to lowest):
+Runtime commands resolve credentials in this chain (highest to lowest):
 
 ```
-CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
+--profile <name> flag  >  active profile  >  ConfigError (exit 7)
+```
+
+Environment variables and `.env` files are **bootstrap-only material for `wb auth login` / `wb auth login-portal`** — they are no longer consulted by runtime code. The fix closes the F-19/F-20 fingerprint-drift trap by construction: a stale `.env` next to a healthy profile can never silently override it again. Run `wb auth whoami` to confirm which credentials runtime code will use.
+
+To check which credential is in flight:
+
+```
+$ wb auth whoami
+Profile     : 668554_base
+Source      : active-profile        # or 'profile-flag' when --profile <name> was passed
+Seller ID   : 668554
+Token type  : base
+Token (promotion): a1b2c3d4e5f60718
+Portal      : not configured
 ```
 
 ### Auth Methods — official vs unofficial
@@ -127,18 +141,17 @@ Both methods can coexist on the same profile — the active profile carries an `
 
 ### Environment Variables
 
+Post A-2, all `WB_*` credential env vars are **bootstrap-only**: they are read once by `wb auth login` / `wb auth login-portal` to materialize a profile and then ignored by every other command. Runtime always reads from `~/.wb-cli/profiles.json` (or the `--profile <name>` flag override).
+
 | Variable | Purpose |
 |----------|---------|
-| `WB_API_TOKEN` | API token — used as fallback for **both** promotion and analytics commands |
-| `WB_ANALYTICS_TOKEN` | Dedicated analytics token (takes priority over `WB_API_TOKEN` for analytics) |
-| `WB_AUTHORIZEV3` | Portal authorizev3 key (fallback for portal session) |
-| `WB_PORTAL_COOKIE` | Portal browser cookie (fallback for portal session) |
-| `WB_USER_ID` | Seller user ID |
-| `WB_TOKEN_EXPIRATION` | Token expiration timestamp |
+| `WB_API_TOKEN` | Bootstrap JWT for `wb auth login` (no `--token`). Defaults `--category` to `all` in bootstrap mode |
+| `WB_ANALYTICS_TOKEN` | Bootstrap JWT for `wb auth login --category analytics` (preferred over `WB_API_TOKEN` when category is analytics) |
+| `WB_AUTHORIZEV3` | Bootstrap portal authorizev3 for `wb auth login-portal` (no `--authorizev3`) |
+| `WB_PORTAL_COOKIE` | Bootstrap portal cookie for `wb auth login-portal` (no `--cookie`) |
 | `WB_RATE_LIMITER` | Set to `memory` to force the in-process limiter and skip the shared SQLite coordinator (diagnostic only) |
 
-> A single `WB_API_TOKEN` with full-scope permissions is sufficient to run all CLI commands
-> (promotion + analytics). No profile registration needed when env vars are set.
+> **First-time setup with `.env`:** drop a `.env` containing `WB_API_TOKEN=<jwt>` next to your project, then run `wb auth login` once — the CLI bootstraps a profile under all 11 categories and you never need to touch the env var at runtime again. Use `wb auth whoami` to confirm which credential is in flight.
 
 ## API Documentation
 

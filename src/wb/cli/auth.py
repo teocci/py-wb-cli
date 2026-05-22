@@ -416,6 +416,95 @@ def auth_status(
     typer.echo(f'Last used: {profile.last_used or "never"}')
 
 
+@auth_app.command('whoami')
+def auth_whoami(ctx: typer.Context) -> None:
+    """Show which credentials runtime code will use right now.
+
+    Sister to ``wb auth status`` with two extra answers:
+
+    - ``source``: ``profile-flag`` when the global ``--profile X`` flag
+      is in play, ``active-profile`` otherwise. Closes the F-19/F-20
+      diagnostic loop — agents and users who used to see env vars
+      override the active profile can now read which credential is
+      actually in flight at a glance.
+    - ``tokens``: SHA-256 fingerprint per registered category, matching
+      what ``wb rate status`` reports. Cross-reference cooldowns by
+      fingerprint without ever printing the raw token.
+
+    JSON mode supported (``wb --json auth whoami``); table mode prints
+    a compact six-line summary.
+    """
+    from wb.core.rate_limiter import compute_token_fingerprint
+
+    json_output = ctx.obj.get('json_output', False) if ctx.obj else False
+    profile_flag = ctx.obj.get('profile') if ctx.obj else None
+    source = 'profile-flag' if profile_flag else 'active-profile'
+
+    store = _get_profile_store()
+    try:
+        profile = store.get_profile(profile_flag)
+    except WbCliError as exc:
+        _emit_whoami_no_profile(json_output, source, exc)
+        return
+
+    fingerprints = {
+        category: compute_token_fingerprint(token)
+        for category, token in profile.tokens.items()
+        if token
+    }
+    has_portal = profile.has_portal_session()
+
+    if json_output:
+        import json
+        payload = {
+            'profile': profile.name,
+            'source': source,
+            'seller_id': profile.seller_id,
+            'token_type': profile.token_type,
+            'token_expires_at': profile.token_expires_at,
+            'tokens': fingerprints,
+            'portal_session': has_portal,
+            'last_used': profile.last_used,
+        }
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    typer.echo(f'Profile     : {profile.name}')
+    typer.echo(f'Source      : {source}')
+    typer.echo(f'Seller ID   : {profile.seller_id or "(unknown)"}')
+    typer.echo(f'Token type  : {profile.token_type}')
+    if fingerprints:
+        for category, fp in fingerprints.items():
+            typer.echo(f'Token ({category}): {fp}')
+    else:
+        typer.echo('Tokens      : (none)')
+    typer.echo(f'Portal      : {"configured" if has_portal else "not configured"}')
+
+
+def _emit_whoami_no_profile(json_output: bool, source: str, exc: Exception) -> None:
+    """Render the no-active-profile branch of ``wb auth whoami``.
+
+    The CLI exits 0 (this is a diagnostic, not a failure) but the
+    payload makes the missing-profile state machine-readable so agents
+    can branch on it without parsing the error message.
+    """
+    if json_output:
+        import json
+        payload = {
+            'profile': None,
+            'source': source,
+            'error': str(exc),
+            'tokens': {},
+            'portal_session': False,
+        }
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    typer.secho(
+        'No active profile. Run `wb auth login` to register one.',
+        fg=typer.colors.YELLOW,
+    )
+
+
 @auth_app.command('ping')
 def auth_ping(
         profile: str | None = typer.Option(None, '--profile', '-p', help='Profile to test'),

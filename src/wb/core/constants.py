@@ -10,6 +10,7 @@ __all__ = [
     'COMMON_API_BASE_URL',
     'SELLER_PORTAL_BASE_URL',
     'SELLER_CONTENT_BASE_URL',
+    'WB_CMP_BASE_URL',
     'DEFAULT_PROFILE_NAME',
     'CONFIG_DIR_NAME',
     'AUDIT_LOG_FILE',
@@ -74,6 +75,8 @@ __all__ = [
     'EP_PORTAL_AUTH_TOKEN',
     'EP_PORTAL_TOKENS_JRPC',
     'EP_PORTAL_TABLE_LIST',
+    'EP_PORTAL_BIDS',
+    'EP_PORTAL_BIDS_CPC',
     'EP_FUNNEL_PRODUCTS',
     'EP_FUNNEL_HISTORY',
     'EP_FUNNEL_GROUPED',
@@ -118,6 +121,9 @@ COMMON_API_BASE_URL = 'https://common-api.wildberries.ru'
 # ── Seller portal base URLs ──────────────────────────────────────────
 SELLER_PORTAL_BASE_URL = 'https://seller.wildberries.ru'
 SELLER_CONTENT_BASE_URL = 'https://seller-content.wildberries.ru'
+# Campaign-management portal (undocumented; see docs/portal/README.md).
+# Hosts the per-NM bid recommendation endpoints used by `wb portal bids`.
+WB_CMP_BASE_URL = 'https://cmp.wildberries.ru'
 
 # ── Configuration defaults ─────────────────────────────────────────────
 DEFAULT_PROFILE_NAME = 'default'
@@ -328,3 +334,7 @@ EP_PRICES_GOODS_FILTER = '/api/v2/list/goods/filter'
 EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'
 EP_PORTAL_TOKENS_JRPC = '/ns/suppliers-auth-tokens/suppliers-portal-core/api/v1/tokensjrpc'
 EP_PORTAL_TABLE_LIST = '/ns/viewer/content-card/viewer/tableListv6'
+# F-21 — bid-recommendation endpoints on the campaign-management portal.
+# Documented empirically in docs/portal/endpoints/bids.md and bids-cpc.md.
+EP_PORTAL_BIDS = '/api/v1/advert/bids'
+EP_PORTAL_BIDS_CPC = '/api/v1/advert/bids-cpc'

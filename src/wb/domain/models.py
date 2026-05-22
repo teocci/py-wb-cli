@@ -38,6 +38,10 @@ __all__ = [
     'ProductSummary',
     'CampaignOverview',
     'DailyReportRow',
+    'PortalProductCard',
+    'ReachTier',
+    'PortalBidRecommendation',
+    'parse_portal_bids_response',
 ]
 
 

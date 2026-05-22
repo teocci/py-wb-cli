@@ -361,3 +361,99 @@ class TestAuthLoginPortalEnvBootstrap:
         assert session is not None
         assert session['authorizev3'] == 'env-authv3'
         assert session['cookie'] == 'env-cookie'
+
+
+# ── auth whoami (A-3) ──────────────────────────────────────────────────
+
+
+class TestAuthWhoami:
+    """`wb auth whoami` is the F-19/F-20 diagnostic closer."""
+
+    def test_no_profile_table_mode(self, isolated_home):
+        """Empty home → friendly stderr/stdout, exit 0 (diagnostic)."""
+        result = runner.invoke(app, ['auth', 'whoami'])
+        assert result.exit_code == 0
+        assert 'No active profile' in result.output
+
+    def test_no_profile_json_mode(self, isolated_home):
+        """Empty home → JSON payload with ``profile: null`` and ``source``."""
+        result = runner.invoke(app, ['--json', 'auth', 'whoami'])
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload['profile'] is None
+        assert payload['source'] == 'active-profile'
+        assert payload['tokens'] == {}
+
+    def test_active_profile_json_includes_fingerprints(self, isolated_home):
+        """Each registered category surfaces its SHA-256[:16] fingerprint."""
+        from wb.core.rate_limiter import compute_token_fingerprint
+
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', 'promo-token')
+        store.save_token('p', 'analytics', 'analytics-token')
+        store.set_active('p')
+
+        result = runner.invoke(app, ['--json', 'auth', 'whoami'])
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload['profile'] == 'p'
+        assert payload['source'] == 'active-profile'
+        assert payload['tokens']['promotion'] == compute_token_fingerprint('promo-token')
+        assert payload['tokens']['analytics'] == compute_token_fingerprint('analytics-token')
+
+    def test_profile_flag_sets_source_to_profile_flag(self, isolated_home):
+        """Global ``--profile X`` reports ``source: profile-flag``."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('active_p')
+        store.save_token('active_p', 'promotion', 'active-token')
+        store.create_profile('other_p')
+        store.save_token('other_p', 'promotion', 'other-token')
+        store.set_active('active_p')
+
+        result = runner.invoke(
+            app, ['--json', '--profile', 'other_p', 'auth', 'whoami'],
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload['profile'] == 'other_p'
+        assert payload['source'] == 'profile-flag'
+
+    def test_stale_env_does_not_change_whoami(self, isolated_home, monkeypatch):
+        """F-19/F-20 regression: stale env doesn't change the reported fingerprint.
+
+        Before A-2 the runtime chain would have fingerprinted the stale
+        env token instead of the active profile's token. After A-2
+        whoami reports the *profile* fingerprint regardless of env.
+        """
+        from wb.core.rate_limiter import compute_token_fingerprint
+
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', 'profile-token')
+        store.set_active('p')
+
+        monkeypatch.setenv('WB_API_TOKEN', 'STALE-env-token')
+
+        result = runner.invoke(app, ['--json', 'auth', 'whoami'])
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        expected_fp = compute_token_fingerprint('profile-token')
+        stale_fp = compute_token_fingerprint('STALE-env-token')
+        assert payload['tokens']['promotion'] == expected_fp
+        assert payload['tokens']['promotion'] != stale_fp
+
+    def test_table_mode_renders_source_field(self, isolated_home):
+        """Human-readable mode prints the new Source line."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', 'tok')
+        store.set_seller_id('p', '12345')
+        store.set_active('p')
+
+        result = runner.invoke(app, ['auth', 'whoami'])
+        assert result.exit_code == 0
+        assert 'Profile' in result.output
+        assert 'Source' in result.output
+        assert 'active-profile' in result.output
+        assert '12345' in result.output

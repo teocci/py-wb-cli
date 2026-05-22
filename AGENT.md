@@ -22,13 +22,14 @@ The documented path. A JWT generated in the seller portal UI under "API tokens",
 ```bash
 wb auth login --token "<your-jwt>" --category all
 wb auth categories --json   # list valid --category values (11 categories)
+wb auth whoami              # confirm which credential is in flight
 ```
 
-Or set as a bootstrap fallback (lower priority than a registered profile):
+Or bootstrap from `.env` (single-seller setups). Run `wb auth login` once with `WB_API_TOKEN` (or `WB_ANALYTICS_TOKEN`) in the environment — the CLI materializes a profile and stops reading env at runtime:
 
 ```bash
-export WB_API_TOKEN="<your-jwt>"                  # promotion + analytics fallback
-export WB_ANALYTICS_TOKEN="<analytics-jwt>"       # analytics-only override
+export WB_API_TOKEN="<your-jwt>"
+wb auth login   # creates profile, defaults --category to 'all'
 ```
 
 ### Method 2 — Unofficial seller-portal session
@@ -44,16 +45,11 @@ Reaches data the official API does **not** expose by replaying a logged-in manag
 wb auth login-portal --authorizev3 "<key-from-devtools>" --cookie "<cookie-from-devtools>"
 ```
 
-Or set as a bootstrap fallback:
-
-```bash
-export WB_AUTHORIZEV3="<key>"
-export WB_PORTAL_COOKIE="<browser-cookie>"
-```
+Or bootstrap from `.env` (`WB_AUTHORIZEV3` + `WB_PORTAL_COOKIE`) and run `wb auth login-portal` once.
 
 Both methods can be registered on the same profile — they coexist.
 
-> Full env var list and credential resolution priority: see [CLAUDE.md](CLAUDE.md) Authentication section.
+> Post A-2, env vars are bootstrap-only: read once by `wb auth login` / `wb auth login-portal`, then ignored at runtime. Full credential model and env var list: see [CLAUDE.md](CLAUDE.md) Authentication section.
 
 **Rule of thumb:** if a documented endpoint can answer your question, use Method 1. Only fall back to Method 2 (`wb portal …`) for fields the official API genuinely does not expose.
 

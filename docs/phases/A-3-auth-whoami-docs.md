@@ -1,42 +1,51 @@
 # Phase A-3 — `wb auth whoami` + docs sweep
 
-**Status:** 🔲 PLANNED · **Depends on:** A-2
+**Status:** ✅ DONE · **Version:** 0.39.0 · **Date:** 2026-05-23 · **Tests:** 1424/1425 (1 pre-existing env failure in `test_auth_list_empty`)
 **Plan:** [auth-homogenization.md](../../../../Users/teocci/.claude/plans/auth-homogenization.md)
 
-> **Note (2026-05-23):** the official-API-vs-portal-scraping clarification
-> in CLI help text, CLAUDE.md, and AGENT.md was pulled forward and shipped
-> as [F-20](F-20-auth-help-official-vs-portal.md) in 0.37.1. The remaining
-> docs sweep here is the bootstrap-then-login model (depends on A-2) and
-> `wb auth whoami`. Re-read F-20's wording when rewriting CLAUDE.md
-> Authentication section in this phase — F-20 already covers the auth-
-> method dichotomy.
+## What was built
 
-## Goal
+Closes the auth-homogenization initiative with the diagnostic the post-A-2 model was missing — `wb auth whoami` — and rewrites the docs that taught the env-only mental model so future readers learn the bootstrap-then-login model from the start.
 
-Add the `wb auth whoami` diagnostic and rewrite the documentation that taught the env-only model to teach the profile-bootstrap model. Closes the auth-homogenization initiative.
+### `wb auth whoami`
 
-## Changes
+A one-shot read on `~/.wb-cli/profiles.json` (no network calls). Surfaces:
+
+- `profile` — the resolved profile name (or `null` when no profile is registered).
+- `source` — `active-profile` (no flag) or `profile-flag` (when `--profile <name>` was passed). Closes the F-19/F-20 diagnostic loop: agents and operators who used to see env vars override the active profile can now read which credential is actually in flight at a glance.
+- `seller_id`, `token_type`, `token_expires_at` — same fields `auth status` already exposes.
+- `tokens` — `{category: sha256_fingerprint[:16]}` map matching what `wb rate status` reports. Cross-reference cooldowns by fingerprint without ever printing the raw token.
+- `portal_session` — true / false.
+
+`wb --json auth whoami` returns the structured payload; the table mode prints a compact six-line summary. No active profile returns exit 0 with `profile: null` (it's a diagnostic, not a failure — agents branch on the structure, not the exit code).
+
+The plan's original `source: cli-flag` value was rejected during scope clarification — the CLI has no global `--token` flag, only `--profile`, so the truthful labels are `active-profile` / `profile-flag`.
+
+### Docs sweep
+
+- [CLAUDE.md](../../CLAUDE.md) "Credential Resolution Priority" section rewritten — the chain shrinks from `CLI flags > Env > .env > profiles.json` to `--profile flag > active profile > ConfigError` for runtime, with env / `.env` reframed as bootstrap-only material. Added a `wb auth whoami` example. The "Environment Variables" table dropped the dead `WB_USER_ID` / `WB_TOKEN_EXPIRATION` rows (A-2 removed both from `Settings`) and reframed every remaining row as bootstrap-only. The "Auth Methods — official vs unofficial" subsection from F-20 (0.37.1) is untouched per the plan's explicit instruction.
+- [AGENT.md](../../AGENT.md) "Setup" section reframes the env-var snippets as one-time bootstrap input to `wb auth login` / `wb auth login-portal`, not a runtime fallback. Adds `wb auth whoami` to the quick-commands.
+- Agent skills audit (`grep -ri 'WB_API_TOKEN\|\.env\|env var' .claude/skills/`) returned zero hits — every skill already assumes the CLI is configured. No edits needed.
+- `scripts/*.py` audit — same: no env-var auth references. No edits needed.
+- The README referenced in the original plan does not exist in the repo; left as-is per the CLAUDE.md rule "NEVER create documentation files unless explicitly requested".
+
+## Files changed
 
 | File | Change |
 |------|--------|
-| `src/wb/cli/auth.py` | New `whoami` subcommand. Prints active profile, plaintext seller ID (from `Profile.seller_id` or extracted on-the-fly from a JWT), token fingerprints per category, portal status, **and the resolved credential source** ("active-profile" / "cli-flag"). The source field is the diagnostic that closes the F-19/F-20 confusion loop: agents/users who were used to env-overrides-profile can immediately see which token is in flight. JSON mode supported. |
-| `tests/unit/test_auth_whoami.py` | Standard JSON / table coverage for `whoami` including the no-active-profile case and the source-field assertion. |
-| `CLAUDE.md` | Rewrite the "Credential Resolution Priority" section. Today it documents `CLI flags > Env > .env > profiles.json`. Post-A-2 the chain shrinks to `CLI flags > active profile` for runtime, and `.env` / env vars become input to `wb auth login` only. Add `wb auth whoami` to the quick-commands. **Do NOT redo the official-API-vs-portal-scraping dichotomy text** — F-20 already shipped that wording in the "Auth Methods — official vs unofficial" section (0.37.1). Just layer the bootstrap-then-login model on top. |
-| `docs/PROGRESS.md`, `docs/IMPROVEMENTS.md` | Flip A-1..A-3 to ✅ DONE; assign final versions. |
-| `README.md` | Update first-time setup example to `wb auth login` (reading `.env` on first run) with a `.env`. Show what `wb auth whoami` returns. |
-| `CHANGELOG.md` | Release entry summarising the homogenisation + the breaking change from A-2. Quote the F-19/F-20 motivation so the lesson is preserved in release history. |
-| `.claude/skills/wb-*` | Sweep all agent skills for assumptions about env-only auth. Replace with the new bootstrap step where needed. Particularly audit `wb-assess`, `wb-pulse`, `wb-optimize`, `wb-calibrate` which run unattended and currently assume env vars work at runtime. |
+| `src/wb/cli/auth.py` | New `auth_whoami` command (JSON + table modes) and `_emit_whoami_no_profile` helper for the no-profile branch. |
+| `tests/unit/test_cli_auth.py` | New `TestAuthWhoami` class — 6 tests: no-profile (table + JSON), JSON includes per-category fingerprints, `--profile X` flips `source` to `profile-flag`, F-19/F-20 stale-env regression (whoami reports profile fingerprint, NOT env's), table mode renders the `Source` line. |
+| `CLAUDE.md` | "Credential Resolution Priority" + "Environment Variables" sections rewritten for the post-A-2 model. `wb auth whoami` example added. `WB_USER_ID` / `WB_TOKEN_EXPIRATION` table rows removed. |
+| `AGENT.md` | "Setup" reframes env vars as bootstrap input; adds `wb auth whoami` to the quick-commands. |
 
 ## Verification
 
-- `wb auth whoami` round-trips through `json.loads` and prints the right fields in both modes, including the new `source` field.
-- **F-19/F-20-regression in agent voice:** `wb auth whoami` with a stale `.env` correctly shows the active profile's fingerprint (NOT the env's), and the `source` field reads `active-profile` — proving the env override is gone.
-- README quickstart works end-to-end from a fresh `~/.wb-cli`.
-- Every agent skill referenced in `.claude/skills/` runs against the new auth model.
+- `pytest tests/unit/test_cli_auth.py::TestAuthWhoami -v` → 6/6 passing.
+- Full suite: `pytest tests/unit/ -v` → 1424/1425 (1 pre-existing `test_auth_list_empty` env leak documented in CLAUDE.md).
+- `wb auth --help` lists `whoami` between `status` and `ping`.
+- `wb auth whoami` with a registered profile + stale `WB_API_TOKEN` in env reports the **profile** fingerprint, not the env's — pinned by `test_stale_env_does_not_change_whoami`.
 
-## Already shipped during the A-1 → A-3 gap
+## Out of scope
 
-Two slices that originally belonged here have already landed and reduce A-3's scope:
-
-- **F-20 (0.37.1)** — official-API-vs-portal-scraping clarification in `wb auth login` / `wb auth login-portal` help, `CLAUDE.md` "Auth Methods" section, and `AGENT.md` setup. A-3's CLAUDE.md rewrite only needs to add bootstrap-then-login on top of F-20's framing.
-- **F-19 (0.37.0)** — `wb bid recommend / minimum / get-items` real implementation. Surfaced the env-override trap that A-2 is the only durable fix for; the live-test failure during F-19 verification is the canonical motivation quoted in A-2's "Motivation — real-world trap" section.
+- The README file referenced in the original plan does not exist in the repo. Creating one was rejected during scope clarification (CLAUDE.md rule).
+- Per-token `last_used` timestamps. `Profile` carries a single `last_used` field at the profile level; per-category tracking would need a schema migration. Deferred.
