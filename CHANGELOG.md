@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.36.0 (2026-05-22)
+- A-1: `wb auth login --token <JWT>` now decodes the token payload (no signature verification) and auto-populates `Profile.seller_id` (from claim `oid`), `Profile.token_expires_at` (from `exp`), and auto-detects `token_type='test'` when `t: true`. Profiles are auto-named `{seller_id}_{token_type}` (e.g. `668554_base`) when `--profile` is omitted; auto-name collisions error out and require explicit `--profile`. Manual `--profile` values are slug-validated against `^[a-z0-9][a-z0-9_]*$`. `auth status` and `auth list` (text + JSON) now surface `seller_id` and `token_expires_at`. Token-type preservation on re-login is retained: when `--token-type` is omitted and the JWT doesn't mark the token as test, an existing profile's `token_type` is kept. New `ProfileStore` helpers: `find_all_by_seller_id`, `set_seller_id`, `set_token_expires_at`. `save_portal_session` also auto-copies `user_id` → `seller_id`. Earlier A-1 spec referenced JWT claim `sid` as the seller key — corrected to `oid` (decoded against real production tokens). F-10's use of `sid` as a rate-limit scope key is flagged for a separate audit. Non-breaking: existing profiles continue to load with `seller_id=None`, `token_expires_at=None` until re-login backfills them.
+
 ## v0.35.1 (2026-05-06)
 - I-19: `generate_daily_wb_report.py` rewritten to use a single `wb stats daily-report --from X --to Y` call; adds `--days N` and `--from`/`--to` backfill modes (max 7 days); drops dual-subprocess orchestration and mid-run rate-status check; range-aware CSV and artifact naming; 634 → 296 lines.
 

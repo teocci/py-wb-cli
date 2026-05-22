@@ -95,7 +95,12 @@
       "Bash(.venv/Scripts/python -c \"from wb.cli.rate import rate_app; print\\('imports ok'\\)\")",
       "Bash(.venv/Scripts/python -c \"from pathlib import Path; print\\(len\\(Path\\('tests/unit/test_cli_rate.py'\\).read_text\\(encoding='utf-8'\\).splitlines\\(\\)\\)\\)\")",
       "Bash(git stash *)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(Get-ChildItem -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\tests\\\\unit\" -File)",
+      "Bash(Select-Object Name)",
+      "Bash(ConvertTo-Json)",
+      "Bash(Get-ChildItem -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\docs\\\\\" -MaxDepth 1 | Select-Object Name)",
+      "PowerShell(ls -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\docs\\\\phases\\\\\" | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object { $_.FullName })"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

@@ -448,3 +448,80 @@ class TestProfileStore:
         store = ProfileStore(tmp_path)
         with pytest.raises(ConfigError, match='does not exist'):
             store.set_token_type('ghost', 'base')
+
+    # ── seller_id / token_expires_at (A-1) ────────────────────────────
+
+    def test_save_portal_session_auto_populates_seller_id(self, tmp_path):
+        """save_portal_session copies user_id to Profile.seller_id."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        store.save_portal_session('p', authorizev3='k', user_id='55555')
+        assert store.get_profile('p').seller_id == '55555'
+
+    def test_save_portal_session_without_user_id_leaves_seller_id_none(self, tmp_path):
+        """When user_id is omitted, seller_id stays None."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        store.save_portal_session('p', authorizev3='k')
+        assert store.get_profile('p').seller_id is None
+
+    def test_find_all_by_seller_id_returns_multiple(self, tmp_path):
+        """A seller with multiple profiles returns all of them."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p1')
+        store.set_seller_id('p1', 'S1')
+        store.create_profile('p2')
+        store.set_seller_id('p2', 'S1')
+        store.create_profile('p3')
+        store.set_seller_id('p3', 'S2')
+
+        matches = store.find_all_by_seller_id('S1')
+        assert sorted(p.name for p in matches) == ['p1', 'p2']
+
+    def test_find_all_by_seller_id_returns_empty_for_unknown(self, tmp_path):
+        """Unknown seller_id returns an empty list, not None."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        assert store.find_all_by_seller_id('no-such-seller') == []
+
+    def test_set_seller_id_persists(self, tmp_path):
+        """set_seller_id writes to disk and reloads correctly."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        store.set_seller_id('p', '99')
+
+        reloaded = ProfileStore(tmp_path).get_profile('p')
+        assert reloaded.seller_id == '99'
+
+    def test_set_seller_id_missing_profile_raises(self, tmp_path):
+        """set_seller_id raises ConfigError when the profile doesn't exist."""
+        store = ProfileStore(tmp_path)
+        with pytest.raises(ConfigError, match='does not exist'):
+            store.set_seller_id('ghost', 'S1')
+
+    def test_set_token_expires_at_persists(self, tmp_path):
+        """set_token_expires_at writes to disk and reloads correctly."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        store.set_token_expires_at('p', 1790136818)
+
+        reloaded = ProfileStore(tmp_path).get_profile('p')
+        assert reloaded.token_expires_at == 1790136818
+
+    def test_set_token_expires_at_missing_profile_raises(self, tmp_path):
+        """set_token_expires_at raises ConfigError when the profile doesn't exist."""
+        store = ProfileStore(tmp_path)
+        with pytest.raises(ConfigError, match='does not exist'):
+            store.set_token_expires_at('ghost', 123)
+
+    def test_profile_token_expires_at_roundtrip(self, tmp_path):
+        """token_expires_at survives to_dict → from_dict via the store."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('p')
+        store.set_token_expires_at('p', 1234567890)
+        assert ProfileStore(tmp_path).get_profile('p').token_expires_at == 1234567890
+
+    def test_to_dict_omits_token_expires_at_when_none(self, tmp_path):
+        """to_dict does not include token_expires_at when unset."""
+        profile = Profile(name='p')
+        assert 'token_expires_at' not in profile.to_dict()

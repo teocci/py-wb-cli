@@ -126,3 +126,120 @@ class TestAuthListShowsTokenType:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload['token_type'] == 'base'
+
+
+# ── auth login — JWT-driven auto-naming (A-1) ──────────────────────────
+
+
+class TestAuthLoginAutoNaming:
+    """`wb auth login` decodes the JWT, auto-names the profile, slug-validates --profile."""
+
+    def test_login_without_profile_uses_oid_and_type(self, isolated_home):
+        """Auto-named profile is '{oid}_{token_type}' with seller_id + exp populated."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(
+                app, ['auth', 'login', '--token', TOKEN_PROD_BASE, '--category', 'all'],
+            )
+
+        assert result.exit_code == 0, result.output
+        store = ProfileStore(isolated_home / '.wb-cli')
+        profile = store.get_profile('668554_base')
+        assert profile.seller_id == '668554'
+        assert profile.token_expires_at == 1790136818
+        assert profile.token_type == 'base'
+
+    def test_login_collision_requires_explicit_profile(self, isolated_home):
+        """Auto-name collision exits with VALIDATION_ERROR and instructs --profile."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('668554_base')
+
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(app, ['auth', 'login', '--token', TOKEN_PROD_BASE])
+
+        assert result.exit_code == 2
+        assert 'already exists' in result.output
+        assert '--profile' in result.output
+
+    def test_login_explicit_profile_overrides_auto_name(self, isolated_home):
+        """User-supplied --profile is used as-is (and slug-validated)."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(
+                app, ['auth', 'login', '--token', TOKEN_PROD_BASE,
+                      '--profile', 'my_seller', '--category', 'all'],
+            )
+
+        assert result.exit_code == 0, result.output
+        store = ProfileStore(isolated_home / '.wb-cli')
+        # The explicit name was used, not the auto-generated one.
+        assert store.get_profile('my_seller').seller_id == '668554'
+
+    @pytest.mark.parametrize(
+        'bad_name',
+        ['My Profile', 'has-dash', 'UPPER', 'with/slash', 'with.dot', 'a b', ''],
+        ids=['space', 'dash', 'upper', 'slash', 'dot', 'middle-space', 'empty'],
+    )
+    def test_login_invalid_profile_slug_rejected(self, isolated_home, bad_name):
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(
+                app, ['auth', 'login', '--token', 'tok', '--profile', bad_name],
+            )
+        assert result.exit_code == 2
+        assert 'Invalid profile name' in result.output
+
+    def test_login_test_token_auto_sets_token_type(self, isolated_home):
+        """JWT with `t: true` auto-sets token_type='test' (and the profile name suffix)."""
+        from tests.unit.test_token_utils import TOKEN_TEST
+
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(app, ['auth', 'login', '--token', TOKEN_TEST])
+
+        assert result.exit_code == 0, result.output
+        store = ProfileStore(isolated_home / '.wb-cli')
+        profile = store.get_profile('999_test')
+        assert profile.token_type == 'test'
+
+    def test_login_undecodable_token_falls_back_to_default(self, isolated_home):
+        """Token that isn't a JWT → no claims → uses active/default profile name."""
+        with patch(PATCH_VALIDATE, return_value=True):
+            result = runner.invoke(
+                app, ['auth', 'login', '--token', 'not-a-jwt', '--category', 'all'],
+            )
+
+        assert result.exit_code == 0, result.output
+        store = ProfileStore(isolated_home / '.wb-cli')
+        # No oid → fell back to active profile name (which is 'default' on a fresh install)
+        profile = store.get_profile('default')
+        assert profile.seller_id is None
+        assert profile.token_expires_at is None
+
+    def test_status_json_includes_seller_id_and_expires(self, isolated_home):
+        """`wb auth status --json` surfaces seller_id and token_expires_at."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('default')
+        store.save_token('default', 'promotion', 'tok')
+        store.set_seller_id('default', '7777')
+        store.set_token_expires_at('default', 1790136818)
+
+        result = runner.invoke(app, ['--json', 'auth', 'status'])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data['seller_id'] == '7777'
+        assert data['token_expires_at'] == 1790136818
+
+    def test_list_json_includes_seller_id(self, isolated_home):
+        """`wb auth list --json` surfaces seller_id and token_expires_at per entry."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', 'tok')
+        store.set_seller_id('p', '8888')
+
+        result = runner.invoke(app, ['--json', 'auth', 'list'])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert any(e['name'] == 'p' and e['seller_id'] == '8888' for e in data)

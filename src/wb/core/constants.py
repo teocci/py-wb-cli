@@ -39,6 +39,8 @@ __all__ = [
     'CATEGORY_DISPLAY_NAMES',
     'TOKEN_TYPES',
     'DEFAULT_TOKEN_TYPE',
+    'PROFILE_SLUG_RE',
+    'PROFILE_NAME_TEMPLATE',
     'PING_PATH',
     'PORTAL_AUTH_HEADER',
     'PORTAL_SESSION_HEADER',
@@ -103,6 +105,7 @@ __all__ = [
     'EP_PRICES_GOODS_FILTER',
 ]
 
+import re
 from enum import IntEnum
 
 # ── API base URLs ──────────────────────────────────────────────────────
@@ -222,6 +225,15 @@ TOKEN_TYPES: tuple[str, ...] = ('personal', 'service', 'base', 'test')
 # assumption: over-throttling Personal is harmless; under-throttling Base
 # trips a 30-minute lockout on the first call.
 DEFAULT_TOKEN_TYPE: str = 'base'
+
+# ── Profile naming (A-1) ─────────────────────────────────────────────
+# Slug: lowercase letters/digits/underscore, starts with letter or digit.
+# Leading digit OK because seller_id (oid) is numeric (e.g. '668554_base').
+PROFILE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9_]*$')
+
+# Auto-generated profile name format: '{seller_id}_{token_type}'.
+# Example: '668554_base', '25169_personal'.
+PROFILE_NAME_TEMPLATE = '{seller_id}_{token_type}'
 
 # ── Connection check ─────────────────────────────────────────────────
 PING_PATH = '/ping'

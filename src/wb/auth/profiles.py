@@ -37,6 +37,11 @@ class Profile:
             for legacy profiles missing the field.
         created_at: ISO timestamp of profile creation.
         last_used: ISO timestamp of last usage.
+        seller_id: WB seller account ID. Auto-populated from JWT claim
+            ``oid`` at ``auth login`` time, or from the portal session
+            ``user_id`` at ``auth login-portal`` time.
+        token_expires_at: Unix timestamp from JWT claim ``exp``. Auto-
+            populated at ``auth login`` time.
     """
 
     name: str
@@ -46,6 +51,7 @@ class Profile:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_used: str | None = None
     seller_id: str | None = None
+    token_expires_at: int | None = None
 
     def has_token(self, category: str) -> bool:
         """Check if profile has a token for the given category."""
@@ -130,6 +136,8 @@ class Profile:
             data['portal_session'] = self.portal_session
         if self.seller_id:
             data['seller_id'] = self.seller_id
+        if self.token_expires_at:
+            data['token_expires_at'] = self.token_expires_at
         return data
 
     @classmethod
@@ -147,6 +155,7 @@ class Profile:
             created_at=data.get('created_at', datetime.now(timezone.utc).isoformat()),
             last_used=data.get('last_used'),
             seller_id=data.get('seller_id'),
+            token_expires_at=data.get('token_expires_at'),
         )
 
 
@@ -279,7 +288,12 @@ class ProfileStore:
             user_id: str | None = None,
             exp: str | None = None,
     ) -> None:
-        """Save portal session credentials to a profile, creating it if needed."""
+        """Save portal session credentials to a profile, creating it if needed.
+
+        When ``user_id`` is supplied, it is also stored on
+        :attr:`Profile.seller_id` — the portal user_id is the seller
+        account identifier.
+        """
         if profile_name not in self._profiles:
             self.create_profile(profile_name)
         profile = self._profiles[profile_name]
@@ -290,6 +304,41 @@ class ProfileStore:
             user_id=user_id,
             exp=exp,
         )
+        if user_id:
+            profile.seller_id = user_id
+        self._save()
+
+    def find_all_by_seller_id(self, seller_id: str) -> list[Profile]:
+        """Return every profile whose ``seller_id`` matches.
+
+        Args:
+            seller_id: Seller account ID to look up.
+
+        Returns:
+            Profiles with matching ``seller_id``. Empty list if none.
+        """
+        return [p for p in self._profiles.values() if p.seller_id == seller_id]
+
+    def set_seller_id(self, profile_name: str, seller_id: str) -> None:
+        """Set ``seller_id`` on an existing profile and persist.
+
+        Raises:
+            ConfigError: When the profile doesn't exist.
+        """
+        if profile_name not in self._profiles:
+            raise ConfigError(f'Profile {profile_name!r} does not exist')
+        self._profiles[profile_name].seller_id = seller_id
+        self._save()
+
+    def set_token_expires_at(self, profile_name: str, expires_at: int) -> None:
+        """Set ``token_expires_at`` (unix ts) on an existing profile and persist.
+
+        Raises:
+            ConfigError: When the profile doesn't exist.
+        """
+        if profile_name not in self._profiles:
+            raise ConfigError(f'Profile {profile_name!r} does not exist')
+        self._profiles[profile_name].token_expires_at = expires_at
         self._save()
 
     def delete_profile(self, name: str) -> None:

@@ -5,11 +5,16 @@ from __future__ import annotations
 import typer
 
 from wb.auth.profiles import ProfileStore
+from wb.auth.token_utils import extract_token_claims
 from wb.auth.token_validation import validate_promotion_token
 from wb.core.config import Settings
 from wb.core.constants import (
     ALL_CATEGORY,
+    DEFAULT_PROFILE_NAME,
+    DEFAULT_TOKEN_TYPE,
     ExitCode,
+    PROFILE_NAME_TEMPLATE,
+    PROFILE_SLUG_RE,
     TOKEN_CATEGORIES,
     TOKEN_TYPES,
 )
@@ -29,10 +34,67 @@ def _get_profile_store() -> ProfileStore:
     return ProfileStore(settings.config_dir)
 
 
+def _validate_slug(name: str) -> None:
+    """Reject profile names with spaces or special characters.
+
+    Raises:
+        ValidationError: If ``name`` doesn't match :data:`PROFILE_SLUG_RE`.
+    """
+    if not PROFILE_SLUG_RE.match(name):
+        raise ValidationError(
+            f'Invalid profile name {name!r}. Must match {PROFILE_SLUG_RE.pattern} '
+            f'(lowercase letters/digits/underscores; no spaces or special chars).'
+        )
+
+
+def _resolve_profile_name(
+        explicit: str | None,
+        claims: dict,
+        resolved_type: str,
+        store: ProfileStore,
+) -> str:
+    """Pick the profile name for an ``auth login`` invocation.
+
+    - When ``explicit`` is given: slug-validate and return it.
+    - When ``explicit`` is None and ``claims['seller_id']`` is known:
+      return ``'{seller_id}_{token_type}'``. Raise on collision.
+    - When ``explicit`` is None and seller_id is unknown (undecodable
+      token): fall back to the active profile name, else
+      :data:`DEFAULT_PROFILE_NAME`.
+
+    Raises:
+        ValidationError: On invalid slug or auto-name collision.
+    """
+    if explicit is not None:
+        _validate_slug(explicit)
+        return explicit
+
+    seller_id = claims.get('seller_id')
+    if not seller_id:
+        return store.active_profile_name or DEFAULT_PROFILE_NAME
+
+    candidate = PROFILE_NAME_TEMPLATE.format(
+        seller_id=seller_id, token_type=resolved_type,
+    )
+    if any(p.name == candidate for p in store.list_profiles()):
+        raise ValidationError(
+            f'Profile {candidate!r} already exists for seller {seller_id}. '
+            f'Use --profile <name> to choose a different name.'
+        )
+    return candidate
+
+
 @auth_app.command('login')
 def auth_login(
         ctx: typer.Context,
-        profile: str = typer.Option('default', '--profile', '-p', help='Profile name'),
+        profile: str | None = typer.Option(
+            None, '--profile', '-p',
+            help=(
+                'Profile name (slug: lowercase letters/digits/underscore). '
+                'When omitted, auto-named "{seller_id}_{token_type}" '
+                'from the JWT.'
+            ),
+        ),
         category: str = typer.Option(
             'promotion', '--category', '-c',
             help='Token category (run `wb auth categories` to list valid values)',
@@ -42,13 +104,20 @@ def auth_login(
             None, '--token-type',
             help=(
                 'Token type for rate-limit prior selection: '
-                f'{", ".join(TOKEN_TYPES)}. Defaults to "base" for new '
-                'profiles; existing token_type kept if not specified.'
+                f'{", ".join(TOKEN_TYPES)}. When omitted, falls back to '
+                '"test" if the JWT marks the token as test, otherwise to '
+                '"base" (the safe default).'
             ),
         ),
         skip_validation: bool = typer.Option(False, '--skip-validation', help='Skip token validation'),
 ) -> None:
-    """Store an API token for a profile."""
+    """Store an API token for a profile.
+
+    The token is decoded (payload-only) to extract:
+        - ``oid``  → ``Profile.seller_id``
+        - ``exp``  → ``Profile.token_expires_at``
+        - ``t``    → auto-detects ``token_type='test'`` when true
+    """
     store = _get_profile_store()
 
     if token_type is not None and token_type not in TOKEN_TYPES:
@@ -69,24 +138,57 @@ def auth_login(
             typer.secho(f'Validation failed: {exc}', fg=typer.colors.RED, err=True)
             raise typer.Abort() from exc
 
-    store.save_token(profile, category, token)
-    if token_type is not None:
-        try:
-            store.set_token_type(profile, token_type)
-        except ValidationError as exc:  # pragma: no cover — guarded above
-            typer.secho(str(exc), fg=typer.colors.RED, err=True)
-            raise typer.Exit(code=ExitCode.VALIDATION_ERROR) from exc
-    store.set_active(profile)
+    claims = extract_token_claims(token)
+    is_test = claims['is_test']
 
-    saved_type = store.get_profile(profile).token_type
+    # Tentative type for auto-name resolution (`{oid}_{type}`).
+    tentative_type = token_type or ('test' if is_test else DEFAULT_TOKEN_TYPE)
+
+    try:
+        resolved_profile = _resolve_profile_name(profile, claims, tentative_type, store)
+    except ValidationError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR) from exc
+
+    # Final type: explicit flag wins, then JWT test, else preserve existing
+    # (re-login on a known profile must not reset token_type to the default),
+    # else default.
+    existing = next(
+        (p for p in store.list_profiles() if p.name == resolved_profile),
+        None,
+    )
+    if token_type is not None:
+        resolved_type = token_type
+    elif is_test:
+        resolved_type = 'test'
+    elif existing is not None:
+        resolved_type = existing.token_type
+    else:
+        resolved_type = DEFAULT_TOKEN_TYPE
+
+    store.save_token(resolved_profile, category, token)
+    try:
+        store.set_token_type(resolved_profile, resolved_type)
+    except ValidationError as exc:  # pragma: no cover — guarded above
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR) from exc
+    if claims['seller_id']:
+        store.set_seller_id(resolved_profile, claims['seller_id'])
+    if claims['expires_at']:
+        store.set_token_expires_at(resolved_profile, claims['expires_at'])
+    store.set_active(resolved_profile)
+
+    saved_type = store.get_profile(resolved_profile).token_type
     if category == ALL_CATEGORY:
         typer.secho(
-            f'Token saved to profile {profile!r} [all {len(TOKEN_CATEGORIES)} categories, type={saved_type}].',
+            f'Token saved to profile {resolved_profile!r} '
+            f'[all {len(TOKEN_CATEGORIES)} categories, type={saved_type}].',
             fg=typer.colors.GREEN,
         )
     else:
         typer.secho(
-            f'Token saved to profile {profile!r} [{category}, type={saved_type}].',
+            f'Token saved to profile {resolved_profile!r} '
+            f'[{category}, type={saved_type}].',
             fg=typer.colors.GREEN,
         )
 
@@ -130,6 +232,8 @@ def auth_list(
                 'active': p.name == store.active_profile_name,
                 'token_type': p.token_type,
                 'categories': list(p.tokens.keys()),
+                'seller_id': p.seller_id,
+                'token_expires_at': p.token_expires_at,
                 'created_at': p.created_at,
                 'last_used': p.last_used,
             })
@@ -142,13 +246,17 @@ def auth_list(
     table.add_column('Profile', style='cyan')
     table.add_column('Active', justify='center')
     table.add_column('Type', style='magenta')
+    table.add_column('Seller ID', style='yellow')
     table.add_column('Categories', style='green')
     table.add_column('Created', style='dim')
 
     for p in profiles:
         is_active = '*' if p.name == store.active_profile_name else ''
         categories = ', '.join(p.tokens.keys()) or 'none'
-        table.add_row(p.name, is_active, p.token_type, categories, p.created_at[:10])
+        table.add_row(
+            p.name, is_active, p.token_type,
+            p.seller_id or '', categories, p.created_at[:10],
+        )
 
     _stdout_console.print(table)
 
@@ -185,6 +293,8 @@ def auth_status(
             'profile': profile.name,
             'token_type': profile.token_type,
             'categories': list(profile.tokens.keys()),
+            'seller_id': profile.seller_id,
+            'token_expires_at': profile.token_expires_at,
             'portal_session': has_portal,
             'last_used': profile.last_used,
         }
@@ -202,13 +312,19 @@ def auth_status(
     typer.echo(f'Active profile: {profile.name}')
     typer.echo(f'Token type: {profile.token_type}')
     typer.echo(f'Token categories: {", ".join(profile.tokens.keys()) or "none"}')
+    if profile.seller_id:
+        typer.echo(f'Seller ID: {profile.seller_id}')
+    if profile.token_expires_at:
+        from datetime import datetime, timezone
+        exp_dt = datetime.fromtimestamp(profile.token_expires_at, tz=timezone.utc)
+        typer.echo(f'Token expires: {exp_dt.isoformat()}')
     typer.echo(f'Portal session: {"yes" if has_portal else "no"}')
     if has_portal:
         ps = profile.get_portal_session()
         if not ps:
             typer.secho('Error: Portal session data is missing or corrupted.', fg=typer.colors.RED, err=True)
             raise typer.Exit(code=ExitCode.CONFIG_ERROR)
-        
+
         typer.echo(f'Portal user ID: {ps.get("user_id", "unknown")}')
     typer.echo(f'Last used: {profile.last_used or "never"}')
 
