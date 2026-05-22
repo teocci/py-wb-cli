@@ -131,6 +131,7 @@ The CLI supports two completely different authentication paths. They are **not i
 
    Used only to reach data the official API does not expose. Today that means:
    - `wb portal products` — richer per-product cards via the portal `tableListv6` endpoint (vendor codes, stocks, ratings, feedback counts).
+   - `wb portal bids` — CPC/CPM bid recommendations with per-tier reach forecasts via `cmp.wildberries.ru/api/v1/advert/bids[-cpc]`. The only bid-recommendation surface for CPC campaigns (official `/api/advert/v0/bids/recommendations` is CPM-only). Empiric reference: [docs/portal/](docs/portal/).
    - `wb auth generate-token` — render-token generation via the portal JRPC endpoint.
 
    Both `--authorizev3` and `--cookie` are required (the `wb-seller-lk` session token is NOT needed).
@@ -185,6 +186,7 @@ Post A-2, all `WB_*` credential env vars are **bootstrap-only**: they are read o
 | Promotion `/api/advert/v2/adverts` | Per-item current bids | Need separate bid endpoint | Live per-NM bids already in `adverts[].nm_settings[].bids_kopecks.{search,recommendations}` — `wb bid get-items` reads these directly with zero extra API calls (F-19) |
 | Analytics `search-report` | Any API token | Works with standard token | Requires `Analytics/Advanced` scope — returns HTTP 403 |
 | Promotion `/adv/v1/budget/deposit` | `sum` field unit | Kopecks | Rubles — minimum 1000, must be multiple of 50 |
+| Portal `cmp.wildberries.ru/api/v1/advert/bids[-cpc]` (UNOFFICIAL) | Response shape | One stable shape per endpoint | Top-level keys are driven by `bid_type`: `1` (manual) → `{combined: [...]}`; `2` (unified) → `{search: [...], recommendations: [...]}`. CPC and CPM endpoints share these rules. `wb portal bids` parser surfaces whatever placement keys WB returns (F-21). |
 
 ## CLI Output Rendering Pattern
 
