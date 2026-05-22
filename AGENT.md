@@ -47,7 +47,7 @@ wb auth login-portal --authorizev3 "<key-from-devtools>" --cookie "<cookie-from-
 
 Or bootstrap from `.env` (`WB_AUTHORIZEV3` + `WB_PORTAL_COOKIE`) and run `wb auth login-portal` once.
 
-Both methods can be registered on the same profile — they coexist.
+Both methods can be registered on the same profile — they coexist. `Profile.seller_id` (from JWT `oid`) and `Profile.portal_user_id` (from the portal session) are kept separate; `wb auth refresh` re-decodes the stored JWT to repair a profile whose `seller_id` was clobbered by a pre-0.40.1 `wb auth login-portal` (F-22).
 
 > Post A-2, env vars are bootstrap-only: read once by `wb auth login` / `wb auth login-portal`, then ignored at runtime. Full credential model and env var list: see [CLAUDE.md](CLAUDE.md) Authentication section.
 

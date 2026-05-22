@@ -391,7 +391,7 @@ def auth_status(
                 typer.secho('Error: Portal session data is missing or corrupted.', fg=typer.colors.RED, err=True)
                 raise typer.Exit(code=ExitCode.CONFIG_ERROR)
 
-            data['portal_user_id'] = ps.get('user_id')
+            data['portal_user_id'] = profile.portal_user_id
             data['portal_exp'] = ps.get('exp')
         typer.echo(json.dumps(data, indent=2))
         return
@@ -412,7 +412,7 @@ def auth_status(
             typer.secho('Error: Portal session data is missing or corrupted.', fg=typer.colors.RED, err=True)
             raise typer.Exit(code=ExitCode.CONFIG_ERROR)
 
-        typer.echo(f'Portal user ID: {ps.get("user_id", "unknown")}')
+        typer.echo(f'Portal user ID: {profile.portal_user_id or "unknown"}')
     typer.echo(f'Last used: {profile.last_used or "never"}')
 
 
@@ -503,6 +503,97 @@ def _emit_whoami_no_profile(json_output: bool, source: str, exc: Exception) -> N
         'No active profile. Run `wb auth login` to register one.',
         fg=typer.colors.YELLOW,
     )
+
+
+@auth_app.command('refresh')
+def auth_refresh(
+        ctx: typer.Context,
+        profile: str | None = typer.Option(
+            None, '--profile', '-p',
+            help='Profile to refresh (default: active profile).',
+        ),
+) -> None:
+    """Re-decode the stored JWT and refresh ``seller_id`` + ``token_expires_at``.
+
+    The CLI parses the stored OFFICIAL WB API token (JWT) for the
+    target profile and re-applies the ``oid`` → ``seller_id`` and
+    ``exp`` → ``token_expires_at`` mapping. Use this after upgrading
+    from a CLI version where ``wb auth login-portal`` clobbered
+    ``seller_id`` with the portal user id (F-22).
+
+    The portal session is NOT touched — ``portal_user_id`` keeps the
+    value written by ``wb auth login-portal``.
+
+    Exits ``AUTH_FAILURE`` when the profile has no JWT registered.
+    """
+    json_output = ctx.obj.get('json_output', False) if ctx.obj else False
+    store = _get_profile_store()
+
+    try:
+        target = store.get_profile(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    token = _pick_refresh_token(target.tokens)
+    if token is None:
+        typer.secho(
+            f'Profile {target.name!r} has no JWT registered. '
+            f'Run `wb auth login --token <JWT> --profile {target.name}` first.',
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=ExitCode.AUTH_FAILURE)
+
+    before = {
+        'seller_id': target.seller_id,
+        'token_expires_at': target.token_expires_at,
+    }
+    claims = extract_token_claims(token)
+
+    if claims['seller_id']:
+        store.set_seller_id(target.name, claims['seller_id'])
+    if claims['expires_at']:
+        store.set_token_expires_at(target.name, claims['expires_at'])
+
+    refreshed = store.get_profile(target.name)
+    after = {
+        'seller_id': refreshed.seller_id,
+        'token_expires_at': refreshed.token_expires_at,
+    }
+
+    if json_output:
+        import json
+        typer.echo(json.dumps({
+            'profile': refreshed.name,
+            'before': before,
+            'after': after,
+        }, indent=2, ensure_ascii=False))
+        return
+
+    typer.echo(f'Profile     : {refreshed.name}')
+    typer.echo(f'Seller ID   : {before["seller_id"] or "(unset)"} → {after["seller_id"] or "(unset)"}')
+    typer.echo(
+        f'Token expires: {before["token_expires_at"] or "(unset)"} → '
+        f'{after["token_expires_at"] or "(unset)"}'
+    )
+
+
+def _pick_refresh_token(tokens: dict[str, str]) -> str | None:
+    """Return a JWT to decode for ``wb auth refresh``.
+
+    All tokens on a profile share the same JWT identity in practice
+    (same ``oid`` / ``exp``), so any registered token works. Prefer
+    ``promotion`` for parity with ``auth login``'s validation path,
+    then ``all``, then any other category.
+    """
+    for category in ('promotion', ALL_CATEGORY):
+        if tokens.get(category):
+            return tokens[category]
+    for token in tokens.values():
+        if token:
+            return token
+    return None
 
 
 @auth_app.command('ping')

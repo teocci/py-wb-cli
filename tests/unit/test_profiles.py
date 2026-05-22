@@ -449,21 +449,63 @@ class TestProfileStore:
         with pytest.raises(ConfigError, match='does not exist'):
             store.set_token_type('ghost', 'base')
 
-    # ── seller_id / token_expires_at (A-1) ────────────────────────────
+    # ── seller_id / token_expires_at (A-1) / portal_user_id (F-22) ───
 
-    def test_save_portal_session_auto_populates_seller_id(self, tmp_path):
-        """save_portal_session copies user_id to Profile.seller_id."""
+    def test_save_portal_session_writes_portal_user_id_not_seller_id(self, tmp_path):
+        """save_portal_session writes user_id to portal_user_id, not seller_id (F-22)."""
         store = ProfileStore(tmp_path)
         store.create_profile('p')
         store.save_portal_session('p', authorizev3='k', user_id='55555')
-        assert store.get_profile('p').seller_id == '55555'
+        profile = store.get_profile('p')
+        assert profile.portal_user_id == '55555'
+        assert profile.seller_id is None
 
-    def test_save_portal_session_without_user_id_leaves_seller_id_none(self, tmp_path):
-        """When user_id is omitted, seller_id stays None."""
+    def test_save_portal_session_without_user_id_leaves_both_none(self, tmp_path):
+        """When user_id is omitted, both seller_id and portal_user_id stay None."""
         store = ProfileStore(tmp_path)
         store.create_profile('p')
         store.save_portal_session('p', authorizev3='k')
-        assert store.get_profile('p').seller_id is None
+        profile = store.get_profile('p')
+        assert profile.seller_id is None
+        assert profile.portal_user_id is None
+
+    def test_save_portal_session_does_not_clobber_existing_seller_id(self, tmp_path):
+        """F-22 regression: login-portal must not overwrite JWT-derived seller_id."""
+        store = ProfileStore(tmp_path)
+        store.create_profile('25169_personal')
+        store.set_seller_id('25169_personal', '25169')
+
+        store.save_portal_session(
+            '25169_personal',
+            authorizev3='k',
+            user_id='10799201',
+        )
+
+        profile = store.get_profile('25169_personal')
+        assert profile.seller_id == '25169'
+        assert profile.portal_user_id == '10799201'
+
+    def test_portal_user_id_persists_through_save_reload(self, tmp_path):
+        """portal_user_id survives a ProfileStore reload (to_dict/from_dict roundtrip)."""
+        store1 = ProfileStore(tmp_path)
+        store1.create_profile('p')
+        store1.save_portal_session('p', authorizev3='k', user_id='12345')
+
+        store2 = ProfileStore(tmp_path)
+        assert store2.get_profile('p').portal_user_id == '12345'
+
+    def test_from_dict_back_fills_portal_user_id_from_portal_session(self):
+        """Legacy on-disk profiles (pre-F-22) get portal_user_id from portal_session.user_id."""
+        legacy = {
+            'name': 'legacy',
+            'tokens': {},
+            'portal_session': {'authorizev3': 'k', 'user_id': '99'},
+            'token_type': DEFAULT_TOKEN_TYPE,
+            'created_at': '2026-05-23T00:00:00+00:00',
+            'last_used': None,
+        }
+        profile = Profile.from_dict(legacy)
+        assert profile.portal_user_id == '99'
 
     def test_find_all_by_seller_id_returns_multiple(self, tmp_path):
         """A seller with multiple profiles returns all of them."""

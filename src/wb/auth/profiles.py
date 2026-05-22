@@ -38,10 +38,14 @@ class Profile:
         created_at: ISO timestamp of profile creation.
         last_used: ISO timestamp of last usage.
         seller_id: WB seller account ID. Auto-populated from JWT claim
-            ``oid`` at ``auth login`` time, or from the portal session
-            ``user_id`` at ``auth login-portal`` time.
+            ``oid`` at ``auth login`` time. Distinct from ``portal_user_id``
+            — they are separate identifiers in WB's system.
         token_expires_at: Unix timestamp from JWT claim ``exp``. Auto-
             populated at ``auth login`` time.
+        portal_user_id: Portal user ID. Auto-populated from the seller-
+            portal ``authorizev3`` response at ``auth login-portal`` time.
+            Distinct from ``seller_id`` (the JWT ``oid``); the portal API
+            uses a different identifier space.
     """
 
     name: str
@@ -52,6 +56,7 @@ class Profile:
     last_used: str | None = None
     seller_id: str | None = None
     token_expires_at: int | None = None
+    portal_user_id: str | None = None
 
     def has_token(self, category: str) -> bool:
         """Check if profile has a token for the given category."""
@@ -138,6 +143,8 @@ class Profile:
             data['seller_id'] = self.seller_id
         if self.token_expires_at:
             data['token_expires_at'] = self.token_expires_at
+        if self.portal_user_id:
+            data['portal_user_id'] = self.portal_user_id
         return data
 
     @classmethod
@@ -146,16 +153,24 @@ class Profile:
 
         Legacy profiles missing ``token_type`` default to
         :data:`DEFAULT_TOKEN_TYPE` (Base) — the safer assumption.
+
+        Legacy profiles written before F-22 stored the portal user id
+        only inside ``portal_session['user_id']``. When the top-level
+        ``portal_user_id`` is missing we back-fill it from that nested
+        value so callers always see one canonical accessor.
         """
+        portal_session = data.get('portal_session', {})
+        portal_user_id = data.get('portal_user_id') or portal_session.get('user_id')
         return cls(
             name=data['name'],
             tokens=data.get('tokens', {}),
-            portal_session=data.get('portal_session', {}),
+            portal_session=portal_session,
             token_type=data.get('token_type', DEFAULT_TOKEN_TYPE),
             created_at=data.get('created_at', datetime.now(timezone.utc).isoformat()),
             last_used=data.get('last_used'),
             seller_id=data.get('seller_id'),
             token_expires_at=data.get('token_expires_at'),
+            portal_user_id=portal_user_id,
         )
 
 
@@ -290,9 +305,10 @@ class ProfileStore:
     ) -> None:
         """Save portal session credentials to a profile, creating it if needed.
 
-        When ``user_id`` is supplied, it is also stored on
-        :attr:`Profile.seller_id` — the portal user_id is the seller
-        account identifier.
+        When ``user_id`` is supplied it is stored on
+        :attr:`Profile.portal_user_id`. It is a distinct identifier from
+        :attr:`Profile.seller_id` (JWT ``oid``); ``seller_id`` is never
+        touched here.
         """
         if profile_name not in self._profiles:
             self.create_profile(profile_name)
@@ -305,7 +321,7 @@ class ProfileStore:
             exp=exp,
         )
         if user_id:
-            profile.seller_id = user_id
+            profile.portal_user_id = user_id
         self._save()
 
     def find_all_by_seller_id(self, seller_id: str) -> list[Profile]:

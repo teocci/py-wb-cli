@@ -457,3 +457,92 @@ class TestAuthWhoami:
         assert 'Source' in result.output
         assert 'active-profile' in result.output
         assert '12345' in result.output
+
+
+# ── auth refresh (F-22) ───────────────────────────────────────────────
+
+
+class TestAuthRefresh:
+    """`wb auth refresh` re-decodes the stored JWT to repair seller_id."""
+
+    def test_refresh_restores_seller_id_from_jwt(self, isolated_home):
+        """F-22 recovery: refresh resets a clobbered seller_id from the JWT."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('25169_personal')
+        store.save_token('25169_personal', 'promotion', TOKEN_PROD_BASE)
+        store.set_seller_id('25169_personal', '10799201')
+        store.set_active('25169_personal')
+
+        result = runner.invoke(app, ['auth', 'refresh'])
+
+        assert result.exit_code == 0, result.output
+        reloaded = ProfileStore(isolated_home / '.wb-cli').get_profile('25169_personal')
+        assert reloaded.seller_id == '668554'
+        assert reloaded.token_expires_at == 1790136818
+
+    def test_refresh_no_token_exits_auth_failure(self, isolated_home):
+        """A profile with no JWT cannot be refreshed."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.set_active('p')
+
+        result = runner.invoke(app, ['auth', 'refresh'])
+
+        assert result.exit_code == 3
+        assert 'no JWT registered' in result.output.lower() or 'no jwt' in result.output.lower()
+
+    def test_refresh_json_mode_outputs_structured_data(self, isolated_home):
+        """--json returns before/after seller_id + token_expires_at."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', TOKEN_PROD_BASE)
+        store.set_seller_id('p', '10799201')
+        store.set_active('p')
+
+        result = runner.invoke(app, ['--json', 'auth', 'refresh'])
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload['profile'] == 'p'
+        assert payload['before']['seller_id'] == '10799201'
+        assert payload['after']['seller_id'] == '668554'
+        assert payload['after']['token_expires_at'] == 1790136818
+
+    def test_refresh_explicit_profile_flag(self, isolated_home):
+        """--profile targets a non-active profile."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('active_p')
+        store.set_active('active_p')
+        store.create_profile('target_p')
+        store.save_token('target_p', 'promotion', TOKEN_PROD_BASE)
+
+        result = runner.invoke(
+            app, ['auth', 'refresh', '--profile', 'target_p'],
+        )
+
+        assert result.exit_code == 0, result.output
+        reloaded = ProfileStore(isolated_home / '.wb-cli').get_profile('target_p')
+        assert reloaded.seller_id == '668554'
+
+    def test_refresh_does_not_touch_portal_user_id(self, isolated_home):
+        """The portal user_id stays intact across a refresh."""
+        from tests.unit.test_token_utils import TOKEN_PROD_BASE
+
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', TOKEN_PROD_BASE)
+        store.save_portal_session('p', authorizev3='k', user_id='10799201')
+        store.set_active('p')
+
+        result = runner.invoke(app, ['auth', 'refresh'])
+
+        assert result.exit_code == 0, result.output
+        reloaded = ProfileStore(isolated_home / '.wb-cli').get_profile('p')
+        assert reloaded.seller_id == '668554'
+        assert reloaded.portal_user_id == '10799201'
