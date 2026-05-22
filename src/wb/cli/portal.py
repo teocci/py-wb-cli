@@ -9,7 +9,15 @@ from wb.core.exceptions import WbCliError
 from wb.core.output import _stdout_console
 
 portal_app = typer.Typer(
-    help='Seller portal operations (requires portal session)',
+    help=(
+        'UNOFFICIAL seller-portal scraping. Reaches data that the public '
+        'WB API does not expose (e.g. detailed product cards) by replaying '
+        'a logged-in manager browser session. No public documentation '
+        'covers these endpoints — they may change without notice. Requires '
+        '`wb auth login-portal` first to store the cookie + authorizev3 '
+        'credentials. For documented operations, prefer the official '
+        '`wb campaign`, `wb stats`, `wb analytics`, etc. command trees.'
+    ),
     no_args_is_help=True,
 )
 
@@ -26,7 +34,13 @@ def portal_products(
         limit: int = typer.Option(20, '--limit', '-n', help='Number of products'),
         search: str = typer.Option('', '--search', '-s', help='Search query'),
 ) -> None:
-    """List product cards from the seller portal."""
+    """List product cards via the UNOFFICIAL portal ``tableListv6`` endpoint.
+
+    Returns richer per-product data (vendor codes, stocks, ratings,
+    feedback counts) than the public WB API exposes. Used when an agent
+    or workflow needs portal-only fields the documented endpoints do
+    not provide.
+    """
     from wb.domain.models import PortalProductCard
 
     json_output = ctx.obj.get('json_output', False) if ctx.obj else False

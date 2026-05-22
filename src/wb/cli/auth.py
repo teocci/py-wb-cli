@@ -22,7 +22,15 @@ from wb.core.exceptions import ValidationError, WbCliError
 from wb.core.output import _stdout_console
 
 auth_app = typer.Typer(
-    help='Authentication and profile management',
+    help=(
+        'Authentication and profile management. Two auth methods: '
+        '`login` registers an OFFICIAL WB API token (JWT) for the '
+        'documented `/api/advert`, `/analytics`, `/statistics` etc. '
+        'endpoints; `login-portal` registers an UNOFFICIAL seller-portal '
+        'browser session (cookie + authorizev3) used to scrape data the '
+        'public API does not expose. Use both on the same profile when a '
+        'workflow needs both.'
+    ),
     no_args_is_help=True,
 )
 
@@ -111,9 +119,23 @@ def auth_login(
         ),
         skip_validation: bool = typer.Option(False, '--skip-validation', help='Skip token validation'),
 ) -> None:
-    """Store an API token for a profile.
+    """Store an OFFICIAL WB API token (JWT) for a profile.
 
-    The token is decoded (payload-only) to extract:
+    This is the documented WB authentication path — the token is the JWT
+    you generate from the seller portal UI under "API tokens". Used by
+    every official endpoint the CLI calls:
+
+    - Promotion (`/api/advert/...`) — campaigns, bids, budgets
+    - Analytics (`/api/v2/...`) — sales funnel, search reports
+    - Statistics (`/api/v1/...`) — orders, stocks, prices
+    - Content / Marketplace / Finance / etc. — 11 token categories total
+
+    For unofficial seller-portal scraping (product cards, render-token
+    generation), use ``wb auth login-portal`` instead — that path takes
+    browser cookies, not a JWT.
+
+    The token's payload is decoded (no signature verification) to
+    populate:
         - ``oid``  → ``Profile.seller_id``
         - ``exp``  → ``Profile.token_expires_at``
         - ``t``    → auto-detects ``token_type='test'`` when true
@@ -399,9 +421,32 @@ def auth_login_portal(
             help='Store credentials without authenticating',
         ),
 ) -> None:
-    """Authenticate with the WB seller portal using browser credentials.
+    """Store UNOFFICIAL seller-portal session credentials for a profile.
 
-    Both authorizev3 and cookie are required. Copy them from browser DevTools.
+    This is NOT the official WB API. It logs into the WB seller portal
+    (https://seller.wildberries.ru) the same way the manager's browser
+    does — by replaying ``authorizev3`` + ``cookie`` headers copied from
+    a logged-in browser session. There is no public documentation for
+    these endpoints; the CLI uses them to read data the official API
+    does not expose. Today that includes:
+
+    - Product cards via the portal ``tableListv6`` endpoint
+      (``wb portal products``).
+    - Render-token generation via the portal JRPC endpoint
+      (``wb auth generate-token``).
+
+    For documented operations (campaigns, bids, analytics, statistics),
+    use ``wb auth login`` with a JWT instead — that path is faster, has
+    real rate limits, and survives portal session expiry.
+
+    How to obtain the credentials:
+        1. Log into https://seller.wildberries.ru in a browser.
+        2. Open DevTools → Application → Cookies, copy the full Cookie
+           header for the seller.wildberries.ru domain.
+        3. Network tab → pick any request → Headers → copy
+           ``authorizev3``.
+
+    Both ``--authorizev3`` and ``--cookie`` are required.
     """
     from wb.client.portal import PortalClient
 
@@ -457,7 +502,12 @@ def auth_generate_token(
             None, '--profile', '-p', help='Profile to use',
         ),
 ) -> None:
-    """Generate a render token using stored portal session credentials."""
+    """Generate a render token via the UNOFFICIAL portal JRPC endpoint.
+
+    Requires a portal session registered with ``wb auth login-portal``.
+    The render token is a short-lived credential used by the portal's
+    front-end for some operations the official API does not cover.
+    """
     try:
         from wb.services._factory import create_portal_client
         client = create_portal_client(profile)

@@ -40,13 +40,19 @@ app = typer.Typer(
     rich_markup_mode='rich',
 )
 
-app.add_typer(auth_app, name='auth', help='Authentication and profile management')
+app.add_typer(
+    auth_app, name='auth',
+    short_help='Authentication and profile management',
+)
 app.add_typer(campaign_app, name='campaign', help='Campaign management')
 app.add_typer(bid_app, name='bid', help='Bid management')
 app.add_typer(budget_app, name='budget', help='Budget and balance')
 app.add_typer(stats_app, name='stats', help='Campaign and cluster statistics')
 app.add_typer(cluster_app, name='cluster', help='Search cluster management')
-app.add_typer(portal_app, name='portal', help='Seller portal operations')
+app.add_typer(
+    portal_app, name='portal',
+    short_help='Unofficial seller-portal scraping (no public WB docs)',
+)
 app.add_typer(prices_app, name='prices', help='Prices and discounts')
 app.add_typer(analytics_app, name='analytics', help='Analytics operations')
 app.add_typer(optimize_app, name='optimize', help='Optimization workflows')

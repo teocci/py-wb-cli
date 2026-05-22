@@ -25,6 +25,7 @@ Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases
 | F-17 | CLI hardcoded `'default'` profile fallback + `cache list` table render | ✅ DONE | cli/_helpers.py, cli/cache.py, cli/budget.py, cli/bid.py, cli/campaign.py, cli/cluster.py | 0.32.2 | [detail](phases/F-17-profile-fallback.md) |
 | F-18 | `funnel-history` `dt` field parser reads wrong key | ✅ DONE | domain/analytics_models.py | 0.33.1 | [detail](phases/F-18-funnel-history-dt-field.md) |
 | F-19 | `bid recommend / minimum / get-items` always HTTP 400 — wrong request shape, never implemented | ✅ DONE | services/bids.py, client/promotion.py, domain/models.py, cli/bid.py | 0.37.0 | [detail](phases/F-19-bid-endpoints-real-implementation.md) |
+| F-20 | `wb auth login` / `login-portal` help and docs don't explain official-API vs portal-scraping distinction | ✅ DONE | cli/auth.py, cli/portal.py, cli/app.py, CLAUDE.md, AGENT.md | 0.37.1 | [detail](phases/F-20-auth-help-official-vs-portal.md) |
 
 ### In Progress
 

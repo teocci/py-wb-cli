@@ -3,6 +3,14 @@
 **Status:** 🔲 PLANNED · **Depends on:** A-2
 **Plan:** [auth-homogenization.md](../../../../Users/teocci/.claude/plans/auth-homogenization.md)
 
+> **Note (2026-05-23):** the official-API-vs-portal-scraping clarification
+> in CLI help text, CLAUDE.md, and AGENT.md was pulled forward and shipped
+> as [F-20](F-20-auth-help-official-vs-portal.md) in 0.37.1. The remaining
+> docs sweep here is the bootstrap-then-login model (depends on A-2) and
+> `wb auth whoami`. Re-read F-20's wording when rewriting CLAUDE.md
+> Authentication section in this phase — F-20 already covers the auth-
+> method dichotomy.
+
 ## Goal
 
 Add the `wb auth whoami` diagnostic and rewrite the documentation that taught the env-only model to teach the profile-bootstrap model. Closes the auth-homogenization initiative.

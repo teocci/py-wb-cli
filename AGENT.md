@@ -6,27 +6,56 @@ Quick reference for AI agents managing Wildberries advertising via the WB CLI.
 
 ## Setup
 
+The CLI has **two auth methods**. Pick the one (or both) that fits the data you need:
+
+### Method 1 — Official WB API token (default)
+
+The documented path. A JWT generated in the seller portal UI under "API tokens", used for every documented endpoint:
+
+| Need | Use |
+|---|---|
+| Campaigns, bids, budgets | `wb campaign …`, `wb bid …`, `wb budget …` |
+| Funnel, search reports | `wb analytics …` |
+| Orders, stocks, prices | `wb stats …`, `wb prices …` |
+| Cluster bids, minus phrases | `wb cluster …` |
+
 ```bash
-# Minimum: one full-scope token covers all commands
-export WB_API_TOKEN="<your-jwt>"
+wb auth login --token "<your-jwt>" --category all
+wb auth categories --json   # list valid --category values (11 categories)
+```
 
-# Optional: separate analytics token (higher priority for analytics commands)
-export WB_ANALYTICS_TOKEN="<analytics-jwt>"
+Or set as a bootstrap fallback (lower priority than a registered profile):
 
-# Optional: portal session (required only for wb portal and wb auth generate-token)
+```bash
+export WB_API_TOKEN="<your-jwt>"                  # promotion + analytics fallback
+export WB_ANALYTICS_TOKEN="<analytics-jwt>"       # analytics-only override
+```
+
+### Method 2 — Unofficial seller-portal session
+
+Reaches data the official API does **not** expose by replaying a logged-in manager's browser session. **No public documentation exists for these endpoints — they may change without notice.** Use only when Method 1 cannot answer your question:
+
+| Need | Use |
+|---|---|
+| Detailed product cards (vendor code, stocks, ratings, feedback count) | `wb portal products` |
+| Render token (portal front-end use) | `wb auth generate-token` |
+
+```bash
+wb auth login-portal --authorizev3 "<key-from-devtools>" --cookie "<cookie-from-devtools>"
+```
+
+Or set as a bootstrap fallback:
+
+```bash
 export WB_AUTHORIZEV3="<key>"
 export WB_PORTAL_COOKIE="<browser-cookie>"
 ```
 
+Both methods can be registered on the same profile — they coexist.
+
 > Full env var list and credential resolution priority: see [CLAUDE.md](CLAUDE.md) Authentication section.
 
-No profile registration needed when env vars are set.
-
-To store a token under all 11 API categories at once:
-```bash
-wb auth login --token "<jwt>" --category all
-wb auth categories --json   # list all valid --category values
-```
+**Rule of thumb:** if a documented endpoint can answer your question, use Method 1. Only fall back to Method 2 (`wb portal …`) for fields the official API genuinely does not expose.
 
 ---
 
