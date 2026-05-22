@@ -59,10 +59,15 @@ def _make_budget(campaign_id: int = 1, total: int = 1000) -> BudgetSnapshot:
 
 
 def _make_recommended_bid(
-        campaign_id: int = 1, nm_id: int = 100, recommended: int = 2000, minimum: int = 800,
+        campaign_id: int = 1, nm_id: int = 100, recommended: int = 2000,
 ) -> RecommendedBid:
+    """Build a RecommendedBid for tests.
+
+    The ``recommended`` parameter maps to the post-F-19 ``competitive``
+    field — the headline recommended bid from /v0/bids/recommendations.
+    """
     return RecommendedBid(
-        campaign_id=campaign_id, nm_id=nm_id, recommended=recommended, minimum=minimum,
+        campaign_id=campaign_id, nm_id=nm_id, competitive=recommended,
     )
 
 
@@ -192,7 +197,7 @@ class TestPulseService:
     def test_healthy_campaign_has_no_alerts(self) -> None:
         svc = _make_pulse_service(
             budget=_make_budget(total=2000),
-            bids=[_make_recommended_bid(recommended=2000, minimum=800)],
+            bids=[_make_recommended_bid(recommended=2000)],
         )
         report = svc.get_pulse([1])
         assert report.action_needed is False
@@ -220,14 +225,21 @@ class TestPulseService:
             json.dumps(baseline), encoding='utf-8',
         )
         svc = _make_pulse_service(
-            bids=[_make_recommended_bid(recommended=1250, minimum=400)],
+            bids=[_make_recommended_bid(recommended=1250)],
             config_dir=tmp_path,
         )
         report = svc.get_pulse([1])
         # 1250 vs 1000 = +25% > 15% threshold
         assert 'competitor_surge' in report.campaigns[0].alerts
 
-    def test_bid_floor_rising_detected(self, tmp_path) -> None:
+    def test_bid_floor_drift_dormant(self, tmp_path) -> None:
+        """Floor drift is not tracked post-F-19 — alert stays silent.
+
+        The /v0/bids/recommendations endpoint does not return a minimum bid,
+        so pulse leaves ``bid_floor_drift_pct`` at 0.0 regardless of what
+        the baseline says. Re-implementing intraday floor tracking would
+        require a per-cycle POST /v1/bids/min call (deferred).
+        """
         baseline = {
             'saved_at': '2026-04-17T09:00:00',
             'campaigns': {'1': {'recommend_kopecks': 2000, 'minimum_kopecks': 800, 'budget_rub': 2000}},
@@ -236,12 +248,12 @@ class TestPulseService:
             json.dumps(baseline), encoding='utf-8',
         )
         svc = _make_pulse_service(
-            bids=[_make_recommended_bid(recommended=2000, minimum=1000)],
+            bids=[_make_recommended_bid(recommended=2000)],
             config_dir=tmp_path,
         )
         report = svc.get_pulse([1])
-        # 1000 vs 800 = +25% > 10% threshold
-        assert 'bid_floor_rising' in report.campaigns[0].alerts
+        assert 'bid_floor_rising' not in report.campaigns[0].alerts
+        assert report.campaigns[0].bid_floor_drift_pct == pytest.approx(0.0)
 
     def test_no_baseline_file_returns_zero_drift(self, tmp_path) -> None:
         svc = _make_pulse_service(config_dir=tmp_path)
@@ -259,13 +271,18 @@ class TestPulseService:
         assert report.action_needed is False
 
     def test_bid_values_converted_to_rub(self) -> None:
+        """bid_recommend_rub reflects the competitive bid in rubles.
+
+        bid_minimum_rub is always 0.0 post-F-19 since /v0/bids/recommendations
+        does not return a minimum.
+        """
         svc = _make_pulse_service(
-            bids=[_make_recommended_bid(recommended=2500, minimum=1000)],
+            bids=[_make_recommended_bid(recommended=2500)],
             budget=_make_budget(total=2000),
         )
         report = svc.get_pulse([1])
         assert report.campaigns[0].bid_recommend_rub == pytest.approx(25.0)
-        assert report.campaigns[0].bid_minimum_rub == pytest.approx(10.0)
+        assert report.campaigns[0].bid_minimum_rub == pytest.approx(0.0)
 
     def test_budget_converted_to_rub(self) -> None:
         svc = _make_pulse_service(budget=_make_budget(total=7500))

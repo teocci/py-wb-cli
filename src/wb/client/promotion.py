@@ -7,6 +7,7 @@ from typing import Any
 from wb.client.http import WbHttpClient
 from wb.core.constants import (
     EP_ACCOUNT_BALANCE,
+    EP_BID_MIN,
     EP_BID_SET,
     EP_BUDGET_DEPOSIT,
     EP_CAMPAIGN_BUDGET,
@@ -32,6 +33,7 @@ from wb.core.constants import (
     EP_NQ_STATS_DAILY,
     EP_RECOMMENDED_BID,
 )
+from wb.core.exceptions import ApiError
 
 __all__ = ['PromotionClient']
 
@@ -163,19 +165,71 @@ class PromotionClient:
         result = self._http.get(EP_CAMPAIGN_FULLSTATS, params=params)
         return result if isinstance(result, list) else []
 
-    def get_recommended_bids(self, campaign_id: int) -> list[dict]:
-        """Retrieve recommended CPM bids for a campaign.
+    def get_recommended_bid(
+            self, campaign_id: int, nm_id: int,
+    ) -> dict | None:
+        """Retrieve recommended CPM bid for a single campaign item.
+
+        Calls ``GET /api/advert/v0/bids/recommendations`` with the WB-required
+        ``nmId`` and ``advertId`` query params. The endpoint returns one
+        object per call — never a list — and is restricted to CPM campaigns.
 
         Args:
-            campaign_id: Target campaign identifier.
+            campaign_id: Target campaign identifier (``advertId``).
+            nm_id: Product nomenclature ID (``nmId``).
 
         Returns:
-            List of bid recommendation dicts.
+            Raw recommendation dict ``{advertId, nmId, base, normQueries}``
+            on success, or ``None`` when WB rejects this NM (HTTP 400, e.g.
+            unsupported NM or non-CPM campaign). Non-400 errors propagate.
         """
-        result = self._http.get(
-            EP_RECOMMENDED_BID, params={'id': campaign_id}
-        )
-        return result if isinstance(result, list) else []
+        try:
+            result = self._http.get(
+                EP_RECOMMENDED_BID,
+                params={'nmId': nm_id, 'advertId': campaign_id},
+            )
+        except ApiError as exc:
+            if exc.status_code == 400:
+                return None
+            raise
+        return result if isinstance(result, dict) else None
+
+    def get_minimum_bids(
+            self,
+            campaign_id: int,
+            nm_ids: list[int],
+            payment_type: str,
+            placement_types: list[str],
+    ) -> list[dict]:
+        """Retrieve minimum allowed bids for one or more campaign items.
+
+        Calls ``POST /api/advert/v1/bids/min``. The endpoint accepts up to
+        100 NM IDs per call; callers must batch larger lists themselves.
+
+        Args:
+            campaign_id: Target campaign identifier (``advert_id``).
+            nm_ids: Product nomenclature IDs (1..100).
+            payment_type: ``'cpm'`` or ``'cpc'``.
+            placement_types: Subset of ``['combined', 'search', 'recommendation']``.
+
+        Returns:
+            The ``bids`` array from the response — one entry per nm_id with
+            ``{nm_id, bids: [{type, value}]}``. Empty list when ``nm_ids``
+            is empty or WB returns no data.
+        """
+        if not nm_ids:
+            return []
+        body = {
+            'advert_id': campaign_id,
+            'nm_ids': nm_ids,
+            'payment_type': payment_type,
+            'placement_types': placement_types,
+        }
+        result = self._http.post(EP_BID_MIN, json_body=body)
+        if isinstance(result, dict):
+            bids = result.get('bids')
+            return bids if isinstance(bids, list) else []
+        return []
 
     def get_cluster_list(
             self, items: list[dict],

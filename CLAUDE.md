@@ -151,7 +151,9 @@ CLI flags > Environment variables > .env file > ~/.wb-cli/profiles.json
 | Promotion `/adv/v3/fullstats` | Rate limit | Relaxed | 3/min, burst=1 → CLI enforces 1 call/20 s |
 | Normquery `/adv/v0/normquery/list` | `items` field | Always a list | Can be `null` — use `(raw.get('items') or [])` |
 | Analytics v3 `sales-funnel/products/history` | `dt` date field | `dt` key | Returns date in `date` key — `FunnelHistoryDay.from_api` reads `date` with `dt` fallback (F-18) |
-| Promotion `/api/advert/v0/bids/recommendations` | Paused campaigns | Returns bid data | Returns HTTP 400 for non-running campaigns |
+| Promotion `/api/advert/v0/bids/recommendations` | Query params + scope | Single `id`, returns a list, any payment type | Requires **both** `nmId` AND `advertId`; returns one object per call (per item). CPM campaigns only — non-CPM yields HTTP 400. CLI loops per NM (F-19) |
+| Promotion `/api/advert/v1/bids/min` | Method/shape | GET like recommendations | **POST** with JSON body `{advert_id, nm_ids[≤100], payment_type, placement_types}`; returns `{bids[].{nm_id, bids[].{type,value}}}` (F-19) |
+| Promotion `/api/advert/v2/adverts` | Per-item current bids | Need separate bid endpoint | Live per-NM bids already in `adverts[].nm_settings[].bids_kopecks.{search,recommendations}` — `wb bid get-items` reads these directly with zero extra API calls (F-19) |
 | Analytics `search-report` | Any API token | Works with standard token | Requires `Analytics/Advanced` scope — returns HTTP 403 |
 | Promotion `/adv/v1/budget/deposit` | `sum` field unit | Kopecks | Rubles — minimum 1000, must be multiple of 50 |
 

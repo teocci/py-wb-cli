@@ -7,6 +7,7 @@ import pytest
 from wb.client.promotion import PromotionClient
 from wb.core.constants import (
     EP_ACCOUNT_BALANCE,
+    EP_BID_MIN,
     EP_CAMPAIGN_BUDGET,
     EP_CAMPAIGN_FULLSTATS,
     EP_CAMPAIGN_INFO,
@@ -19,6 +20,7 @@ from wb.core.constants import (
     EP_NQ_STATS_DAILY,
     EP_RECOMMENDED_BID,
 )
+from wb.core.exceptions import ApiError
 
 
 @pytest.fixture()
@@ -168,20 +170,78 @@ class TestCampaignStats:
         assert client.get_campaign_stats([1], '2026-03-01', '2026-03-07') == []
 
 
-class TestRecommendedBids:
-    """Tests for recommended bids."""
+class TestRecommendedBid:
+    """Tests for the per-item /v0/bids/recommendations endpoint."""
 
-    def test_get_recommended_bids(self, client, mock_http):
-        mock_http.get.return_value = [{'nmId': 1, 'cpm': 200}]
-        result = client.get_recommended_bids(42)
-        assert len(result) == 1
+    def test_passes_nm_and_advert_id(self, client, mock_http):
+        """Both nmId AND advertId must be sent (single id form is broken)."""
+        mock_http.get.return_value = {
+            'advertId': 42, 'nmId': 7, 'base': {}, 'normQueries': [],
+        }
+        result = client.get_recommended_bid(42, 7)
+        assert isinstance(result, dict)
+        assert result['nmId'] == 7
         mock_http.get.assert_called_once_with(
-            EP_RECOMMENDED_BID, params={'id': 42},
+            EP_RECOMMENDED_BID, params={'nmId': 7, 'advertId': 42},
         )
 
-    def test_none_response(self, client, mock_http):
+    def test_returns_none_on_400(self, client, mock_http):
+        """WB rejects with 400 when NM is unsupported — client soft-fails."""
+        mock_http.get.side_effect = ApiError(
+            'bad', status_code=400, response_body='IncorrectTypeAdv',
+        )
+        assert client.get_recommended_bid(42, 7) is None
+
+    def test_propagates_non_400_errors(self, client, mock_http):
+        """403/500 still raise — only 400 is treated as 'skip this NM'."""
+        mock_http.get.side_effect = ApiError(
+            'forbidden', status_code=403, response_body='',
+        )
+        with pytest.raises(ApiError):
+            client.get_recommended_bid(42, 7)
+
+    def test_non_dict_response_yields_none(self, client, mock_http):
         mock_http.get.return_value = None
-        assert client.get_recommended_bids(1) == []
+        assert client.get_recommended_bid(1, 2) is None
+
+
+class TestMinimumBids:
+    """Tests for POST /v1/bids/min."""
+
+    def test_posts_canonical_body(self, client, mock_http):
+        """Body must include advert_id, nm_ids, payment_type, placement_types."""
+        mock_http.post.return_value = {
+            'bids': [
+                {'nm_id': 7, 'bids': [{'type': 'search', 'value': 150}]},
+            ],
+        }
+        result = client.get_minimum_bids(
+            campaign_id=42,
+            nm_ids=[7, 9],
+            payment_type='cpm',
+            placement_types=['combined', 'search', 'recommendation'],
+        )
+        assert isinstance(result, list)
+        assert len(result) == 1
+        mock_http.post.assert_called_once_with(
+            EP_BID_MIN,
+            json_body={
+                'advert_id': 42,
+                'nm_ids': [7, 9],
+                'payment_type': 'cpm',
+                'placement_types': ['combined', 'search', 'recommendation'],
+            },
+        )
+
+    def test_empty_nm_ids_short_circuits(self, client, mock_http):
+        """No NMs → no API call, no error."""
+        assert client.get_minimum_bids(42, [], 'cpm', ['combined']) == []
+        mock_http.post.assert_not_called()
+
+    def test_missing_bids_field_yields_empty(self, client, mock_http):
+        """Defensive handling when WB returns dict without bids key."""
+        mock_http.post.return_value = {}
+        assert client.get_minimum_bids(42, [7], 'cpm', ['search']) == []
 
 
 class TestClusters:

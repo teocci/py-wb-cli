@@ -221,15 +221,32 @@ class TestRecommendedBid:
     """Tests for RecommendedBid model and from_api()."""
 
     def test_from_api(self):
-        data = {'nmId': 777, 'cpm': 350, 'minCpm': 100}
+        data = {
+            'advertId': 42,
+            'nmId': 777,
+            'base': {
+                'competitiveBid': {'bidKopecks': 350},
+                'leadersBid': {'bidKopecks': 600},
+                'top2': {'bidKopecks': 900},
+            },
+        }
         bid = RecommendedBid.from_api(data, campaign_id=42)
         assert bid.campaign_id == 42
         assert bid.nm_id == 777
-        assert bid.recommended == 350
-        assert bid.minimum == 100
+        assert bid.competitive == 350
+        assert bid.leaders == 600
+        assert bid.top2 == 900
+        assert bid.error is None
 
     def test_from_api_defaults(self):
         bid = RecommendedBid.from_api({}, campaign_id=1)
         assert bid.nm_id == 0
-        assert bid.recommended == 0
-        assert bid.minimum == 0
+        assert bid.competitive == 0
+        assert bid.leaders == 0
+        assert bid.top2 == 0
+        assert bid.error is None
+
+    def test_from_api_missing_base(self):
+        bid = RecommendedBid.from_api({'nmId': 7}, campaign_id=1)
+        assert bid.nm_id == 7
+        assert bid.competitive == 0

@@ -27,6 +27,8 @@ __all__ = [
     'OptimizationDecision',
     'AccountBalance',
     'RecommendedBid',
+    'MinimumBid',
+    'CurrentBid',
     'MutationResult',
     'CampaignCreate',
     'BidMutation',
@@ -731,33 +733,126 @@ class PlacementConfig:
 
 @dataclass(slots=True)
 class RecommendedBid:
-    """Platform-recommended bid for a campaign product.
+    """Platform-recommended bid for one product in a CPM campaign.
+
+    Source: ``GET /api/advert/v0/bids/recommendations?nmId=&advertId=``.
+    All bid values are in kopecks; ``error`` is non-None when WB rejected
+    this NM (e.g. delisted item) so the caller can surface partial failures
+    without losing the rest of the loop's results.
 
     Attributes:
-        campaign_id: Campaign identifier.
-        nm_id: Product nomenclature ID.
-        recommended: Recommended CPM value.
-        minimum: Minimum acceptable CPM.
+        campaign_id: Campaign identifier (``advertId``).
+        nm_id: Product nomenclature ID (``nmId``).
+        competitive: ``base.competitiveBid.bidKopecks`` — the median bid.
+        leaders: ``base.leadersBid.bidKopecks`` — bid for top positions.
+        top2: ``base.top2.bidKopecks`` — bid to occupy the TOP-2 slot.
+        error: WB error message when this NM could not be queried.
     """
 
     campaign_id: int
     nm_id: int = 0
-    recommended: int = 0
-    minimum: int = 0
+    competitive: int = 0
+    leaders: int = 0
+    top2: int = 0
+    error: str | None = None
 
     @classmethod
     def from_api(cls, data: dict, campaign_id: int) -> RecommendedBid:
-        """Create from WB API recommended_cpm response item.
+        """Create from a ``/v0/bids/recommendations`` response object.
 
         Args:
-            data: Raw API dict for a bid recommendation.
+            data: Raw API dict — ``{advertId, nmId, base: {competitiveBid,
+                leadersBid, top2}, normQueries: […]}``.
             campaign_id: Campaign this recommendation belongs to.
         """
+        base = data.get('base') or {}
+        competitive = (base.get('competitiveBid') or {}).get('bidKopecks', 0)
+        leaders = (base.get('leadersBid') or {}).get('bidKopecks', 0)
+        top2 = (base.get('top2') or {}).get('bidKopecks', 0)
         return cls(
             campaign_id=campaign_id,
             nm_id=data.get('nmId', 0),
-            recommended=data.get('cpm', 0),
-            minimum=data.get('minCpm', 0),
+            competitive=competitive,
+            leaders=leaders,
+            top2=top2,
+        )
+
+
+@dataclass(slots=True)
+class MinimumBid:
+    """Minimum allowed bid for one product across placements.
+
+    Source: ``POST /api/advert/v1/bids/min``. Values are in kopecks.
+
+    Attributes:
+        campaign_id: Campaign identifier (``advert_id``).
+        nm_id: Product nomenclature ID.
+        combined: Minimum bid for combined search+recommendation placement.
+        search: Minimum bid for search placement.
+        recommendation: Minimum bid for recommendation placement.
+    """
+
+    campaign_id: int
+    nm_id: int = 0
+    combined: int = 0
+    search: int = 0
+    recommendation: int = 0
+
+    @classmethod
+    def from_api(cls, data: dict, campaign_id: int) -> MinimumBid:
+        """Create from a ``bids[]`` entry in /v1/bids/min response.
+
+        Args:
+            data: ``{nm_id, bids: [{type, value}]}`` per the swagger.
+            campaign_id: Campaign these minimums belong to.
+        """
+        placements = {
+            b['type']: b.get('value', 0)
+            for b in (data.get('bids') or [])
+            if 'type' in b
+        }
+        return cls(
+            campaign_id=campaign_id,
+            nm_id=data.get('nm_id', 0),
+            combined=placements.get('combined', 0),
+            search=placements.get('search', 0),
+            recommendation=placements.get('recommendation', 0),
+        )
+
+
+@dataclass(slots=True)
+class CurrentBid:
+    """Current per-item bid for a campaign product.
+
+    Source: ``GET /api/advert/v2/adverts`` — bids live in
+    ``adverts[].nm_settings[].bids_kopecks.{search, recommendations}``.
+
+    Attributes:
+        campaign_id: Campaign identifier.
+        nm_id: Product nomenclature ID.
+        search: Current search placement bid, kopecks.
+        recommendations: Current recommendation placement bid, kopecks.
+    """
+
+    campaign_id: int
+    nm_id: int = 0
+    search: int = 0
+    recommendations: int = 0
+
+    @classmethod
+    def from_nm_setting(cls, nm: dict, campaign_id: int) -> CurrentBid:
+        """Create from a single ``nm_settings[]`` entry.
+
+        Args:
+            nm: Raw nm_settings entry from /api/advert/v2/adverts.
+            campaign_id: Campaign identifier.
+        """
+        bk = nm.get('bids_kopecks') or {}
+        return cls(
+            campaign_id=campaign_id,
+            nm_id=nm.get('nm_id', 0),
+            search=bk.get('search', 0),
+            recommendations=bk.get('recommendations', 0),
         )
 
 

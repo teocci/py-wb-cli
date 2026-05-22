@@ -2,6 +2,16 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.37.0 (2026-05-23) — BREAKING
+- F-19: `wb bid recommend / minimum / get-items` real implementation. The previous code sent the wrong request shape to `/api/advert/v0/bids/recommendations` (single `id` instead of `nmId`+`advertId`) and aliased `bid minimum` and `bid get-items` to that broken call — every read returned HTTP 400 on every campaign. Rewrote all three against the actual WB endpoints documented in `docs/swagger/08-promotion.yaml`: `bid recommend` loops over the campaign's NMs (optional `--nm` scopes to one) and pre-validates CPM payment type; `bid minimum` POSTs to `/api/advert/v1/bids/min` with the seller-account batched at 100; `bid get-items` reads `nm_settings[].bids_kopecks` from campaign info with zero extra API calls. Updated `RecommendedBid` dataclass (now `competitive`/`leaders`/`top2`/`error`), added `MinimumBid` and `CurrentBid`. PulseService updated to use `.competitive` and pass `nm_id` explicitly so a per-cycle pulse run does not loop over every campaign item.
+
+### Breaking
+- `RecommendedBid` field rename: `recommended` → `competitive`, `minimum` removed; new fields `leaders`, `top2`, `error`. JSON output of `wb bid recommend` changes accordingly.
+- `wb bid minimum` JSON output schema changes from `{recommended, minimum}` to `{combined, search, recommendation}` per item (the real `/v1/bids/min` shape).
+- `wb bid get-items` JSON output schema changes from `{recommended, minimum}` to `{search, recommendations}` per item.
+- `wb pulse` field `bid_minimum_rub` is now always `0.0` and `bid_floor_drift_pct` stays at `0.0` — the `/v0/bids/recommendations` endpoint does not return a minimum, and per-cycle `/v1/bids/min` polling is deferred. `bid_floor_rising` alert no longer fires.
+- SDK `get_recommended_bids(campaign_id, nm_id, subject_id)` → `get_recommended_bids(campaign_id, nm_id=None)`; `subject_id` parameter dropped (was unused).
+
 ## v0.36.0 (2026-05-22)
 - A-1: `wb auth login --token <JWT>` now decodes the token payload (no signature verification) and auto-populates `Profile.seller_id` (from claim `oid`), `Profile.token_expires_at` (from `exp`), and auto-detects `token_type='test'` when `t: true`. Profiles are auto-named `{seller_id}_{token_type}` (e.g. `668554_base`) when `--profile` is omitted; auto-name collisions error out and require explicit `--profile`. Manual `--profile` values are slug-validated against `^[a-z0-9][a-z0-9_]*$`. `auth status` and `auth list` (text + JSON) now surface `seller_id` and `token_expires_at`. Token-type preservation on re-login is retained: when `--token-type` is omitted and the JWT doesn't mark the token as test, an existing profile's `token_type` is kept. New `ProfileStore` helpers: `find_all_by_seller_id`, `set_seller_id`, `set_token_expires_at`. `save_portal_session` also auto-copies `user_id` → `seller_id`. Earlier A-1 spec referenced JWT claim `sid` as the seller key — corrected to `oid` (decoded against real production tokens). F-10's use of `sid` as a rate-limit scope key is flagged for a separate audit. Non-breaking: existing profiles continue to load with `seller_id=None`, `token_expires_at=None` until re-login backfills them.
 

@@ -9,7 +9,8 @@ import pytest
 from typer.testing import CliRunner
 
 from wb.cli.app import app
-from wb.domain.models import RecommendedBid
+from wb.core.exceptions import ValidationError
+from wb.domain.models import CurrentBid, MinimumBid, RecommendedBid
 
 runner = CliRunner()
 
@@ -20,12 +21,31 @@ def _make_recommended_bid(
         campaign_id: int = 42,
         nm_id: int = 555,
 ) -> RecommendedBid:
-    """Create a RecommendedBid instance for testing."""
+    """Create a RecommendedBid instance matching the F-19 dataclass shape."""
     return RecommendedBid(
         campaign_id=campaign_id,
         nm_id=nm_id,
-        recommended=300,
-        minimum=100,
+        competitive=300,
+        leaders=450,
+        top2=600,
+    )
+
+
+def _make_minimum_bid(
+        campaign_id: int = 42, nm_id: int = 555,
+) -> MinimumBid:
+    return MinimumBid(
+        campaign_id=campaign_id, nm_id=nm_id,
+        combined=120, search=200, recommendation=250,
+    )
+
+
+def _make_current_bid(
+        campaign_id: int = 42, nm_id: int = 555,
+) -> CurrentBid:
+    return CurrentBid(
+        campaign_id=campaign_id, nm_id=nm_id,
+        search=180, recommendations=220,
     )
 
 
@@ -46,7 +66,7 @@ class TestBidRecommend:
 
     @patch(FACTORY_PATH)
     def test_bid_recommend_json(self, mock_factory: MagicMock) -> None:
-        """JSON output contains recommended bid data."""
+        """JSON output exposes competitive/leaders/top2 per item."""
         svc = MagicMock()
         svc.get_recommended_bids.return_value = [_make_recommended_bid()]
         mock_factory.return_value = svc
@@ -59,7 +79,50 @@ class TestBidRecommend:
         parsed = json.loads(result.output)
         assert isinstance(parsed, list)
         assert parsed[0]['nm_id'] == 555
-        assert parsed[0]['recommended'] == 300
+        assert parsed[0]['competitive'] == 300
+        assert parsed[0]['leaders'] == 450
+        assert parsed[0]['top2'] == 600
+        assert parsed[0]['error'] is None
+        svc.get_recommended_bids.assert_called_once_with(42, nm_id=None)
+
+    @patch(FACTORY_PATH)
+    def test_bid_recommend_with_nm_scopes_to_one(
+            self, mock_factory: MagicMock,
+    ) -> None:
+        """--nm forwards to the service so only one item is queried."""
+        svc = MagicMock()
+        svc.get_recommended_bids.return_value = [_make_recommended_bid()]
+        mock_factory.return_value = svc
+
+        result = runner.invoke(
+            app,
+            ['--json', 'bid', 'recommend', '--campaign', '42', '--nm', '555'],
+        )
+        assert result.exit_code == 0
+        svc.get_recommended_bids.assert_called_once_with(42, nm_id=555)
+
+    @patch(FACTORY_PATH)
+    def test_bid_recommend_non_cpm_raises_validation_error(
+            self, mock_factory: MagicMock,
+    ) -> None:
+        """ValidationError from the service propagates with exit code 2.
+
+        The global JSON-error formatting happens in ``__main__.main()`` which
+        ``CliRunner`` does not invoke, so we verify the exception type and
+        exit code directly — matching the pattern used in test_cli_stock_runway.
+        """
+        svc = MagicMock()
+        svc.get_recommended_bids.side_effect = ValidationError(
+            '`bid recommend` works only for CPM campaigns (campaign 42 uses cpc)'
+        )
+        mock_factory.return_value = svc
+
+        result = runner.invoke(
+            app, ['--json', 'bid', 'recommend', '--campaign', '42'],
+        )
+        assert result.exit_code != 0
+        assert isinstance(result.exception, ValidationError)
+        assert 'CPM' in str(result.exception)
 
     @patch(FACTORY_PATH)
     def test_bid_recommend_empty(self, mock_factory: MagicMock) -> None:
@@ -80,9 +143,9 @@ class TestBidMinimum:
 
     @patch(FACTORY_PATH)
     def test_bid_minimum_json(self, mock_factory: MagicMock) -> None:
-        """JSON output contains minimum bid data."""
+        """JSON output exposes combined/search/recommendation per item."""
         svc = MagicMock()
-        svc.get_minimum_bids.return_value = [_make_recommended_bid()]
+        svc.get_minimum_bids.return_value = [_make_minimum_bid()]
         mock_factory.return_value = svc
 
         result = runner.invoke(
@@ -92,7 +155,10 @@ class TestBidMinimum:
 
         parsed = json.loads(result.output)
         assert isinstance(parsed, list)
-        assert parsed[0]['minimum'] == 100
+        assert parsed[0]['nm_id'] == 555
+        assert parsed[0]['combined'] == 120
+        assert parsed[0]['search'] == 200
+        assert parsed[0]['recommendation'] == 250
 
 
 class TestBidGetItems:
@@ -100,9 +166,9 @@ class TestBidGetItems:
 
     @patch(FACTORY_PATH)
     def test_bid_get_items_json(self, mock_factory: MagicMock) -> None:
-        """JSON output contains per-item bid data."""
+        """JSON output exposes per-item search/recommendations bids."""
         svc = MagicMock()
-        svc.get_item_bids.return_value = [_make_recommended_bid()]
+        svc.get_item_bids.return_value = [_make_current_bid()]
         mock_factory.return_value = svc
 
         result = runner.invoke(
@@ -113,7 +179,8 @@ class TestBidGetItems:
         parsed = json.loads(result.output)
         assert isinstance(parsed, list)
         assert parsed[0]['nm_id'] == 555
-        assert parsed[0]['recommended'] == 300
+        assert parsed[0]['search'] == 180
+        assert parsed[0]['recommendations'] == 220
 
 BID_WRITE_FACTORY = 'wb.services._factory.create_bid_service'
 AUDIT_FACTORY = 'wb.services._factory.create_audit_logger'

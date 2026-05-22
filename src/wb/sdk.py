@@ -267,23 +267,25 @@ def topup_budget(
 
 def get_recommended_bids(
         campaign_id: int,
-        nm_id: int,
-        subject_id: int | None = None,
+        nm_id: int | None = None,
         profile: str | None = None,
 ):
-    """Get recommended bids for a product.
+    """Get recommended bids for a campaign.
+
+    When ``nm_id`` is provided, returns the recommendation for that single
+    product. When omitted, loops over every product in the campaign — see
+    :class:`wb.services.bids.BidService.get_recommended_bids` for details.
 
     Args:
         campaign_id: Campaign identifier.
-        nm_id: Product NM ID.
-        subject_id: Subject ID (optional).
+        nm_id: Optional product NM ID to scope to a single item.
         profile: Profile name, or None for active profile.
 
     Returns:
         List of RecommendedBid objects.
     """
     svc = create_bid_service(profile)
-    return svc.get_recommended_bids(campaign_id, nm_id, subject_id)
+    return svc.get_recommended_bids(campaign_id, nm_id=nm_id)
 
 
 def set_item_bid(

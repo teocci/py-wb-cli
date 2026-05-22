@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.36.0 |
-| **Tests Passing** | 1370/1371 (1 pre-existing env test in `test_auth_list_empty`) |
-| **Phases Complete** | 50 |
+| **Current Version** | 0.37.0 |
+| **Tests Passing** | 1398/1399 (1 pre-existing env test in `test_auth_list_empty`) |
+| **Phases Complete** | 51 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -70,6 +70,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | I-18 | `wb stats daily-report` — rich default shape + `--from`/`--to`/`--days` filters | ✅ DONE | 0.35.0 |
 | I-19 | `generate_daily_wb_report.py` switches to `wb stats daily-report` | ✅ DONE | 0.35.1 |
 | A-1 | `wb auth login` JWT-driven profile bootstrap (oid/exp/test + auto-name) | ✅ DONE | 0.36.0 |
+| F-19 | `bid recommend / minimum / get-items` real implementation (was always 400) | ✅ DONE | 0.37.0 |
 | A-2 | Drop runtime env fallback — profile becomes mandatory (BREAKING) | 🔲 PLANNED | TBD |
 | A-3 | `wb auth whoami` + docs sweep for new auth model | 🔲 PLANNED | TBD |
 

@@ -100,7 +100,10 @@
       "Bash(Select-Object Name)",
       "Bash(ConvertTo-Json)",
       "Bash(Get-ChildItem -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\docs\\\\\" -MaxDepth 1 | Select-Object Name)",
-      "PowerShell(ls -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\docs\\\\phases\\\\\" | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object { $_.FullName })"
+      "PowerShell(ls -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\\\\docs\\\\phases\\\\\" | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object { $_.FullName })",
+      "Bash(python -c \"import sys, json; data = json.load\\(sys.stdin\\); ids = {36384182, 30863759}; matches = [c for c in \\(data if isinstance\\(data, list\\) else []\\) if c.get\\('id'\\) in ids]; print\\(json.dumps\\(matches, indent=2, ensure_ascii=False\\)\\)\")",
+      "Bash(python -c \"import sys, json; data = json.load\\(sys.stdin\\); rows = data if isinstance\\(data, list\\) else []; print\\('total:', len\\(rows\\)\\); print\\('sample id keys:', [list\\(r.keys\\(\\)\\)[:6] for r in rows[:2]]\\); print\\('ids:', [r.get\\('id'\\) for r in rows[:20]]\\)\")",
+      "Bash(python -c \"import sys; out = sys.stdin.read\\(\\); print\\('len:', len\\(out\\)\\); print\\('head:', repr\\(out[:400]\\)\\)\")"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

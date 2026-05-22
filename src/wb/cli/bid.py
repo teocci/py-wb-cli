@@ -30,25 +30,47 @@ def bid_recommend(
         campaign_id: int = typer.Option(
             ..., '--campaign', '-c', help='Campaign ID',
         ),
+        nm_id: int | None = typer.Option(
+            None, '--nm',
+            help='Scope to a single NM (default: loop over all campaign items)',
+        ),
 ) -> None:
-    """Show recommended bids for a campaign."""
+    """Show recommended bids for a CPM campaign.
+
+    Calls ``GET /api/advert/v0/bids/recommendations`` per item. With no
+    ``--nm`` flag, loops over every product in the campaign — this may
+    take several minutes for campaigns with many items because the
+    endpoint is rate-limited to 5 requests per minute on personal tokens.
+    """
     from wb.services._factory import create_bid_service
 
     renderer = get_renderer(ctx)
     svc = create_bid_service(get_profile(ctx))
-    bids = svc.get_recommended_bids(campaign_id)
+    bids = svc.get_recommended_bids(campaign_id, nm_id=nm_id)
 
     if not bids:
         renderer.success('No bid recommendations available.')
         return
 
-    data = [asdict(b) for b in bids]
-    headers = ['NM ID', 'Recommended', 'Minimum']
+    if renderer.is_json:
+        typer.echo(
+            json.dumps([asdict(b) for b in bids], indent=2, ensure_ascii=False)
+        )
+        return
+
+    from wb.core.output import render_table
+    headers = ['NM ID', 'Competitive', 'Leaders', 'Top-2', 'Error']
     rows = [
-        [str(b.nm_id), str(b.recommended), str(b.minimum)]
+        [
+            str(b.nm_id),
+            str(b.competitive),
+            str(b.leaders),
+            str(b.top2),
+            b.error or '',
+        ]
         for b in bids
     ]
-    renderer.display(data, headers=headers, title='Recommended Bids', fields=get_fields(ctx))
+    render_table(headers, rows, title='Recommended Bids (kopecks)')
 
 
 @bid_app.command('minimum')
@@ -58,7 +80,12 @@ def bid_minimum(
             ..., '--campaign', '-c', help='Campaign ID',
         ),
 ) -> None:
-    """Show minimum bids for a campaign."""
+    """Show minimum allowed bids per placement for a campaign.
+
+    Calls ``POST /api/advert/v1/bids/min`` with every product in the
+    campaign (batched at 100 per call). Returns the per-placement floor
+    that WB will accept.
+    """
     from wb.services._factory import create_bid_service
 
     renderer = get_renderer(ctx)
@@ -69,13 +96,19 @@ def bid_minimum(
         renderer.success('No bid data available.')
         return
 
-    data = [asdict(b) for b in bids]
-    headers = ['NM ID', 'Minimum', 'Recommended']
+    if renderer.is_json:
+        typer.echo(
+            json.dumps([asdict(b) for b in bids], indent=2, ensure_ascii=False)
+        )
+        return
+
+    from wb.core.output import render_table
+    headers = ['NM ID', 'Combined', 'Search', 'Recommendation']
     rows = [
-        [str(b.nm_id), str(b.minimum), str(b.recommended)]
+        [str(b.nm_id), str(b.combined), str(b.search), str(b.recommendation)]
         for b in bids
     ]
-    renderer.display(data, headers=headers, title='Minimum Bids', fields=get_fields(ctx))
+    render_table(headers, rows, title='Minimum Bids (kopecks)')
 
 
 @bid_app.command('get-items')
@@ -85,7 +118,12 @@ def bid_get_items(
             ..., '--campaign', '-c', help='Campaign ID',
         ),
 ) -> None:
-    """Show per-item bid details for a campaign."""
+    """Show current per-item bids for a campaign.
+
+    Reads bid values directly from ``/api/advert/v2/adverts`` —
+    ``nm_settings[].bids_kopecks`` — so no extra API call is needed
+    beyond the campaign-info fetch.
+    """
     from wb.services._factory import create_bid_service
 
     renderer = get_renderer(ctx)
@@ -96,13 +134,19 @@ def bid_get_items(
         renderer.success('No item bid data available.')
         return
 
-    data = [asdict(b) for b in bids]
-    headers = ['NM ID', 'Recommended', 'Minimum']
+    if renderer.is_json:
+        typer.echo(
+            json.dumps([asdict(b) for b in bids], indent=2, ensure_ascii=False)
+        )
+        return
+
+    from wb.core.output import render_table
+    headers = ['NM ID', 'Search', 'Recommendations']
     rows = [
-        [str(b.nm_id), str(b.recommended), str(b.minimum)]
+        [str(b.nm_id), str(b.search), str(b.recommendations)]
         for b in bids
     ]
-    renderer.display(data, headers=headers, title='Item Bids', fields=get_fields(ctx))
+    render_table(headers, rows, title='Current Bids (kopecks)')
 
 
 def _log_bid_mutation(profile: str, command: str, result) -> None:

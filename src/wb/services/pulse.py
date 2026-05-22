@@ -91,17 +91,18 @@ class PulseService:
 
         baseline_data: dict[str, dict] = {}
         for cid in campaign_ids:
-            bids = self._safe_get_recommended_bids(cid)
-            if bids:
-                recommend = bids[0].recommended
-                minimum = bids[0].minimum
-            else:
-                recommend = 0
-                minimum = 0
+            campaign = self._safe_get_campaign(cid)
+            nm_id = campaign.nm_ids[0] if campaign and campaign.nm_ids else None
+            bids = self._safe_get_recommended_bids(cid, nm_id)
+            recommend = bids[0].competitive if bids else 0
             budget = self._safe_get_budget(cid)
             baseline_data[str(cid)] = {
                 'recommend_kopecks': recommend,
-                'minimum_kopecks': minimum,
+                # Minimum bid floor lives on a separate endpoint (/v1/bids/min)
+                # that pulse does not call to keep run time bounded; baseline
+                # always records 0 here. Re-add when intraday floor tracking
+                # is implemented.
+                'minimum_kopecks': 0,
                 'budget_rub': budget.total,
             }
 
@@ -120,27 +121,26 @@ class PulseService:
         """Fetch live data and compute alerts for a single campaign."""
         campaign = self._safe_get_campaign(campaign_id)
         budget = self._safe_get_budget(campaign_id)
-        bids = self._safe_get_recommended_bids(campaign_id)
-
         nm_id = campaign.nm_ids[0] if campaign and campaign.nm_ids else 0
+        bids = self._safe_get_recommended_bids(
+            campaign_id, nm_id if nm_id else None,
+        )
+
         status = campaign.status.name.lower() if campaign else 'unknown'
         budget_rub = float(budget.total) if budget else 0.0
 
-        recommend_rub = 0.0
+        recommend_rub = bids[0].competitive / 100.0 if bids else 0.0
+        # /v0/bids/recommendations does not return a minimum bid; the floor
+        # tracker stays at zero until a separate /v1/bids/min poll is wired
+        # into pulse. Keeping the field preserves the JSON schema.
         minimum_rub = 0.0
-        if bids:
-            recommend_rub = bids[0].recommended / 100.0
-            minimum_rub = bids[0].minimum / 100.0
 
         base = baseline.campaigns.get(str(campaign_id), {})
         drift_pct = _compute_drift(
             recommend_rub * 100.0,
             base.get('recommend_kopecks', 0),
         )
-        floor_drift_pct = _compute_drift(
-            minimum_rub * 100.0,
-            base.get('minimum_kopecks', 0),
-        )
+        floor_drift_pct = 0.0
         alerts = _compute_alerts(
             status=status,
             budget_rub=budget_rub,
@@ -178,10 +178,19 @@ class PulseService:
             logger.debug('budget %s unavailable: %s', campaign_id, exc)
             return BudgetSnapshot(campaign_id=campaign_id)
 
-    def _safe_get_recommended_bids(self, campaign_id: int) -> list:
-        """Get recommended bids; return empty list on failure."""
+    def _safe_get_recommended_bids(
+            self, campaign_id: int, nm_id: int | None = None,
+    ) -> list:
+        """Get recommended bids; return empty list on failure.
+
+        Passes ``nm_id`` through to the bid service so the underlying call
+        is a single per-item lookup instead of a multi-NM loop. Pulse only
+        needs one bid value per campaign for drift detection, and the
+        per-item endpoint is rate-limited to 5/min — looping every campaign
+        per pulse cycle would blow the budget.
+        """
         try:
-            return self._bids.get_recommended_bids(campaign_id)
+            return self._bids.get_recommended_bids(campaign_id, nm_id=nm_id)
         except WbCliError as exc:
             logger.debug('bids %s unavailable: %s', campaign_id, exc)
             return []
