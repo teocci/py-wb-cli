@@ -15,13 +15,17 @@ import httpx
 
 from wb.core.constants import (
     EP_PORTAL_AUTH_TOKEN,
+    EP_PORTAL_BIDS,
+    EP_PORTAL_BIDS_CPC,
     EP_PORTAL_TABLE_LIST,
     EP_PORTAL_TOKENS_JRPC,
     PORTAL_AUTH_HEADER,
     SELLER_CONTENT_BASE_URL,
     SELLER_PORTAL_BASE_URL,
+    WB_CMP_BASE_URL,
 )
 from wb.core.exceptions import ApiError, AuthenticationError, ValidationError
+from wb.domain.enums import PaymentType
 
 __all__ = ['PortalClient', 'PortalSession']
 
@@ -150,6 +154,47 @@ class PortalClient:
         )
         return self._parse_products_response(response)
 
+    def fetch_bid_recommendations(
+            self,
+            nm_ids: list[int],
+            payment_type: PaymentType | str,
+            bid_type: int,
+    ) -> dict[str, Any] | list[Any]:
+        """Fetch bid recommendations from the campaign-management portal.
+
+        Picks endpoint by ``payment_type`` — CPC hits ``/bids-cpc``
+        (placement-split response), CPM hits ``/bids`` (flat list).
+        Both shapes are returned as-is; the caller normalizes via
+        :func:`wb.domain.models.parse_portal_bids_response`.
+
+        Args:
+            nm_ids: NM IDs to query (passed as a comma-separated ``nms`` param).
+            payment_type: ``'cpm'`` or ``'cpc'``.
+            bid_type: New-typology bid mode — ``1`` (manual) or ``2`` (unified).
+
+        Returns:
+            Raw response body. For CPC: ``{'recommendations': [...], 'search': [...]}``.
+            For CPM: a flat list of per-NM dicts.
+
+        Raises:
+            ValidationError: When ``nm_ids`` is empty.
+            AuthenticationError: When the portal rejects the credentials.
+            ApiError: For other non-2xx responses or invalid JSON.
+        """
+        if not nm_ids:
+            raise ValidationError('fetch_bid_recommendations: nm_ids is empty')
+        pt_value = payment_type.value if isinstance(payment_type, PaymentType) else str(payment_type).lower()
+        params: dict[str, str] = {
+            'nms': ','.join(str(n) for n in nm_ids),
+            'bid_type': str(bid_type),
+        }
+        if pt_value == PaymentType.CPC.value:
+            path = EP_PORTAL_BIDS_CPC
+        else:
+            path = EP_PORTAL_BIDS
+            params['payment_type'] = pt_value
+        return self._get(WB_CMP_BASE_URL, path, params)
+
     def _build_jrpc_payload(
             self,
             params: dict[str, Any],
@@ -166,15 +211,25 @@ class PortalClient:
             payload['method'] = method
         return payload
 
-    def _build_headers(self) -> dict[str, str]:
-        """Build request headers with cookie + authorizev3."""
+    def _build_headers(
+            self,
+            origin: str = SELLER_PORTAL_BASE_URL,
+            referer: str | None = None,
+    ) -> dict[str, str]:
+        """Build request headers with cookie + authorizev3.
+
+        Args:
+            origin: Origin host for the request. Defaults to the seller portal.
+                Pass ``WB_CMP_BASE_URL`` for cmp endpoints.
+            referer: Optional referer override. Defaults to ``f'{origin}/'``.
+        """
         return {
             PORTAL_AUTH_HEADER: self._authorizev3,
             'cookie': self._cookie,
             'content-type': 'application/json',
             'accept': '*/*',
-            'origin': SELLER_PORTAL_BASE_URL,
-            'referer': f'{SELLER_PORTAL_BASE_URL}/',
+            'origin': origin,
+            'referer': referer or f'{origin}/',
             'user-agent': _DEFAULT_USER_AGENT,
         }
 
@@ -204,6 +259,62 @@ class PortalClient:
         try:
             response = httpx.post(
                 url, json=payload, headers=headers, timeout=self._timeout,
+            )
+        except httpx.HTTPError as exc:
+            raise ApiError(
+                f'Portal request failed: {exc}',
+                status_code=None,
+                response_body=None,
+            ) from exc
+
+        if response.status_code in (401, 403):
+            raise AuthenticationError(
+                f'Portal authentication failed (HTTP {response.status_code}). '
+                'Credentials may have expired — refresh from browser DevTools.'
+            )
+
+        if response.status_code >= 400:
+            raise ApiError(
+                f'Portal error: HTTP {response.status_code}',
+                status_code=response.status_code,
+                response_body=response.text,
+            )
+
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise ApiError(
+                'Portal returned invalid JSON',
+                status_code=response.status_code,
+                response_body=response.text,
+            ) from exc
+
+    def _get(
+            self,
+            base_url: str,
+            path: str,
+            params: dict[str, str],
+    ) -> dict[str, Any] | list[Any]:
+        """Make a GET request to a portal endpoint.
+
+        Args:
+            base_url: Portal base URL.
+            path: Endpoint path.
+            params: Query parameters.
+
+        Returns:
+            Parsed JSON response — may be a dict or list depending on endpoint.
+
+        Raises:
+            AuthenticationError: On 401/403 responses.
+            ApiError: On other errors or invalid responses.
+        """
+        url = f'{base_url}{path}'
+        headers = self._build_headers(origin=base_url)
+
+        try:
+            response = httpx.get(
+                url, params=params, headers=headers, timeout=self._timeout,
             )
         except httpx.HTTPError as exc:
             raise ApiError(

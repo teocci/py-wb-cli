@@ -1148,3 +1148,144 @@ class DailyReportRow:
     orders: int = 0
     order_sum: int = 0
     buyouts: int = 0
+
+
+@dataclass(slots=True)
+class ReachTier:
+    """Reach forecast tier from the unofficial portal bid endpoints.
+
+    Each tier represents a (bid, projected-traffic) point WB suggests
+    for one of three reach levels. A tier filled with zeros means WB
+    has no forecast at that level for the queried NM (typically when
+    historical impression data is missing).
+
+    Attributes:
+        bid: Suggested bid in kopecks (0 = no forecast).
+        min: Per-tier floor in kopecks; mostly 0 in observed samples.
+        budget: Projected daily budget in kopecks at this bid/tier.
+        shows: Projected daily impressions at this bid/tier.
+        clicks: Projected daily clicks at this bid/tier.
+    """
+
+    bid: int = 0
+    min: int = 0
+    budget: int = 0
+    shows: int = 0
+    clicks: int = 0
+
+    @classmethod
+    def from_portal(cls, data: dict | None) -> ReachTier:
+        """Create from a tier sub-dict; missing/null yields a zeroed tier."""
+        if not isinstance(data, dict):
+            return cls()
+        return cls(
+            bid=data.get('bid', 0),
+            min=data.get('min', 0),
+            budget=data.get('budget', 0),
+            shows=data.get('shows', 0),
+            clicks=data.get('clicks', 0),
+        )
+
+
+@dataclass(slots=True)
+class PortalBidRecommendation:
+    """Portal bid recommendation for one (NM, placement) pair.
+
+    Returned by the unofficial endpoints on ``cmp.wildberries.ru``:
+    ``/api/v1/advert/bids-cpc`` and ``/api/v1/advert/bids``. The
+    response shape depends on ``bid_type`` rather than ``payment_type``:
+
+    - ``bid_type=1`` (manual) → ``{'combined': [...]}`` — one record per
+      NM, ``placement = 'combined'``.
+    - ``bid_type=2`` (unified) → ``{'search': [...], 'recommendations': [...]}``
+      — two records per NM, ``placement = 'search'`` / ``'recommendations'``.
+
+    See ``docs/portal/endpoints/`` for the empiric reference.
+
+    Attributes:
+        nm_id: WB article number echoed back by the portal.
+        payment_type: ``'cpm'`` or ``'cpc'`` — the endpoint that was hit.
+        placement: Top-level key from the response (e.g. ``'combined'``,
+            ``'search'``, ``'recommendations'``). ``None`` only if a future
+            response variant returns a flat array with no placement context.
+        min_bid: Absolute floor in kopecks for this NM × placement.
+        reach_max: Max-reach tier forecast.
+        reach_medium: Medium-reach tier forecast.
+        reach_min: Min-reach tier forecast.
+    """
+
+    nm_id: int
+    payment_type: str
+    placement: str | None
+    min_bid: int
+    reach_max: ReachTier
+    reach_medium: ReachTier
+    reach_min: ReachTier
+
+    @classmethod
+    def from_portal(
+            cls,
+            data: dict,
+            payment_type: str,
+            placement: str | None = None,
+    ) -> PortalBidRecommendation:
+        """Create from a per-NM entry in the portal bids response.
+
+        Args:
+            data: Raw entry dict — `{id, min, reach_max, reach_medium, reach_min}`.
+            payment_type: ``'cpm'`` or ``'cpc'``.
+            placement: The placement key (top-level dict key from the
+                response), or ``None`` if the entry came from a flat array.
+        """
+        return cls(
+            nm_id=data.get('id', 0),
+            payment_type=payment_type,
+            placement=placement,
+            min_bid=data.get('min', 0),
+            reach_max=ReachTier.from_portal(data.get('reach_max')),
+            reach_medium=ReachTier.from_portal(data.get('reach_medium')),
+            reach_min=ReachTier.from_portal(data.get('reach_min')),
+        )
+
+
+def parse_portal_bids_response(
+        raw: dict | list,
+        payment_type: str,
+) -> list[PortalBidRecommendation]:
+    """Normalize the portal bids response into a flat record list.
+
+    The response is shape-flexible — observed variants include
+    ``{'combined': [...]}`` (manual bidding) and
+    ``{'search': [...], 'recommendations': [...]}`` (unified bidding).
+    A flat list is also accepted as a defensive fallback. The parser
+    surfaces whatever placement keys WB returns without hard-coding
+    a fixed set, so a future ``'cart'`` (or similar) placement just
+    works.
+
+    Args:
+        raw: Raw response body (dict-of-lists in current samples; a
+            flat list is tolerated for robustness).
+        payment_type: ``'cpm'`` or ``'cpc'`` — stored on each record.
+    """
+    if isinstance(raw, dict):
+        results: list[PortalBidRecommendation] = []
+        for placement_key, items in raw.items():
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if isinstance(item, dict):
+                    results.append(
+                        PortalBidRecommendation.from_portal(
+                            item,
+                            payment_type=payment_type,
+                            placement=placement_key,
+                        )
+                    )
+        return results
+    if isinstance(raw, list):
+        return [
+            PortalBidRecommendation.from_portal(item, payment_type=payment_type)
+            for item in raw
+            if isinstance(item, dict)
+        ]
+    return []

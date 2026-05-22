@@ -73,10 +73,11 @@ New directory `docs/portal/` — **strictly separate** from `dev-wb-adv.md` / `d
 ## Acceptance checks
 
 1. `pytest tests/unit/ -v` — all pass.
-2. Live end-to-end smoke against NM 183813043 (campaign 36384182, CPC):
-   - `wb portal bids -c 36384182` → 2 rows (search + recommendations placements), with `search.min=181`, `search.reach_min.bid=1500`, `search.reach_min.clicks=30`, `recommendations.min=100`.
-   - `wb portal bids --nm 183813043 --payment-type cpc` → same data, no campaign call.
-   - `wb portal bids --nm 183813043 --payment-type cpm --bid-type manual` → 1 row, `placement=null`, populated reach tiers matching the user's CPM probe (`min=12000`, `reach_medium.bid=21600`).
-3. `--json` output validates as a list of `PortalBidRecommendation` dicts; `--fields` filtering works.
-4. 401/403 from the portal raises `AuthenticationError` → exit code 3.
-5. `dev-wb-adv.md` and `docs/swagger/` are unchanged in the F-21 diff (`git diff --name-only main HEAD` lists only `docs/portal/**`, `docs/PROGRESS.md`, `docs/IMPROVEMENTS.md`, `docs/phases/F-21-portal-bids.md`, plus the code files in Step 3).
+2. Live end-to-end smoke against NM 183813043 (campaign 36384182, CPC). Response shape depends on `--bid-type`:
+   - `wb portal bids -c 36384182` (manual, the campaign's mode) → 1 row with `placement='combined'`, `min_bid=181`.
+   - `wb portal bids --nm 183813043 --payment-type cpc --bid-type unified` → 2 rows: `placement='search'` (`min_bid=181`, `reach_min.bid=1500`, `reach_min.clicks=30`) and `placement='recommendations'` (`min_bid=100`).
+   - `wb portal bids --nm 183813043 --payment-type cpm --bid-type unified` → 2 rows with non-zero `reach_medium`/`reach_min` tiers (CPM has broader inventory signal).
+3. `--json` output validates as a list of `PortalBidRecommendation` dicts.
+4. Validation: missing inputs / invalid `--bid-type` / invalid `--payment-type` all exit 2 (`VALIDATION_ERROR`).
+5. 401/403 from the portal raises `AuthenticationError` → exit code 3.
+6. `dev-wb-adv.md` and `docs/swagger/` are unchanged in the F-21 diff (`git diff --name-only main HEAD` lists only `docs/portal/**`, `docs/PROGRESS.md`, `docs/IMPROVEMENTS.md`, `docs/phases/F-21-portal-bids.md`, plus the code files in Step 3).

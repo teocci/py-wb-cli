@@ -13,7 +13,7 @@ Returns suggested bids and **per-placement reach forecasts** for CPC campaigns. 
 | Name | Required | Example | Meaning |
 |---|---|---|---|
 | `nms` | yes | `183813043` | NM ID. Almost certainly accepts a comma-separated list (mirrors what the browser sends for multi-product campaigns); not yet verified with ≥2 NMs in a single call. |
-| `bid_type` | yes | `2` | New-typology bid mode: `1` = manual, `2` = unified. Independent of payment type. |
+| `bid_type` | yes | `2` | New-typology bid mode: `1` = manual, `2` = unified. **Drives the response shape** — see below. |
 
 `payment_type` is **not** a query param here — CPC is implied by the `-cpc` suffix in the path. (Contrast with the sibling [bids.md](bids.md) endpoint, which requires `payment_type=cpm`.)
 
@@ -44,15 +44,37 @@ curl 'https://cmp.wildberries.ru/api/v1/advert/bids-cpc?nms=183813043&bid_type=2
 
 ## Response shape
 
+The top-level shape depends on `bid_type`:
+
+### `bid_type=1` (manual)
+
+```jsonc
+{
+  "combined": [
+    {
+      "id": 183813043,                  // NM ID echoed back
+      "min": 181,                       // absolute minimum bid (kopecks)
+      "reach_max":    { "bid": 0, "min": 0, "budget": 0, "shows": 0, "clicks": 0 },
+      "reach_medium": { "bid": 0, "min": 0, "budget": 0, "shows": 0, "clicks": 0 },
+      "reach_min":    { "bid": 0, "min": 0, "budget": 0, "shows": 0, "clicks": 0 }
+    }
+  ]
+}
+```
+
+Single `combined` bucket — manual bidding applies one bid to whichever placement WB picks, so the forecast is not split.
+
+### `bid_type=2` (unified)
+
 ```jsonc
 {
   "recommendations": [
     {
-      "id": 183813043,                  // NM ID echoed back
-      "min": 100,                       // absolute minimum bid for this placement (kopecks)
-      "reach_max":    { "bid": 0,    "min": 0, "budget": 0,      "shows": 0, "clicks": 0 },
-      "reach_medium": { "bid": 0,    "min": 0, "budget": 0,      "shows": 0, "clicks": 0 },
-      "reach_min":    { "bid": 0,    "min": 0, "budget": 0,      "shows": 0, "clicks": 0 }
+      "id": 183813043,
+      "min": 100,
+      "reach_max":    { "bid": 0, "min": 0, "budget": 0, "shows": 0, "clicks": 0 },
+      "reach_medium": { "bid": 0, "min": 0, "budget": 0, "shows": 0, "clicks": 0 },
+      "reach_min":    { "bid": 0, "min": 0, "budget": 0, "shows": 0, "clicks": 0 }
     }
   ],
   "search": [
@@ -67,12 +89,14 @@ curl 'https://cmp.wildberries.ru/api/v1/advert/bids-cpc?nms=183813043&bid_type=2
 }
 ```
 
-Top-level keys are the two CPC placements:
+Two buckets, one per placement:
 
 - `recommendations` — recommendation-carousel slots.
 - `search` — search-results slots.
 
-Each is an array of per-NM records (one entry per requested NM). The shape inside the entry is symmetric for both placements.
+Each value is an array of per-NM records (one entry per requested NM). The per-entry shape is identical across all placements.
+
+**The CLI parser is shape-flexible**: it surfaces whatever top-level keys WB returns as the `placement` field on `PortalBidRecommendation`. A future `cart` (or similar) placement would flow through without code changes.
 
 ## Field semantics (observed)
 
@@ -101,7 +125,7 @@ For the campaign in our smoke test (CPC, NM 183813043), only `search.reach_min` 
 
 1. **Multi-NM in a single call.** The browser likely sends comma-separated `nms` for multi-product campaigns. Probe with `nms=A,B` and verify both records come back.
 2. **`reach_*.min`.** Mostly `0` in observed samples — possibly a per-tier floor that only differs from the top-level `min` when WB has a tier-specific override. Worth probing on a high-traffic NM.
-3. **`bid_type=2` vs `bid_type=1`.** The user confirmed the new typology: `1` = manual, `2` = unified. Worth re-probing a manual-bid CPC campaign with `bid_type=1` to confirm shape is identical.
+3. **`combined.min` reflects which placement?** When `bid_type=1` returns a single `combined` record, its `min` matches the `search.min` from the `bid_type=2` response (both `181` in observed samples). Whether that's coincidence or `combined` always tracks `search` is not yet confirmed.
 
 ## See also
 
