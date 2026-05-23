@@ -249,6 +249,60 @@ class TestAuthLoginAutoNaming:
         assert any(e['name'] == 'p' and e['seller_id'] == '8888' for e in data)
 
 
+# ── auth list surfaces portal identity ────────────────────────────────
+
+
+class TestAuthListShowsPortalIdentity:
+    """`wb auth list` exposes `portal_user_id` and dashes Type for portal-only profiles."""
+
+    def test_json_includes_portal_user_id_when_set(self, isolated_home):
+        """JSON entry carries `portal_user_id` when the profile has a portal session."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', 'tok')
+        store.save_portal_session(
+            'p', authorizev3='av3-token', user_id='10799201',
+        )
+
+        result = runner.invoke(app, ['--json', 'auth', 'list'])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert any(
+            e['name'] == 'p' and e['portal_user_id'] == '10799201'
+            for e in data
+        )
+
+    def test_json_portal_user_id_is_null_when_no_portal_session(self, isolated_home):
+        """JSON entry always carries the `portal_user_id` key; `null` when not configured."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('p')
+        store.save_token('p', 'promotion', 'tok')
+
+        result = runner.invoke(app, ['--json', 'auth', 'list'])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        entry = next(e for e in data if e['name'] == 'p')
+        assert 'portal_user_id' in entry
+        assert entry['portal_user_id'] is None
+
+    def test_table_dashes_type_for_portal_only_profile(self, isolated_home):
+        """A profile with portal session and zero JWT tokens shows '—' in Type."""
+        store = ProfileStore(isolated_home / '.wb-cli')
+        store.create_profile('portal_only')
+        store.save_portal_session(
+            'portal_only', authorizev3='av3-token', user_id='10799201',
+        )
+
+        result = runner.invoke(app, ['auth', 'list'])
+        assert result.exit_code == 0
+        # Portal user id is visible in the row.
+        assert '10799201' in result.output
+        # Type cell is a dash, not the default 'base'.
+        assert '—' in result.output
+        # The row carries no JWT type label — Categories says 'none'.
+        assert 'none' in result.output
+
+
 # ── auth login env-bootstrap (A-2) ────────────────────────────────────
 
 

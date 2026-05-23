@@ -320,6 +320,7 @@ def auth_list(
                 'token_type': p.token_type,
                 'categories': list(p.tokens.keys()),
                 'seller_id': p.seller_id,
+                'portal_user_id': p.portal_user_id,
                 'token_expires_at': p.token_expires_at,
                 'created_at': p.created_at,
                 'last_used': p.last_used,
@@ -334,15 +335,18 @@ def auth_list(
     table.add_column('Active', justify='center')
     table.add_column('Type', style='magenta')
     table.add_column('Seller ID', style='yellow')
+    table.add_column('Portal User', style='yellow')
     table.add_column('Categories', style='green')
     table.add_column('Created', style='dim')
 
     for p in profiles:
         is_active = '*' if p.name == store.active_profile_name else ''
         categories = ', '.join(p.tokens.keys()) or 'none'
+        type_cell = p.token_type if p.tokens else '—'
         table.add_row(
-            p.name, is_active, p.token_type,
-            p.seller_id or '', categories, p.created_at[:10],
+            p.name, is_active, type_cell,
+            p.seller_id or '', p.portal_user_id or '',
+            categories, p.created_at[:10],
         )
 
     _stdout_console.print(table)

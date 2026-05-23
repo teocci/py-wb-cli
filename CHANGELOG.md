@@ -2,6 +2,9 @@
 
 All releases. Detailed phase notes: [docs/phases/](docs/phases/).
 
+## v0.41.0 (2026-05-23)
+- I-20: `wb auth list` surfaces portal identity and stops lying about Type for portal-only profiles. New `Portal User` column (next to `Seller ID`) and new `portal_user_id` field in `--json` output, read from the canonical `Profile.portal_user_id` accessor introduced in F-22 — profiles created via `wb auth login-portal` alone (e.g. portal user `10799201`) and profiles carrying both JWT + portal session (e.g. seller `25169` paired with portal user `10799201`) both render their portal identity directly without a `whoami` round-trip. The `Type` cell now renders `—` when the profile has zero JWT tokens — previously it displayed `base` (the dataclass default) even for portal-only profiles, contradicting the adjacent `Categories: none`. Table-only render fix; JSON `token_type` stays as the stored string so agent consumers see no schema change. New `TestAuthListShowsPortalIdentity` class with 3 tests; 1453/1454 passing (same pre-existing `test_auth_list_empty` env-leak as v0.40.1).
+
 ## v0.40.1 (2026-05-23)
 - F-22: `wb auth login-portal` no longer clobbers the JWT-derived `seller_id`. The portal user id (a distinct identifier — e.g. seller `25169` vs portal user `10799201`) is now stored on a new `Profile.portal_user_id` field; `save_portal_session()` writes to that field instead of overwriting `seller_id`. Legacy on-disk profiles back-fill `portal_user_id` from `portal_session['user_id']` transparently on next load. New `wb auth refresh` command re-decodes the stored JWT and restores `seller_id` + `token_expires_at` from the `oid` / `exp` claims — one-shot recovery for profiles already broken by the bug (the user's own `25169_personal` was repaired this way during dev). `wb auth status` reads from the typed field instead of the nested dict. 8 new tests + 2 rewrites; 1450/1451 passing (1 pre-existing env leakage in `test_auth_list_empty`).
 
