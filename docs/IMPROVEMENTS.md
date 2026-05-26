@@ -47,6 +47,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.39.0 | A-3  | ✅ DONE    | `wb auth whoami` (active profile + source field + per-category token fingerprints) + CLAUDE.md / AGENT.md auth-section rewrite for the post-A-2 model — [detail](phases/A-3-auth-whoami-docs.md) |
 | 0.40.0 | F-21 | ✅ DONE    | `wb portal bids` — CPC/CPM bid recommendations + empiric portal docs (separate `docs/portal/` tree, kept isolated from official `dev-wb-adv.md`) — [detail](phases/F-21-portal-bids.md) |
 | 0.41.0 | I-20 | ✅ DONE    | `wb auth list` surfaces `portal_user_id` (new column + JSON field) + dash-Type render for portal-only profiles — [detail](phases/I-20-auth-list-portal-identity.md) |
+| 0.42.0 | I-21 | ✅ DONE    | `wb report orders` + `wb report sales` — Statistics API per-order/per-sale wrappers with `--date`/`--since`/`--flag`, `--exclude-cancelled`, `--by-product` — [detail](phases/I-21-report-orders-sales.md) |
 
 ---
 

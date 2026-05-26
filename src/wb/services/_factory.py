@@ -667,6 +667,11 @@ def create_reports_service(profile_name: str | None = None):
 def create_statistics_client(profile_name: str | None = None):
     """Create a StatisticsClient using the analytics token.
 
+    Wires the shared :class:`EndpointBudget` so the 1/min limit on
+    ``/api/v1/supplier/orders`` and ``/api/v1/supplier/sales`` (swagger
+    12) is enforced preemptively. Agents calling these endpoints back to
+    back are queued rather than 429'd.
+
     Args:
         profile_name: Profile name, or None for active profile.
 
@@ -675,7 +680,11 @@ def create_statistics_client(profile_name: str | None = None):
     """
     from wb.client.statistics import StatisticsClient
     token = _get_analytics_token(profile_name)
-    http = _Container.http_client(STATISTICS_BASE_URL, token)
+    token_type = _get_token_type(profile_name)
+    http = _Container.http_client(
+        STATISTICS_BASE_URL, token,
+        with_rate_limits=True, token_type=token_type,
+    )
     return StatisticsClient(http)
 
 

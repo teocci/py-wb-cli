@@ -61,6 +61,8 @@ from wb.core.constants import (
     EP_SEARCH_ORDERS,
     EP_SEARCH_REPORT,
     EP_SEARCH_TEXTS,
+    EP_STATISTICS_ORDERS,
+    EP_STATISTICS_SALES,
     EP_STOCKS_WB_WAREHOUSES,
     EP_WAREHOUSE_REMAINS_CREATE,
     EP_WAREHOUSE_REMAINS_STATUS,
@@ -140,6 +142,11 @@ ENDPOINT_LIMITS: dict[str, tuple[int, float]] = {
     EP_WAREHOUSE_REMAINS_CREATE: (1, 60.0),  # swagger 12: 1/min, burst 5
     #   status poll and download share the same path; use stricter (1/5s)
     EP_WAREHOUSE_REMAINS_STATUS: (1, 5.0),   # swagger 12: poll 1/5s, download 1/min
+
+    # ── Statistics API — supplier orders / sales ─────────────────────────
+    #   both endpoints: 1/min, burst 1 (strict; preemptive throttle protects agents)
+    EP_STATISTICS_ORDERS: (1, 60.0),         # swagger 12: 1/min, burst 1
+    EP_STATISTICS_SALES:  (1, 60.0),         # swagger 12: 1/min, burst 1
 }
 
 # ── Base-token overrides (R-5) ─────────────────────────────────────────

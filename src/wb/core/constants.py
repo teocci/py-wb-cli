@@ -97,6 +97,7 @@ __all__ = [
     'REPORT_POLL_TIMEOUT',
     'STATISTICS_BASE_URL',
     'EP_STATISTICS_SALES',
+    'EP_STATISTICS_ORDERS',
     'RUNWAY_ALERT_CRITICAL_DAYS',
     'RUNWAY_ALERT_LOW_DAYS',
     'RUNWAY_CONFIDENCE_HIGH_DAYS',
@@ -314,6 +315,7 @@ REPORT_POLL_TIMEOUT = 120.0
 # ── Statistics API endpoint paths ────────────────────────────────────
 # Source: statistics-api.wildberries.ru
 EP_STATISTICS_SALES = '/api/v1/supplier/sales'
+EP_STATISTICS_ORDERS = '/api/v1/supplier/orders'
 
 # ── Stock runway thresholds ──────────────────────────────────────────
 RUNWAY_ALERT_CRITICAL_DAYS = 7

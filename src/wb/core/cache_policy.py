@@ -76,6 +76,8 @@ from wb.core.constants import (
     EP_SEARCH_ORDERS,
     EP_SEARCH_REPORT,
     EP_SEARCH_TEXTS,
+    EP_STATISTICS_ORDERS,
+    EP_STATISTICS_SALES,
     EP_STOCKS_WB_WAREHOUSES,
     EP_WAREHOUSE_REMAINS_CREATE,
     EP_WAREHOUSE_REMAINS_STATUS,
@@ -115,6 +117,10 @@ CACHEABLE_ENDPOINTS: frozenset[str] = frozenset({
     EP_SEARCH_DETAILS,
     EP_SEARCH_TEXTS,
     EP_SEARCH_ORDERS,
+    # Statistics API — past-day queries are idempotent; 60 s TTL matches
+    # the 1/min rate limit (caching the only legal call window).
+    EP_STATISTICS_ORDERS,
+    EP_STATISTICS_SALES,
 })
 
 

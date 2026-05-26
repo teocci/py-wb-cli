@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.41.0 |
-| **Tests Passing** | 1453/1454 (1 pre-existing env test in `test_auth_list_empty`) |
-| **Phases Complete** | 57 |
+| **Current Version** | 0.42.0 |
+| **Tests Passing** | 1471/1472 (1 pre-existing env test in `test_auth_list_empty`) |
+| **Phases Complete** | 58 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -77,6 +77,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | F-21 | `wb portal bids` — CPC/CPM bid recommendations from seller portal + empiric portal docs | ✅ DONE | 0.40.0 |
 | F-22 | `wb auth login-portal` clobbers JWT seller_id + add `wb auth refresh` | ✅ DONE | 0.40.1 |
 | I-20 | `wb auth list` surfaces `portal_user_id` + dash-Type for portal-only profiles | ✅ DONE | 0.41.0 |
+| I-21 | `wb report orders` + `wb report sales` — Statistics API per-order/per-sale wrappers | ✅ DONE | 0.42.0 |
 
 Phase detail files: [docs/phases/](phases/)
 

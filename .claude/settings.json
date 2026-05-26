@@ -123,7 +123,9 @@
       "Bash(git -C d:/teocci/code/python/py-wb-cli commit -m \"release: v0.39.0 — A-3: wb auth whoami + post-A-2 docs sweep\")",
       "Bash(.venv/Scripts/python -c \"from wb.cli.portal import portal_app; print\\('ok'\\)\")",
       "Bash(.venv/Scripts/python -c \"import wb; print\\(wb.__version__\\)\")",
-      "Bash(git ls-remote *)"
+      "Bash(git ls-remote *)",
+      "PowerShell(if \\(Test-Path \".venv/Scripts\"\\) { $venv = \".venv/Scripts\" } else { $venv = \".venv/bin\" }; & \"$venv/python\" -m pytest tests/unit/test_cli_auth.py -v 2>&1 | Select-Object -Last 80)",
+      "PowerShell(if \\(Test-Path \".venv/Scripts\"\\) { $venv = \".venv/Scripts\" } else { $venv = \".venv/bin\" }; & \"$venv/python\" -m pytest tests/unit/ 2>&1 | Select-Object -Last 5)"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",

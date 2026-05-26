@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from wb.client.http import WbHttpClient
-from wb.core.constants import EP_STATISTICS_SALES
+from wb.core.constants import EP_STATISTICS_ORDERS, EP_STATISTICS_SALES
 
 __all__ = ['StatisticsClient']
 
@@ -30,6 +30,32 @@ class StatisticsClient:
         """
         params = {'dateFrom': date_from, 'flag': flag}
         result = self._http.get(EP_STATISTICS_SALES, params=params)
+        if not isinstance(result, list):
+            return []
+        return result
+
+    def get_orders(self, date_from: str, flag: int = 1) -> list[dict]:
+        """Fetch order records since a given date.
+
+        Wraps ``GET /api/v1/supplier/orders``. Returns one row per ordered
+        item — every WB field is preserved (``srid``, ``sticker``, ``nmId``,
+        ``supplierArticle``, ``barcode``, ``warehouseName``, ``countryName``,
+        ``regionName``, ``totalPrice``, ``discountPercent``, ``spp``,
+        ``finishedPrice``, ``priceWithDisc``, ``isCancel``, ``cancelDate``).
+
+        Args:
+            date_from: ISO 'YYYY-MM-DD' (or RFC3339) for the start of the window.
+            flag: ``1`` = orders placed on this exact calendar day (time
+                portion ignored, no row cap); ``0`` (or absent) = orders
+                whose ``lastChangeDate >= date_from`` (capped ~80,000 rows
+                per call, agent drives the cursor via the last row's
+                ``lastChangeDate``).
+
+        Returns:
+            List of raw order record dicts from the API.
+        """
+        params = {'dateFrom': date_from, 'flag': flag}
+        result = self._http.get(EP_STATISTICS_ORDERS, params=params)
         if not isinstance(result, list):
             return []
         return result
