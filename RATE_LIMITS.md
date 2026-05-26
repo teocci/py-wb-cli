@@ -70,6 +70,14 @@ Base costs a 30-minute lockout). Override with `wb auth login --token-type
 | *(not yet implemented)* | `EP_STOCKS_WB_WAREHOUSES` | `/api/analytics/v1/stocks-report/wb-warehouses` | **1/20 s** (3/min, burst 1) | *uniform* | swagger 11 |
 | `wb report warehouse create` | `EP_WAREHOUSE_REMAINS_CREATE` | `/api/v1/warehouse_remains` (POST) | **1/min** (burst 5) | **4/h** (1 per 15 min) | swagger 12 |
 | `wb report warehouse status` | `EP_WAREHOUSE_REMAINS_STATUS` | `/api/v1/warehouse_remains/tasks` (GET) | 1/5 s (burst 5) | **4/h** (1 per 15 min) | swagger 12 |
+| `wb report orders` | `EP_STATISTICS_ORDERS` | `/api/v1/supplier/orders` (statistics-api) | **1/min** (burst 1) | *uniform* | swagger 12 |
+| `wb report sales` | `EP_STATISTICS_SALES` | `/api/v1/supplier/sales` (statistics-api) | **1/min** (burst 1) | *uniform* | swagger 12 |
+| `wb finance sales-reports list` | `EP_FINANCE_SALES_REPORT_LIST` | `/api/finance/v1/sales-reports/list` (finance-api) | **1/min** (burst 1) | **1/h** (assumed) | swagger 13 |
+| `wb finance sales-reports detailed` | `EP_FINANCE_SALES_REPORT_DETAILED` | `/api/finance/v1/sales-reports/detailed` (finance-api) | **1/min** (burst 1) | **1/h** (assumed) | swagger 13 |
+| `wb finance sales-reports get` | `/api/finance/v1/sales-reports/detailed/{reportId}` | template — no prior, EndpointBudget learns from response headers | — | — | swagger 13 |
+| `wb finance acquiring list` | `EP_FINANCE_ACQUIRING_LIST` | `/api/finance/v1/acquiring/list` (finance-api) | **1/min** (burst 1) | **1/h** (assumed) | swagger 13 |
+| `wb finance acquiring detailed` | `EP_FINANCE_ACQUIRING_DETAILED` | `/api/finance/v1/acquiring/detailed` (finance-api) | **1/min** (burst 1) | **1/h** (assumed) | swagger 13 |
+| `wb finance acquiring get` | `/api/finance/v1/acquiring/detailed/{reportId}` | template — no prior, EndpointBudget learns from response headers | — | — | swagger 13 |
 | `wb prices list` | `EP_PRICES_GOODS_FILTER` | `/api/v2/list/goods/filter` | undocumented | undocumented | not in swagger |
 
 > *uniform* in the Base column means swagger documents a single rate that applies

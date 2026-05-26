@@ -98,6 +98,13 @@ __all__ = [
     'STATISTICS_BASE_URL',
     'EP_STATISTICS_SALES',
     'EP_STATISTICS_ORDERS',
+    'FINANCE_BASE_URL',
+    'EP_FINANCE_SALES_REPORT_LIST',
+    'EP_FINANCE_SALES_REPORT_DETAILED',
+    'EP_FINANCE_SALES_REPORT_DETAILED_BY_ID',
+    'EP_FINANCE_ACQUIRING_LIST',
+    'EP_FINANCE_ACQUIRING_DETAILED',
+    'EP_FINANCE_ACQUIRING_DETAILED_BY_ID',
     'RUNWAY_ALERT_CRITICAL_DAYS',
     'RUNWAY_ALERT_LOW_DAYS',
     'RUNWAY_CONFIDENCE_HIGH_DAYS',
@@ -116,6 +123,7 @@ from enum import IntEnum
 PROMOTION_BASE_URL = 'https://advert-api.wildberries.ru'
 ANALYTICS_BASE_URL = 'https://seller-analytics-api.wildberries.ru'
 STATISTICS_BASE_URL = 'https://statistics-api.wildberries.ru'
+FINANCE_BASE_URL = 'https://finance-api.wildberries.ru'
 PRICES_BASE_URL = 'https://discounts-prices-api.wildberries.ru'
 COMMON_API_BASE_URL = 'https://common-api.wildberries.ru'
 
@@ -316,6 +324,18 @@ REPORT_POLL_TIMEOUT = 120.0
 # Source: statistics-api.wildberries.ru
 EP_STATISTICS_SALES = '/api/v1/supplier/sales'
 EP_STATISTICS_ORDERS = '/api/v1/supplier/orders'
+
+# ── Finance API endpoint paths ───────────────────────────────────────
+# Source: docs/swagger/13-finances.yaml (verified 2026-05-27).
+# WB pre-generates these reports on a weekly schedule (daily if the
+# seller has opted in). All six endpoints are read-only; the
+# ``detailed*`` variants paginate via the ``rrdId`` cursor (204 = end).
+EP_FINANCE_SALES_REPORT_LIST = '/api/finance/v1/sales-reports/list'
+EP_FINANCE_SALES_REPORT_DETAILED = '/api/finance/v1/sales-reports/detailed'
+EP_FINANCE_SALES_REPORT_DETAILED_BY_ID = '/api/finance/v1/sales-reports/detailed/{report_id}'
+EP_FINANCE_ACQUIRING_LIST = '/api/finance/v1/acquiring/list'
+EP_FINANCE_ACQUIRING_DETAILED = '/api/finance/v1/acquiring/detailed'
+EP_FINANCE_ACQUIRING_DETAILED_BY_ID = '/api/finance/v1/acquiring/detailed/{report_id}'
 
 # ── Stock runway thresholds ──────────────────────────────────────────
 RUNWAY_ALERT_CRITICAL_DAYS = 7

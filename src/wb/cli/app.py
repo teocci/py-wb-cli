@@ -19,6 +19,7 @@ from wb.cli.bid import bid_app
 from wb.cli.budget import budget_app
 from wb.cli.campaign import campaign_app
 from wb.cli.cluster import cluster_app
+from wb.cli.finance import finance_app
 from wb.cli.portal import portal_app
 from wb.cli.prices import prices_app
 from wb.cli.product import product_app
@@ -57,6 +58,10 @@ app.add_typer(prices_app, name='prices', help='Prices and discounts')
 app.add_typer(analytics_app, name='analytics', help='Analytics operations')
 app.add_typer(optimize_app, name='optimize', help='Optimization workflows')
 app.add_typer(report_app, name='report', help='Reports (warehouse, orders, sales)')
+app.add_typer(
+    finance_app, name='finance',
+    short_help='Settlement reports (sales, acquiring) — finance-api',
+)
 app.add_typer(snapshot_app, name='snapshot', help='Local domain snapshots')
 app.add_typer(product_app, name='product', help='Product summary and analysis')
 app.add_typer(rate_app, name='rate', help='Rate-limit diagnostic (read-only)')

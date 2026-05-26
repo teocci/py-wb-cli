@@ -76,6 +76,10 @@ from wb.core.constants import (
     EP_SEARCH_ORDERS,
     EP_SEARCH_REPORT,
     EP_SEARCH_TEXTS,
+    EP_FINANCE_ACQUIRING_DETAILED,
+    EP_FINANCE_ACQUIRING_LIST,
+    EP_FINANCE_SALES_REPORT_DETAILED,
+    EP_FINANCE_SALES_REPORT_LIST,
     EP_STATISTICS_ORDERS,
     EP_STATISTICS_SALES,
     EP_STOCKS_WB_WAREHOUSES,
@@ -121,6 +125,16 @@ CACHEABLE_ENDPOINTS: frozenset[str] = frozenset({
     # the 1/min rate limit (caching the only legal call window).
     EP_STATISTICS_ORDERS,
     EP_STATISTICS_SALES,
+    # Finance API — settlement reports are write-once by WB on a fixed
+    # schedule; once published, the rows never change. 60 s TTL (Personal)
+    # / 1 h TTL (Base) lets back-to-back agent calls share the response
+    # instead of fighting the 1/min throttle. The two ``/detailed/{id}``
+    # endpoints aren't listed here for the same reason they aren't in
+    # ENDPOINT_LIMITS — see the comment in :mod:`wb.core.rate_limits`.
+    EP_FINANCE_SALES_REPORT_LIST,
+    EP_FINANCE_SALES_REPORT_DETAILED,
+    EP_FINANCE_ACQUIRING_LIST,
+    EP_FINANCE_ACQUIRING_DETAILED,
 })
 
 

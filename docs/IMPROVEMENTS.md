@@ -48,6 +48,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.40.0 | F-21 | ✅ DONE    | `wb portal bids` — CPC/CPM bid recommendations + empiric portal docs (separate `docs/portal/` tree, kept isolated from official `dev-wb-adv.md`) — [detail](phases/F-21-portal-bids.md) |
 | 0.41.0 | I-20 | ✅ DONE    | `wb auth list` surfaces `portal_user_id` (new column + JSON field) + dash-Type render for portal-only profiles — [detail](phases/I-20-auth-list-portal-identity.md) |
 | 0.42.0 | I-21 | ✅ DONE    | `wb report orders` + `wb report sales` — Statistics API per-order/per-sale wrappers with `--date`/`--since`/`--flag`, `--exclude-cancelled`, `--by-product` — [detail](phases/I-21-report-orders-sales.md) |
+| 0.43.0 | I-22 | ✅ DONE    | `wb finance` — sales-reports + acquiring settlement reports (6 endpoints on `finance-api.wildberries.ru`): `sales-reports list/get/detailed` + `acquiring list/get/detailed`. Opt-in `--all` cursor pagination respects 1 req/min budget — [detail](phases/I-22-finance-reports.md) |
 
 ---
 
@@ -85,6 +86,13 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 - `product summary --nms 100525085` returns sales + ad spend + clusters + bids in one call.
 
 ---
+
+## Deferred Follow-ups
+
+| Theme | Scope | Source |
+|-------|-------|--------|
+| `wb finance balance` | Wrap `GET /api/v1/account/balance` (finance-api seller-settlement balance — distinct from the existing `wb budget balance` which is the ad-deposit on `/adv/v1/balance`). 1/min throttle, same finance token category. | I-22 deferred |
+| `wb finance documents …` | Wrap the 4 Documents API endpoints: `/api/v1/documents/categories`, `/list`, `/download`, `/download/all`. Lets agents fetch redemption notices, acceptance acts, and other settlement artifacts as PDF/XLSX/ZIP (base64-decoded). Token category: `documents`. | I-22 deferred |
 
 ## Current Issues (Open)
 

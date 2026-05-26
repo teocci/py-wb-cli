@@ -61,6 +61,10 @@ from wb.core.constants import (
     EP_SEARCH_ORDERS,
     EP_SEARCH_REPORT,
     EP_SEARCH_TEXTS,
+    EP_FINANCE_ACQUIRING_DETAILED,
+    EP_FINANCE_ACQUIRING_LIST,
+    EP_FINANCE_SALES_REPORT_DETAILED,
+    EP_FINANCE_SALES_REPORT_LIST,
     EP_STATISTICS_ORDERS,
     EP_STATISTICS_SALES,
     EP_STOCKS_WB_WAREHOUSES,
@@ -147,6 +151,19 @@ ENDPOINT_LIMITS: dict[str, tuple[int, float]] = {
     #   both endpoints: 1/min, burst 1 (strict; preemptive throttle protects agents)
     EP_STATISTICS_ORDERS: (1, 60.0),         # swagger 12: 1/min, burst 1
     EP_STATISTICS_SALES:  (1, 60.0),         # swagger 12: 1/min, burst 1
+
+    # ── Finance API — sales-reports + acquiring ──────────────────────────
+    # All six endpoints documented at 1/min, burst 1. Only the four
+    # non-templated paths are entered here; the two ``/detailed/{report_id}``
+    # variants are not — their URL carries a per-report ID so each
+    # reportId would be its own ``EndpointBudget`` bucket and a static
+    # prior wouldn't help. EndpointBudget self-corrects from response
+    # headers if WB throttles us. The by-period endpoints (the typical
+    # agent path) ARE rate-limited preemptively here.
+    EP_FINANCE_SALES_REPORT_LIST:     (1, 60.0),   # swagger 13: 1/min, burst 1
+    EP_FINANCE_SALES_REPORT_DETAILED: (1, 60.0),   # swagger 13: 1/min, burst 1
+    EP_FINANCE_ACQUIRING_LIST:        (1, 60.0),   # swagger 13: 1/min, burst 1
+    EP_FINANCE_ACQUIRING_DETAILED:    (1, 60.0),   # swagger 13: 1/min, burst 1
 }
 
 # ── Base-token overrides (R-5) ─────────────────────────────────────────
@@ -198,6 +215,15 @@ BASE_OVERRIDES: dict[str, tuple[int, float]] = {
     # Reports — warehouse remains (4/h, 15 min interval, burst 1)
     EP_WAREHOUSE_REMAINS_CREATE: (1, 900.0),
     EP_WAREHOUSE_REMAINS_STATUS: (1, 900.0),
+
+    # Finance — sales-reports + acquiring. Swagger doesn't stratify by
+    # token type; the 1/min Personal limit becomes 1/hour for Base tokens
+    # by the same convention applied to other un-stratified endpoints in
+    # this file (RATE_LIMITS.md "When swagger silent, default Base = 1/h").
+    EP_FINANCE_SALES_REPORT_LIST:     (1, 3600.0),
+    EP_FINANCE_SALES_REPORT_DETAILED: (1, 3600.0),
+    EP_FINANCE_ACQUIRING_LIST:        (1, 3600.0),
+    EP_FINANCE_ACQUIRING_DETAILED:    (1, 3600.0),
 }
 
 

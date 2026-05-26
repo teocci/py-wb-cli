@@ -13,6 +13,7 @@ from wb.core.constants import (
     ANALYTICS_BASE_URL,
     CACHE_DB_FILE,
     DEFAULT_TOKEN_TYPE,
+    FINANCE_BASE_URL,
     PRICES_BASE_URL,
     PROMOTION_BASE_URL,
     RATE_LIMIT_DB_FILE,
@@ -56,6 +57,8 @@ __all__ = [
     'create_product_service',
     'create_assess_service',
     'create_pulse_service',
+    'create_finance_client',
+    'create_finance_service',
 ]
 
 
@@ -809,6 +812,78 @@ def create_pulse_service(profile_name: str | None = None):
         bid_service=_lazy_bid(client),
         config_dir=settings.config_dir,
     )
+
+
+# ── Finance factories ────────────────────────────────────────────────
+
+
+def _get_finance_token(
+        profile_name: str | None = None,
+        cli_token: str | None = None,
+) -> str:
+    """Retrieve the finance token from a CLI flag or the active profile.
+
+    Priority chain (post A-2): ``CLI flag → profile → ConfigError``.
+    Mirrors :func:`_get_promotion_token` / :func:`_get_analytics_token`
+    but reads the ``finance`` token category.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+        cli_token: Token passed via CLI flag (highest priority).
+
+    Returns:
+        Finance API JWT.
+
+    Raises:
+        ConfigError: When neither a CLI flag nor a registered profile
+            provides a finance token.
+    """
+    if cli_token:
+        return cli_token
+    settings = _Container.settings()
+    try:
+        store = ProfileStore(settings.config_dir)
+        profile = store.get_profile(profile_name)
+    except ConfigError as exc:
+        raise _bootstrap_required_error(
+            'no active profile and no --token flag',
+        ) from exc
+    return profile.get_token('finance')
+
+
+def create_finance_client(profile_name: str | None = None):
+    """Create a :class:`FinanceClient` from profile credentials.
+
+    Wires the shared :class:`EndpointBudget` so the 1/min limit on the
+    six finance-api endpoints is enforced preemptively.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured :class:`FinanceClient` instance.
+    """
+    from wb.client.finance import FinanceClient
+    token = _get_finance_token(profile_name)
+    token_type = _get_token_type(profile_name)
+    http = _Container.http_client(
+        FINANCE_BASE_URL, token,
+        with_rate_limits=True, token_type=token_type,
+    )
+    return FinanceClient(http)
+
+
+def create_finance_service(profile_name: str | None = None):
+    """Create a :class:`FinanceService` from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured :class:`FinanceService` instance.
+    """
+    from wb.services.finance import FinanceService
+    return FinanceService(create_finance_client(profile_name))
 
 
 def create_product_service(profile_name: str | None = None):
