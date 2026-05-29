@@ -14,9 +14,13 @@ from typing import Any
 import httpx
 
 from wb.core.constants import (
+    DOWNLOADS_CONTENT_ANALYTICS_BASE_URL,
     EP_PORTAL_AUTH_TOKEN,
     EP_PORTAL_BIDS,
     EP_PORTAL_BIDS_CPC,
+    EP_PORTAL_JAM_DOWNLOADS,
+    EP_PORTAL_JAM_FILE,
+    EP_PORTAL_JAM_GENERATE,
     EP_PORTAL_TABLE_LIST,
     EP_PORTAL_TOKENS_JRPC,
     PORTAL_AUTH_HEADER,
@@ -103,19 +107,29 @@ class PortalClient:
         )
         return self._parse_auth_response(response)
 
-    def generate_token(self) -> str:
-        """Generate a render token via the portal JRPC endpoint.
+    def generate_token(self, team: str = 'render') -> str:
+        """Mint a portal token via the ``tokensjrpc`` JRPC endpoint.
+
+        The same JRPC method serves multiple "teams" — each returns a token
+        scoped for one downstream service. Known teams:
+
+        - ``render`` (default, legacy use-case): 412-char alphanumeric render token.
+        - ``content-analytics``: base64 ``{expiresAt, encryptedPart}`` token used as
+          the ``x-download-token`` header by the WB Джем (Jam) downloads CDN.
+
+        Args:
+            team: The token "team" to request.
 
         Returns:
-            The generated token string (412 chars, alphanumeric).
+            The minted token string. Shape depends on ``team``.
 
         Raises:
             AuthenticationError: If credentials are invalid or expired.
-            ApiError: If the response format is unexpected.
+            ApiError: If the response format is unexpected or the team is unknown.
         """
         payload = self._build_jrpc_payload(
             method='generateToken',
-            params={'team': 'render'},
+            params={'team': team},
         )
         response = self._post(
             SELLER_CONTENT_BASE_URL,
@@ -123,6 +137,15 @@ class PortalClient:
             payload,
         )
         return self._parse_token_response(response)
+
+    def generate_download_token(self) -> str:
+        """Mint the short-lived ``x-download-token`` for the Jam downloads CDN.
+
+        Convenience wrapper for :meth:`generate_token` with ``team='content-analytics'``.
+        The token is required by ``downloads-content-analytics.wildberries.ru`` and
+        expires after a few minutes — mint just-in-time before each download.
+        """
+        return self.generate_token(team='content-analytics')
 
     def list_products(
             self,
@@ -194,6 +217,83 @@ class PortalClient:
             path = EP_PORTAL_BIDS
             params['payment_type'] = pt_value
         return self._get(WB_CMP_BASE_URL, path, params)
+
+    def generate_jam_report(
+            self,
+            report_id: str,
+            report_type: str,
+            params: dict[str, Any],
+            *,
+            user_report_name: str = '',
+    ) -> dict[str, Any]:
+        """Trigger generation of a WB Джем (Jam) report.
+
+        The caller picks ``report_id`` (a UUID) so the same id can later be
+        matched against the ``downloads`` list during polling.
+
+        Args:
+            report_id: Client-generated UUID for this report instance.
+            report_type: WB report-type slug (e.g. ``SEARCH_QUERIES_REPORT``).
+            params: Report-specific parameters (date range, filters, sort).
+            user_report_name: Optional display name; empty string by default.
+
+        Returns:
+            Parsed JSON — expected shape ``{'data': 'Created', 'error': false, ...}``.
+        """
+        payload = {
+            'id': report_id,
+            'userReportName': user_report_name,
+            'reportType': report_type,
+            'params': params,
+        }
+        return self._post(
+            SELLER_CONTENT_BASE_URL,
+            EP_PORTAL_JAM_GENERATE,
+            payload,
+        )
+
+    def list_jam_reports(self, report_type: str) -> list[dict[str, Any]]:
+        """List Jam reports of a given type that WB has queued or generated.
+
+        Args:
+            report_type: WB report-type slug to filter by.
+
+        Returns:
+            List of raw ``downloads[]`` entries (may be empty).
+        """
+        response = self._get(
+            SELLER_CONTENT_BASE_URL,
+            EP_PORTAL_JAM_DOWNLOADS,
+            {'report_types': report_type},
+        )
+        if not isinstance(response, dict):
+            return []
+        data = response.get('data') or {}
+        downloads = data.get('downloads') or []
+        return [d for d in downloads if isinstance(d, dict)]
+
+    def download_jam_file(self, report_id: str) -> bytes:
+        """Fetch the binary ZIP for a generated Jam report.
+
+        Two-step on the WB side:
+
+        1. Mint a short-lived ``x-download-token`` via the portal JRPC tokens
+           endpoint (``team='content-analytics'``).
+        2. GET the file from ``downloads-content-analytics.wildberries.ru`` with
+           that token + the session cookie (no ``authorizev3`` on this host).
+
+        Args:
+            report_id: The same UUID passed to :meth:`generate_jam_report`.
+
+        Returns:
+            Raw ZIP bytes; caller writes to disk.
+        """
+        download_token = self.generate_download_token()
+        return self._get_bytes(
+            DOWNLOADS_CONTENT_ANALYTICS_BASE_URL,
+            f'{EP_PORTAL_JAM_FILE}/{report_id}',
+            download_token=download_token,
+        )
 
     def _build_jrpc_payload(
             self,
@@ -344,6 +444,64 @@ class PortalClient:
                 status_code=response.status_code,
                 response_body=response.text,
             ) from exc
+
+    def _get_bytes(
+            self,
+            base_url: str,
+            path: str,
+            *,
+            download_token: str | None = None,
+    ) -> bytes:
+        """GET a binary payload from a portal-adjacent host.
+
+        Used for Jam file downloads on ``downloads-content-analytics.wildberries.ru``.
+        Matches the captured browser trace's header set: cookie-based auth, no
+        ``authorizev3`` (this host doesn't accept it), no JSON content-type.
+
+        Args:
+            base_url: Host base URL (e.g. ``DOWNLOADS_CONTENT_ANALYTICS_BASE_URL``).
+            path: Endpoint path (already includes any ``/{id}`` suffix).
+            download_token: Optional ``x-download-token`` value — required by the
+                Jam downloads CDN; minted via :meth:`generate_download_token`.
+
+        Returns:
+            Raw response body bytes.
+
+        Raises:
+            AuthenticationError: On 401/403.
+            ApiError: On other non-2xx responses.
+        """
+        url = f'{base_url}{path}'
+        headers = {
+            'cookie': self._cookie,
+            'accept': '*/*',
+            'origin': SELLER_PORTAL_BASE_URL,
+            'referer': f'{SELLER_PORTAL_BASE_URL}/',
+            'user-agent': _DEFAULT_USER_AGENT,
+        }
+        if download_token:
+            headers['x-download-token'] = download_token
+        try:
+            response = httpx.get(url, headers=headers, timeout=self._timeout)
+        except httpx.HTTPError as exc:
+            raise ApiError(
+                f'Portal download failed: {exc}',
+                status_code=None,
+                response_body=None,
+            ) from exc
+
+        if response.status_code in (401, 403):
+            raise AuthenticationError(
+                f'Portal download auth failed (HTTP {response.status_code}). '
+                'Session cookie may have expired — re-run `wb auth login-portal`.'
+            )
+        if response.status_code >= 400:
+            raise ApiError(
+                f'Portal download error: HTTP {response.status_code}',
+                status_code=response.status_code,
+                response_body=response.text[:500],
+            )
+        return response.content
 
     @staticmethod
     def _parse_auth_response(data: dict[str, Any]) -> PortalSession:

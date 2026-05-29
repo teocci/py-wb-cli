@@ -114,6 +114,11 @@ __all__ = [
     'REPORTS_DIR_NAME',
     'PRICES_BASE_URL',
     'EP_PRICES_GOODS_FILTER',
+    'DOWNLOADS_CONTENT_ANALYTICS_BASE_URL',
+    'EP_PORTAL_JAM_GENERATE',
+    'EP_PORTAL_JAM_DOWNLOADS',
+    'EP_PORTAL_JAM_FILE',
+    'JAM_REPORT_SEARCH_QUERIES',
 ]
 
 import re
@@ -133,6 +138,9 @@ SELLER_CONTENT_BASE_URL = 'https://seller-content.wildberries.ru'
 # Campaign-management portal (undocumented; see docs/portal/README.md).
 # Hosts the per-NM bid recommendation endpoints used by `wb portal bids`.
 WB_CMP_BASE_URL = 'https://cmp.wildberries.ru'
+# WB Джем (Jam) report-download CDN — file payloads land here after WB
+# generates them. Auth is cookie-based; no authorizev3 header.
+DOWNLOADS_CONTENT_ANALYTICS_BASE_URL = 'https://downloads-content-analytics.wildberries.ru'
 
 # ── Configuration defaults ─────────────────────────────────────────────
 DEFAULT_PROFILE_NAME = 'default'
@@ -360,3 +368,9 @@ EP_PORTAL_TABLE_LIST = '/ns/viewer/content-card/viewer/tableListv6'
 # Documented empirically in docs/portal/endpoints/bids.md and bids-cpc.md.
 EP_PORTAL_BIDS = '/api/v1/advert/bids'
 EP_PORTAL_BIDS_CPC = '/api/v1/advert/bids-cpc'
+# I-23 — WB Джем (Jam) report endpoints. Async file-manager workflow:
+# POST generate → GET poll list → GET file. See docs/phases/I-23-portal-jam-reports.md.
+EP_PORTAL_JAM_GENERATE = '/ns/analytics-api/content-analytics/api/v1/file-manager/download'
+EP_PORTAL_JAM_DOWNLOADS = '/ns/analytics-api/content-analytics/api/v1/file-manager/downloads'
+EP_PORTAL_JAM_FILE = '/api/v1/file-manager/download'  # download host; '/{id}' appended
+JAM_REPORT_SEARCH_QUERIES = 'SEARCH_QUERIES_REPORT'

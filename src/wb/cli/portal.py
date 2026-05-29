@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import date
+from pathlib import Path
+
 import typer
 
 from wb.cli._helpers import get_profile, get_renderer
-from wb.core.constants import ExitCode
+from wb.core.constants import ExitCode, JAM_REPORT_SEARCH_QUERIES
 from wb.core.exceptions import WbCliError
 from wb.core.output import _stdout_console
 from wb.domain.enums import BidType, PaymentType
@@ -21,6 +24,20 @@ portal_app = typer.Typer(
         '`wb campaign`, `wb stats`, `wb analytics`, etc. command trees.'
     ),
     no_args_is_help=True,
+)
+
+jam_app = typer.Typer(
+    help=(
+        'WB Джем (Jam) report downloads. Async file-manager workflow against '
+        'the seller portal: generate the report → poll until SUCCESS → download '
+        'the ZIP. Same portal auth as `wb portal products`/`bids`.'
+    ),
+    no_args_is_help=True,
+)
+portal_app.add_typer(
+    jam_app,
+    name='jam',
+    short_help='WB Джем (Jam) report downloads (search-queries, …)',
 )
 
 # F-21 — map BidType enum value → integer expected by the portal endpoints.
@@ -315,3 +332,149 @@ def _render_bids_table(records: list) -> None:
         for r in records
     ]
     render_table(headers, rows, title='Portal Bid Recommendations (kopecks)')
+
+
+# ── `wb portal jam` ──────────────────────────────────────────────────
+
+
+def _get_jam_service(profile: str | None):
+    """Build a PortalJamService scoped to the resolved profile."""
+    from wb.services._factory import create_portal_jam_service
+    return create_portal_jam_service(profile_name=profile)
+
+
+def _parse_iso_date(value: str, flag: str) -> date:
+    """Parse a ``YYYY-MM-DD`` CLI argument; raise typer.Exit on failure."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        typer.secho(
+            f'Error: {flag} must be YYYY-MM-DD (got {value!r})',
+            fg=typer.colors.RED, err=True,
+        )
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR) from exc
+
+
+def _resolve_jam_output(output: Path | None, default_name: str) -> Path:
+    """Resolve where to write the downloaded ZIP.
+
+    If ``output`` is an existing directory (or ends in a path separator) the
+    default filename is appended. If ``output`` is ``None`` the current working
+    directory is used. Otherwise ``output`` is treated as the target file path.
+    """
+    if output is None:
+        return Path.cwd() / default_name
+    if output.is_dir():
+        return output / default_name
+    return output
+
+
+def _render_jam_metadata(report, saved_path: Path, renderer) -> None:
+    """Print metadata for a successfully downloaded Jam report."""
+    import json
+    from dataclasses import asdict
+
+    payload = {**asdict(report), 'saved_path': str(saved_path)}
+    if renderer.is_json:
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    typer.echo(
+        f'Generated report {report.id} '
+        f'({report.start_date}..{report.end_date}, {report.size} bytes)'
+    )
+    typer.echo(f'Saved: {saved_path}')
+
+
+@jam_app.command('search-queries')
+def jam_search_queries(
+        ctx: typer.Context,
+        from_str: str = typer.Option(
+            ..., '--from', '-f', help='Report start date YYYY-MM-DD.',
+        ),
+        to_str: str | None = typer.Option(
+            None, '--to', '-t',
+            help='Report end date YYYY-MM-DD. Defaults to --from (single-day report).',
+        ),
+        output: Path | None = typer.Option(
+            None, '--output', '-o',
+            help='Output path. File → save under that name. Directory → save default '
+                 'filename inside. Default: current working directory.',
+        ),
+) -> None:
+    """Generate, poll, and download the ``SEARCH_QUERIES_REPORT`` ZIP.
+
+    Runs the full async pipeline (generate → poll until SUCCESS → download)
+    against the undocumented seller-portal ``file-manager`` endpoint and writes
+    the resulting ZIP (an XLSX inside) to disk. ``--json`` emits report metadata
+    as JSON instead of a human-readable line.
+    """
+    from wb.services.portal_jam import default_filename
+
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx)
+    from_date = _parse_iso_date(from_str, '--from')
+    to_date = _parse_iso_date(to_str, '--to') if to_str else from_date
+    if to_date < from_date:
+        typer.secho('Error: --to must be on or after --from', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR)
+
+    try:
+        service = _get_jam_service(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    try:
+        report, content = service.fetch_search_queries(from_date, to_date)
+    except WbCliError as exc:
+        typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
+
+    target = _resolve_jam_output(
+        output, default_filename(JAM_REPORT_SEARCH_QUERIES, from_date, to_date),
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+    _render_jam_metadata(report, target, renderer)
+
+
+@jam_app.command('list')
+def jam_list(ctx: typer.Context) -> None:
+    """List ready/queued ``SEARCH_QUERIES_REPORT`` jobs known to WB.
+
+    Calls the portal ``file-manager/downloads`` endpoint. Useful for re-fetching
+    an already-generated report (download URL is the ``downloadUrl`` field).
+    """
+    import json
+    from dataclasses import asdict
+    from wb.core.output import render_table
+
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx)
+
+    try:
+        service = _get_jam_service(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    try:
+        reports = service.list_reports(JAM_REPORT_SEARCH_QUERIES)
+    except WbCliError as exc:
+        typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
+
+    if renderer.is_json:
+        typer.echo(json.dumps([asdict(r) for r in reports], indent=2, ensure_ascii=False))
+        return
+    if not reports:
+        typer.echo('No Jam search-queries reports found.')
+        return
+    rows = [
+        [r.id[:8], r.status, r.start_date, r.end_date, str(r.size), r.created_at]
+        for r in reports
+    ]
+    render_table(
+        ['ID (8)', 'Status', 'From', 'To', 'Size', 'Created'],
+        rows, title=f'Jam Search-Queries Reports ({len(reports)})',
+    )

@@ -42,6 +42,7 @@ __all__ = [
     'ReachTier',
     'PortalBidRecommendation',
     'parse_portal_bids_response',
+    'JamReport',
 ]
 
 
@@ -1289,3 +1290,56 @@ def parse_portal_bids_response(
             if isinstance(item, dict)
         ]
     return []
+
+
+@dataclass(slots=True)
+class JamReport:
+    """Async report entry from the WB Джем (Jam) ``file-manager/downloads`` list.
+
+    Attributes:
+        id: Client-generated UUID echoed by WB; used to match the report we just
+            requested against the list response and to build the download URL.
+        status: WB status string — ``SUCCESS`` is terminal-ok, ``FAILED``/``ERROR``
+            terminal-fail, anything else (``PROCESSING`` etc.) means keep polling.
+        name: Human-readable report name (Russian; e.g. "Поисковые запросы — ваши товары").
+        size: ZIP size in bytes (``0`` until generated).
+        start_date: Reporting period start (``YYYY-MM-DD``).
+        end_date: Reporting period end (``YYYY-MM-DD``).
+        download_url: Full URL on the downloads-content-analytics host.
+        created_at: When WB queued the report (ISO-8601).
+        generated_at: When WB finished generating it (ISO-8601; empty if not ready).
+    """
+
+    id: str
+    status: str
+    name: str
+    size: int
+    start_date: str
+    end_date: str
+    download_url: str
+    created_at: str
+    generated_at: str
+
+    @classmethod
+    def from_api(cls, data: dict) -> JamReport:
+        """Build from a raw ``data.downloads[]`` entry; tolerant of missing keys."""
+        return cls(
+            id=str(data.get('id', '')),
+            status=str(data.get('status', '')),
+            name=str(data.get('name', '')),
+            size=int(data.get('size') or 0),
+            start_date=str(data.get('startDate', '')),
+            end_date=str(data.get('endDate', '')),
+            download_url=str(data.get('downloadUrl', '')),
+            created_at=str(data.get('createdAt', '')),
+            generated_at=str(data.get('generatedAt', '')),
+        )
+
+    @property
+    def is_terminal(self) -> bool:
+        """True once the report has reached a final state (success or failure)."""
+        return self.status in ('SUCCESS', 'FAILED', 'ERROR')
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == 'SUCCESS'

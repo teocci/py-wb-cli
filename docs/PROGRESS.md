@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.43.0 |
-| **Tests Passing** | 1520/1522 (49 new in I-22; 1 pre-existing env-leak in `test_auth_list_empty`, 1 timing-sensitive flake `test_acquire_after_window_clears_no_sleep` that passes in isolation) |
-| **Phases Complete** | 59 |
+| **Current Version** | 0.44.0 |
+| **Tests Passing** | 1558/1559 (38 new in I-23; 1 pre-existing env-leak in `test_auth_list_empty`) |
+| **Phases Complete** | 60 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -79,6 +79,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | I-20 | `wb auth list` surfaces `portal_user_id` + dash-Type for portal-only profiles | ✅ DONE | 0.41.0 |
 | I-21 | `wb report orders` + `wb report sales` — Statistics API per-order/per-sale wrappers | ✅ DONE | 0.42.0 |
 | I-22 | `wb finance` — sales-reports + acquiring settlement reports (6 endpoints) | ✅ DONE | 0.43.0 |
+| I-23 | `wb portal jam` — WB Джем report downloads (search-queries + list) | ✅ DONE | 0.44.0 |
 
 Phase detail files: [docs/phases/](phases/)
 

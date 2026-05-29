@@ -49,6 +49,7 @@ Tracks planned and in-progress improvements. Completed phases: [docs/phases/](ph
 | 0.41.0 | I-20 | ✅ DONE    | `wb auth list` surfaces `portal_user_id` (new column + JSON field) + dash-Type render for portal-only profiles — [detail](phases/I-20-auth-list-portal-identity.md) |
 | 0.42.0 | I-21 | ✅ DONE    | `wb report orders` + `wb report sales` — Statistics API per-order/per-sale wrappers with `--date`/`--since`/`--flag`, `--exclude-cancelled`, `--by-product` — [detail](phases/I-21-report-orders-sales.md) |
 | 0.43.0 | I-22 | ✅ DONE    | `wb finance` — sales-reports + acquiring settlement reports (6 endpoints on `finance-api.wildberries.ru`): `sales-reports list/get/detailed` + `acquiring list/get/detailed`. Opt-in `--all` cursor pagination respects 1 req/min budget — [detail](phases/I-22-finance-reports.md) |
+| 0.44.0 | I-23 | ✅ DONE | `wb portal jam` — async download of WB Джем (Jam) seller-analytics reports via the undocumented `file-manager` workflow (generate → poll → download). First report: `search-queries` (SEARCH_QUERIES_REPORT). Adds `wb portal jam search-queries` + `wb portal jam list`. Empirically reverse-engineered the `x-download-token` minting (tokensjrpc `team='content-analytics'`) — [detail](phases/I-23-portal-jam-reports.md) |
 
 ---
 
