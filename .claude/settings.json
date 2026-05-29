@@ -125,7 +125,20 @@
       "Bash(.venv/Scripts/python -c \"import wb; print\\(wb.__version__\\)\")",
       "Bash(git ls-remote *)",
       "PowerShell(if \\(Test-Path \".venv/Scripts\"\\) { $venv = \".venv/Scripts\" } else { $venv = \".venv/bin\" }; & \"$venv/python\" -m pytest tests/unit/test_cli_auth.py -v 2>&1 | Select-Object -Last 80)",
-      "PowerShell(if \\(Test-Path \".venv/Scripts\"\\) { $venv = \".venv/Scripts\" } else { $venv = \".venv/bin\" }; & \"$venv/python\" -m pytest tests/unit/ 2>&1 | Select-Object -Last 5)"
+      "PowerShell(if \\(Test-Path \".venv/Scripts\"\\) { $venv = \".venv/Scripts\" } else { $venv = \".venv/bin\" }; & \"$venv/python\" -m pytest tests/unit/ 2>&1 | Select-Object -Last 5)",
+      "Bash(Get-ChildItem -Path \"d:\\\\teocci\\\\code\\\\python\\\\py-wb-cli\" -Directory)",
+      "Bash(./.venv/Scripts/python -m wb auth whoami)",
+      "Bash(./.venv/Scripts/python -c \"from pathlib import Path; lines=Path\\('src/wb/domain/models.py'\\).read_text\\(\\).splitlines\\(\\); print\\(len\\(lines\\)\\)\")",
+      "Bash(./.venv/Scripts/python -c \"import wb.cli.portal; import wb.services.portal_jam; import wb.client.portal; print\\('imports OK'\\)\")",
+      "Bash(./.venv/Scripts/python -m wb portal jam --help)",
+      "Bash(./.venv/Scripts/python -m pytest tests/unit/test_portal_jam.py -v)",
+      "Bash(./.venv/Scripts/python -m pytest tests/unit/)",
+      "Bash(mkdir -p d:/tmp/jam-verify)",
+      "Bash(./.venv/Scripts/python -m wb portal jam search-queries --from 2026-05-11 -o d:/tmp/jam-verify)",
+      "Bash(./.venv/Scripts/python -c ' *)",
+      "Bash(./.venv/Scripts/python -m pytest tests/unit/test_portal_client.py -v)",
+      "Bash(./.venv/Scripts/python -m wb --json portal jam list)",
+      "Bash(./.venv/Scripts/python -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(d['id'], d['status'], d['start_date'], d['size']\\) for d in data[:5]]\")"
     ],
     "additionalDirectories": [
       "d:\\teocci\\code\\python\\py-wb-cli\\.claude\\skills",
