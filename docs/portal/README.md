@@ -6,15 +6,16 @@ This directory documents endpoints that the WB seller-portal web UI calls from a
 
 ## Scope
 
-Three hosts are documented here:
+Four hosts are documented here:
 
 | Host | Role |
 |---|---|
 | `cmp.wildberries.ru` | Campaign-management portal — bid recommendations, reach forecasts, campaign editor data. |
 | `seller.wildberries.ru` | Main seller portal — auth, profile, account-level data. |
-| `seller-content.wildberries.ru` | Content portal — product cards, render-token JRPC. |
+| `seller-content.wildberries.ru` | Content portal — product cards, JRPC token mint, WB Джем (Jam) report generate + list. |
+| `downloads-content-analytics.wildberries.ru` | Read-only CDN — serves the binary ZIP files for WB Джем (Jam) reports. **Uses a different auth shape** (cookie + `x-download-token`; rejects `authorizev3`). |
 
-All three are reached with the **same auth pair**: `authorizev3` header + browser `cookie` string (see [Auth model](#auth-model)).
+The first three share the **same auth pair**: `authorizev3` header + browser `cookie` (see [Auth model](#auth-model)). The downloads CDN uses cookie + a short-lived `x-download-token` minted via [tokens-jrpc](endpoints/tokens-jrpc.md) — see [file-manager-file.md](endpoints/file-manager-file.md) for details.
 
 ## Auth model
 
@@ -45,8 +46,11 @@ If a documented endpoint stops working, the action is: (1) re-capture from DevTo
 | `/api/v1/advert/bids` | GET | `cmp.wildberries.ru` | `wb portal bids` (F-21) | [bids.md](endpoints/bids.md) |
 | `/api/v1/advert/bids-cpc` | GET | `cmp.wildberries.ru` | `wb portal bids` (F-21) | [bids-cpc.md](endpoints/bids-cpc.md) |
 | `/ns/suppliers-auth/suppliers-portal-core/auth/token` | POST | `seller.wildberries.ru` | `PortalClient.authenticate()` | [auth-token.md](endpoints/auth-token.md) |
-| `/ns/suppliers-auth-tokens/suppliers-portal-core/api/v1/tokensjrpc` | POST | `seller-content.wildberries.ru` | `wb auth generate-token` | [tokens-jrpc.md](endpoints/tokens-jrpc.md) |
+| `/ns/suppliers-auth-tokens/suppliers-portal-core/api/v1/tokensjrpc` | POST | `seller-content.wildberries.ru` | `wb auth generate-token` (team `render`) · `wb portal jam search-queries` (team `content-analytics`, I-23) | [tokens-jrpc.md](endpoints/tokens-jrpc.md) |
 | `/ns/viewer/content-card/viewer/tableListv6` | POST | `seller-content.wildberries.ru` | `wb portal products` | [table-list.md](endpoints/table-list.md) |
+| `/ns/analytics-api/content-analytics/api/v1/file-manager/download` | POST | `seller-content.wildberries.ru` | `wb portal jam search-queries` (I-23) — generate | [file-manager-generate.md](endpoints/file-manager-generate.md) |
+| `/ns/analytics-api/content-analytics/api/v1/file-manager/downloads` | GET | `seller-content.wildberries.ru` | `wb portal jam list` · `wb portal jam search-queries` polling (I-23) | [file-manager-downloads.md](endpoints/file-manager-downloads.md) |
+| `/api/v1/file-manager/download/{id}` | GET | `downloads-content-analytics.wildberries.ru` | `wb portal jam search-queries` (I-23) — file fetch | [file-manager-file.md](endpoints/file-manager-file.md) |
 
 ## Stability disclaimer
 
