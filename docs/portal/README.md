@@ -51,6 +51,8 @@ If a documented endpoint stops working, the action is: (1) re-capture from DevTo
 | `/ns/analytics-api/content-analytics/api/v1/file-manager/download` | POST | `seller-content.wildberries.ru` | `wb portal jam search-queries` (I-23) — generate | [file-manager-generate.md](endpoints/file-manager-generate.md) |
 | `/ns/analytics-api/content-analytics/api/v1/file-manager/downloads` | GET | `seller-content.wildberries.ru` | `wb portal jam list` · `wb portal jam search-queries` polling (I-23) | [file-manager-downloads.md](endpoints/file-manager-downloads.md) |
 | `/api/v1/file-manager/download/{id}` | GET | `downloads-content-analytics.wildberries.ru` | `wb portal jam search-queries` (I-23) — file fetch | [file-manager-file.md](endpoints/file-manager-file.md) |
+| `/api/v6/upd` | GET | `cmp.wildberries.ru` | `wb portal campaign finance` (I-24) — paginated expense ledger JSON | [upd-list.md](endpoints/upd-list.md) |
+| `/api/v5/updxlsx` | GET | `cmp.wildberries.ru` | `wb portal campaign finance-xlsx` (I-24) — full-range expense ledger xlsx | [upd-xlsx.md](endpoints/upd-xlsx.md) |
 
 ## Stability disclaimer
 
