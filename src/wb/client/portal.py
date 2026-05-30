@@ -23,6 +23,8 @@ from wb.core.constants import (
     EP_PORTAL_JAM_GENERATE,
     EP_PORTAL_TABLE_LIST,
     EP_PORTAL_TOKENS_JRPC,
+    EP_PORTAL_UPD_LIST,
+    EP_PORTAL_UPD_XLSX,
     PORTAL_AUTH_HEADER,
     SELLER_CONTENT_BASE_URL,
     SELLER_PORTAL_BASE_URL,
@@ -293,6 +295,101 @@ class PortalClient:
             DOWNLOADS_CONTENT_ANALYTICS_BASE_URL,
             f'{EP_PORTAL_JAM_FILE}/{report_id}',
             download_token=download_token,
+            include_auth=False,
+        )
+
+    def list_campaign_finance(
+            self,
+            from_dt: str,
+            to_dt: str,
+            *,
+            page_number: int = 1,
+            page_size: int = 100,
+            bid_type: str = '[0]',
+            attribute: str = 'all',
+    ) -> dict[str, Any]:
+        """Fetch one page of the campaign expense ledger (``/api/v6/upd``).
+
+        Args:
+            from_dt: Range start as ISO-8601 with MSK offset
+                (e.g. ``'2026-05-11T00:00:00+03:00'``).
+            to_dt: Range end (inclusive end-of-day per WB semantics — pass
+                the start-of-day for that calendar day).
+            page_number: 1-indexed page number.
+            page_size: Rows per page.
+            bid_type: Bid-type filter — ``'[0]'`` (default) returns all types.
+            attribute: WB's catch-all filter — ``'all'`` matches the UI default.
+
+        Returns:
+            Raw response ``{upd_total_amount, total_count, upd_info[]}``.
+
+        Raises:
+            AuthenticationError: On 401/403.
+            ApiError: On other non-2xx responses or invalid JSON.
+        """
+        params = {
+            'page_number': str(page_number),
+            'page_size': str(page_size),
+            'bid_type': bid_type,
+            'attribute': attribute,
+            'from': from_dt,
+            'to': to_dt,
+        }
+        response = self._get(
+            WB_CMP_BASE_URL,
+            EP_PORTAL_UPD_LIST,
+            params,
+            origin=WB_CMP_BASE_URL,
+            referer=f'{WB_CMP_BASE_URL}/campaigns/finances',
+        )
+        if not isinstance(response, dict):
+            raise ApiError(
+                f'Unexpected /api/v6/upd payload type: {type(response).__name__}',
+                status_code=None,
+                response_body=None,
+            )
+        return response
+
+    def download_campaign_finance_xlsx(
+            self,
+            from_dt: str,
+            to_dt: str,
+            *,
+            page_size: int = 10,
+            bid_type: str = '[0]',
+    ) -> bytes:
+        """Download the full campaign-finance ledger as an xlsx workbook.
+
+        The xlsx endpoint always returns every row for the date range — the
+        ``pageNumber``/``pageSize`` params are vestigial (the UI sends 1/10).
+        We match the UI value to stay close to the captured trace.
+
+        Args:
+            from_dt: Range start as ISO-8601 with MSK offset.
+            to_dt: Range end (inclusive end-of-day per WB semantics).
+            page_size: Vestigial; passed through unchanged.
+            bid_type: Bid-type filter (default ``'[0]'`` = all).
+
+        Returns:
+            Raw xlsx bytes; caller writes to disk.
+
+        Raises:
+            AuthenticationError: On 401/403.
+            ApiError: On other non-2xx responses.
+        """
+        params = {
+            'bid_type': bid_type,
+            'from': from_dt,
+            'to': to_dt,
+            'pageNumber': '1',
+            'pageSize': str(page_size),
+        }
+        return self._get_bytes(
+            WB_CMP_BASE_URL,
+            EP_PORTAL_UPD_XLSX,
+            params=params,
+            origin=WB_CMP_BASE_URL,
+            referer=f'{WB_CMP_BASE_URL}/campaigns/finances',
         )
 
     def _build_jrpc_payload(
@@ -394,6 +491,9 @@ class PortalClient:
             base_url: str,
             path: str,
             params: dict[str, str],
+            *,
+            origin: str | None = None,
+            referer: str | None = None,
     ) -> dict[str, Any] | list[Any]:
         """Make a GET request to a portal endpoint.
 
@@ -401,6 +501,8 @@ class PortalClient:
             base_url: Portal base URL.
             path: Endpoint path.
             params: Query parameters.
+            origin: Override ``Origin`` header (defaults to ``base_url``).
+            referer: Override ``Referer`` header (defaults to ``f'{origin}/'``).
 
         Returns:
             Parsed JSON response — may be a dict or list depending on endpoint.
@@ -410,7 +512,7 @@ class PortalClient:
             ApiError: On other errors or invalid responses.
         """
         url = f'{base_url}{path}'
-        headers = self._build_headers(origin=base_url)
+        headers = self._build_headers(origin=origin or base_url, referer=referer)
 
         try:
             response = httpx.get(
@@ -449,20 +551,32 @@ class PortalClient:
             self,
             base_url: str,
             path: str,
+            params: dict[str, str] | None = None,
             *,
             download_token: str | None = None,
+            include_auth: bool = True,
+            origin: str | None = None,
+            referer: str | None = None,
     ) -> bytes:
         """GET a binary payload from a portal-adjacent host.
 
-        Used for Jam file downloads on ``downloads-content-analytics.wildberries.ru``.
-        Matches the captured browser trace's header set: cookie-based auth, no
-        ``authorizev3`` (this host doesn't accept it), no JSON content-type.
+        Two known shapes:
+
+        - ``downloads-content-analytics.wildberries.ru`` (Jam reports): cookie +
+          ``x-download-token`` only; ``authorizev3`` is rejected by this CDN.
+          Callers pass ``include_auth=False`` and supply ``download_token``.
+        - ``cmp.wildberries.ru`` (campaign-finance xlsx): regular portal auth
+          (cookie + ``authorizev3``). Default behavior.
 
         Args:
-            base_url: Host base URL (e.g. ``DOWNLOADS_CONTENT_ANALYTICS_BASE_URL``).
+            base_url: Host base URL.
             path: Endpoint path (already includes any ``/{id}`` suffix).
-            download_token: Optional ``x-download-token`` value — required by the
-                Jam downloads CDN; minted via :meth:`generate_download_token`.
+            params: Optional query parameters.
+            download_token: Optional ``x-download-token`` value (Jam CDN).
+            include_auth: When True (default), sends the ``authorizev3`` header.
+                Set False for the Jam CDN which rejects it.
+            origin: Override ``Origin`` header (defaults to seller portal).
+            referer: Override ``Referer`` header (defaults to ``f'{origin}/'``).
 
         Returns:
             Raw response body bytes.
@@ -472,17 +586,20 @@ class PortalClient:
             ApiError: On other non-2xx responses.
         """
         url = f'{base_url}{path}'
+        effective_origin = origin or SELLER_PORTAL_BASE_URL
         headers = {
             'cookie': self._cookie,
             'accept': '*/*',
-            'origin': SELLER_PORTAL_BASE_URL,
-            'referer': f'{SELLER_PORTAL_BASE_URL}/',
+            'origin': effective_origin,
+            'referer': referer or f'{effective_origin}/',
             'user-agent': _DEFAULT_USER_AGENT,
         }
+        if include_auth:
+            headers[PORTAL_AUTH_HEADER] = self._authorizev3
         if download_token:
             headers['x-download-token'] = download_token
         try:
-            response = httpx.get(url, headers=headers, timeout=self._timeout)
+            response = httpx.get(url, params=params, headers=headers, timeout=self._timeout)
         except httpx.HTTPError as exc:
             raise ApiError(
                 f'Portal download failed: {exc}',

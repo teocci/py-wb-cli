@@ -119,6 +119,10 @@ __all__ = [
     'EP_PORTAL_JAM_DOWNLOADS',
     'EP_PORTAL_JAM_FILE',
     'JAM_REPORT_SEARCH_QUERIES',
+    'EP_PORTAL_UPD_LIST',
+    'EP_PORTAL_UPD_XLSX',
+    'MSK_TZ_OFFSET',
+    'CAMPAIGN_FINANCE_DEFAULT_PAGE_SIZE',
 ]
 
 import re
@@ -374,3 +378,18 @@ EP_PORTAL_JAM_GENERATE = '/ns/analytics-api/content-analytics/api/v1/file-manage
 EP_PORTAL_JAM_DOWNLOADS = '/ns/analytics-api/content-analytics/api/v1/file-manager/downloads'
 EP_PORTAL_JAM_FILE = '/api/v1/file-manager/download'  # download host; '/{id}' appended
 JAM_REPORT_SEARCH_QUERIES = 'SEARCH_QUERIES_REPORT'
+
+# I-24 — Campaign finance ledger endpoints on the cmp.wildberries.ru portal.
+# Both synchronous; the xlsx variant returns the full ledger for the date
+# range in one shot, the JSON variant is paginated.
+EP_PORTAL_UPD_LIST = '/api/v6/upd'
+EP_PORTAL_UPD_XLSX = '/api/v5/updxlsx'
+
+# WB seller portal works in Europe/Moscow (UTC+03:00) year-round; both
+# campaign-finance endpoints expect ISO-8601 datetimes with this offset.
+MSK_TZ_OFFSET = '+03:00'
+
+# Conservative page size for the JSON listing — WB does not document a
+# hard ceiling; the captured browser request uses 10 but 100 keeps the
+# auto-paginate loop short while staying well below any plausible cap.
+CAMPAIGN_FINANCE_DEFAULT_PAGE_SIZE = 100

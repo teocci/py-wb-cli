@@ -43,6 +43,8 @@ __all__ = [
     'PortalBidRecommendation',
     'parse_portal_bids_response',
     'JamReport',
+    'CampaignFinanceEntry',
+    'CampaignFinancePage',
 ]
 
 
@@ -1343,3 +1345,106 @@ class JamReport:
     @property
     def is_success(self) -> bool:
         return self.status == 'SUCCESS'
+
+
+@dataclass(slots=True)
+class CampaignFinanceEntry:
+    """One deduction row from the cmp.wildberries.ru expense ledger.
+
+    Mirrors a single ``upd_info[]`` entry returned by ``GET /api/v6/upd`` and
+    the matching row in the ``GET /api/v5/updxlsx`` workbook. All fields are
+    pass-through; in particular ``bid_type`` is the raw integer WB returns
+    (semantics differ from the F-21 ``_BID_TYPE_INT`` mapping — see
+    ``docs/phases/I-24-portal-campaign-finance.md``).
+
+    Attributes:
+        advert_id: Campaign identifier.
+        camp_name: Seller-chosen campaign name.
+        upd_time: Charge timestamp (ISO-8601 with MSK offset).
+        upd_sum: Charge amount in rubles.
+        bid_type: Raw WB enum (1 or 2); do not assume the F-21 manual/unified
+            mapping — empirically the xlsx labels ``bid_type=1`` as
+            "Единая Ставка" (Unified Rate).
+        payment_type: Russian label for the payment source (e.g. "Баланс").
+        payment_type_id: Numeric payment-source code.
+        advert_status: WB campaign status code at charge time (e.g. "9", "11").
+        payment_model: Pricing model — "cpm" or "cpc".
+        upd_num: Document number (0 when not yet assigned).
+        booked_time: When the charge was booked (ISO-8601; JSON ``time`` field).
+        source_service_id: Source-service code from WB.
+        is_autorefill: True when the charge was funded by an auto-refill rule.
+        advert_type: WB sub-type label (often empty).
+        category_uid: Category UUID (often the all-sixes sentinel).
+    """
+
+    advert_id: int
+    camp_name: str
+    upd_time: str
+    upd_sum: int
+    bid_type: int
+    payment_type: str
+    payment_type_id: int
+    advert_status: str
+    payment_model: str
+    upd_num: int
+    booked_time: str
+    source_service_id: int
+    is_autorefill: bool
+    advert_type: str
+    category_uid: str
+
+    @classmethod
+    def from_api(cls, data: dict) -> CampaignFinanceEntry:
+        """Build from one ``upd_info[]`` entry; tolerant of missing keys."""
+        return cls(
+            advert_id=int(data.get('advert_id') or 0),
+            camp_name=str(data.get('camp_name', '')),
+            upd_time=str(data.get('upd_time', '')),
+            upd_sum=int(data.get('upd_sum') or 0),
+            bid_type=int(data.get('bid_type') or 0),
+            payment_type=str(data.get('payment_type', '')),
+            payment_type_id=int(data.get('payment_type_id') or 0),
+            advert_status=str(data.get('advert_status', '')),
+            payment_model=str(data.get('payment_model', '')),
+            upd_num=int(data.get('upd_num') or 0),
+            booked_time=str(data.get('time', '')),
+            source_service_id=int(data.get('source_service_id') or 0),
+            is_autorefill=bool(data.get('is_autorefill', False)),
+            advert_type=str(data.get('advert_type', '')),
+            category_uid=str(data.get('category_uid', '')),
+        )
+
+
+@dataclass(slots=True)
+class CampaignFinancePage:
+    """One page (or the merged result of all pages) from ``GET /api/v6/upd``.
+
+    Attributes:
+        entries: Per-deduction rows.
+        upd_total_amount: Sum of all charges across the requested date range
+            (not just this page — WB returns the full-range total on every page).
+        total_count: Total row count for the date range (same — full-range).
+        page_number: 1-indexed page number this response represents. When the
+            page is the merged "fetch-all" result, this is 1 and ``page_size``
+            equals ``total_count``.
+        page_size: Per-page size used for the request.
+    """
+
+    entries: list[CampaignFinanceEntry]
+    upd_total_amount: int
+    total_count: int
+    page_number: int
+    page_size: int
+
+    @classmethod
+    def from_api(cls, data: dict, *, page_number: int, page_size: int) -> CampaignFinancePage:
+        """Build from a raw ``/api/v6/upd`` response."""
+        raw_rows = data.get('upd_info') or []
+        entries = [CampaignFinanceEntry.from_api(r) for r in raw_rows if isinstance(r, dict)]
+        return cls(
+            entries=entries,
+            upd_total_amount=int(data.get('upd_total_amount') or 0),
+            total_count=int(data.get('total_count') or 0),
+            page_number=page_number,
+            page_size=page_size,
+        )

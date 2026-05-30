@@ -40,6 +40,20 @@ portal_app.add_typer(
     short_help='WB Джем (Jam) report downloads (search-queries, …)',
 )
 
+campaign_app = typer.Typer(
+    help=(
+        'Campaign-side portal commands on cmp.wildberries.ru. Currently surfaces '
+        'the campaign expense ledger ("История затрат") that the documented '
+        'analytics API does not expose. Same portal auth as `wb portal bids`.'
+    ),
+    no_args_is_help=True,
+)
+portal_app.add_typer(
+    campaign_app,
+    name='campaign',
+    short_help='cmp.wildberries.ru campaign-side commands (finance, finance-xlsx)',
+)
+
 # F-21 — map BidType enum value → integer expected by the portal endpoints.
 # WB's "new campaign typology": 1 = manual, 2 = unified.
 _BID_TYPE_INT = {
@@ -355,8 +369,8 @@ def _parse_iso_date(value: str, flag: str) -> date:
         raise typer.Exit(code=ExitCode.VALIDATION_ERROR) from exc
 
 
-def _resolve_jam_output(output: Path | None, default_name: str) -> Path:
-    """Resolve where to write the downloaded ZIP.
+def _resolve_download_output(output: Path | None, default_name: str) -> Path:
+    """Resolve where to write a downloaded portal file (ZIP or xlsx).
 
     If ``output`` is an existing directory (or ends in a path separator) the
     default filename is appended. If ``output`` is ``None`` the current working
@@ -430,7 +444,7 @@ def jam_search_queries(
         typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
         raise typer.Exit(code=ExitCode.API_ERROR) from exc
 
-    target = _resolve_jam_output(
+    target = _resolve_download_output(
         output, default_filename(JAM_REPORT_SEARCH_QUERIES, from_date, to_date),
     )
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -478,3 +492,182 @@ def jam_list(ctx: typer.Context) -> None:
         ['ID (8)', 'Status', 'From', 'To', 'Size', 'Created'],
         rows, title=f'Jam Search-Queries Reports ({len(reports)})',
     )
+
+
+# ── `wb portal campaign finance{,-xlsx}` ─────────────────────────────
+
+
+def _get_campaign_finance_service(profile: str | None):
+    """Build a PortalCampaignFinanceService scoped to the resolved profile."""
+    from wb.services._factory import create_portal_campaign_finance_service
+    return create_portal_campaign_finance_service(profile_name=profile)
+
+
+def _render_finance_table(page) -> None:
+    """Render a ``CampaignFinancePage`` as a rich table with a summary header."""
+    from wb.core.output import render_table
+
+    typer.echo(
+        f'Total: {page.upd_total_amount:,} ₽ across {page.total_count} rows '
+        f'(page {page.page_number}, size {page.page_size}, returned {len(page.entries)})'
+    )
+    if not page.entries:
+        return
+    rows = [
+        [
+            str(e.advert_id),
+            e.camp_name,
+            e.upd_time[:16].replace('T', ' '),
+            str(e.upd_sum),
+            e.payment_model,
+            str(e.bid_type),
+            e.payment_type,
+            e.advert_status,
+            'yes' if e.is_autorefill else 'no',
+        ]
+        for e in page.entries
+    ]
+    render_table(
+        ['Advert ID', 'Campaign', 'Charge time', 'Sum ₽', 'Model', 'Bid', 'Source', 'Status', 'Autorefill'],
+        rows,
+        title=f'Campaign Finance Ledger ({len(page.entries)} rows)',
+    )
+
+
+@campaign_app.command('finance')
+def campaign_finance(
+        ctx: typer.Context,
+        from_str: str = typer.Option(
+            ..., '--from', '-f', help='Range start date YYYY-MM-DD.',
+        ),
+        to_str: str | None = typer.Option(
+            None, '--to', '-t',
+            help='Range end date YYYY-MM-DD. Defaults to --from (single-day).',
+        ),
+        page: int | None = typer.Option(
+            None, '--page',
+            help='1-indexed page number. Omit to auto-paginate the whole range.',
+        ),
+        page_size: int | None = typer.Option(
+            None, '--page-size',
+            help='Rows per page (default: 100).',
+        ),
+) -> None:
+    """Show the campaign expense ledger from `cmp.wildberries.ru/api/v6/upd`.
+
+    Returns per-deduction rows (campaign × charge date × payment source) that
+    the documented analytics API does not expose. Default behaviour auto-
+    paginates the entire date range; pass ``--page N`` for a single slice.
+    """
+    import json
+    from dataclasses import asdict
+
+    from wb.core.constants import CAMPAIGN_FINANCE_DEFAULT_PAGE_SIZE
+
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx)
+    from_date = _parse_iso_date(from_str, '--from')
+    to_date = _parse_iso_date(to_str, '--to') if to_str else from_date
+    if to_date < from_date:
+        typer.secho('Error: --to must be on or after --from', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR)
+
+    effective_page_size = page_size or CAMPAIGN_FINANCE_DEFAULT_PAGE_SIZE
+
+    try:
+        service = _get_campaign_finance_service(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    try:
+        if page is not None:
+            result = service.list_page(
+                from_date, to_date,
+                page_number=page, page_size=effective_page_size,
+            )
+        else:
+            result = service.list_all(
+                from_date, to_date, page_size=effective_page_size,
+            )
+    except WbCliError as exc:
+        typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
+
+    if renderer.is_json:
+        payload = {
+            'entries': [asdict(e) for e in result.entries],
+            'upd_total_amount': result.upd_total_amount,
+            'total_count': result.total_count,
+            'page_number': result.page_number,
+            'page_size': result.page_size,
+        }
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    _render_finance_table(result)
+
+
+@campaign_app.command('finance-xlsx')
+def campaign_finance_xlsx(
+        ctx: typer.Context,
+        from_str: str = typer.Option(
+            ..., '--from', '-f', help='Range start date YYYY-MM-DD.',
+        ),
+        to_str: str | None = typer.Option(
+            None, '--to', '-t',
+            help='Range end date YYYY-MM-DD. Defaults to --from (single-day).',
+        ),
+        output: Path | None = typer.Option(
+            None, '--output', '-o',
+            help='Output path. File → save under that name. Directory → save default '
+                 'filename inside. Default: current working directory.',
+        ),
+) -> None:
+    """Download the campaign expense ledger as an xlsx workbook.
+
+    Wraps `cmp.wildberries.ru/api/v5/updxlsx`, which returns the entire ledger
+    for the requested date range in one synchronous call (no pagination).
+    """
+    import json
+
+    from wb.services.portal_campaign_finance import default_filename
+
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx)
+    from_date = _parse_iso_date(from_str, '--from')
+    to_date = _parse_iso_date(to_str, '--to') if to_str else from_date
+    if to_date < from_date:
+        typer.secho('Error: --to must be on or after --from', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR)
+
+    try:
+        service = _get_campaign_finance_service(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    try:
+        content = service.download_xlsx(from_date, to_date)
+    except WbCliError as exc:
+        typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
+
+    target = _resolve_download_output(output, default_filename(from_date, to_date))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+
+    payload = {
+        'saved_path': str(target),
+        'byte_size': len(content),
+        'from': from_date.isoformat(),
+        'to': to_date.isoformat(),
+    }
+    if renderer.is_json:
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    typer.echo(
+        f'Downloaded campaign-finance xlsx ({from_date.isoformat()}..{to_date.isoformat()}, '
+        f'{len(content)} bytes)'
+    )
+    typer.echo(f'Saved: {target}')
