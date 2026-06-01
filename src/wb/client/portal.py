@@ -21,6 +21,9 @@ from wb.core.constants import (
     EP_PORTAL_JAM_DOWNLOADS,
     EP_PORTAL_JAM_FILE,
     EP_PORTAL_JAM_GENERATE,
+    EP_PORTAL_SALES_REPORT_GENERATE,
+    EP_PORTAL_SALES_REPORT_LIST,
+    EP_PORTAL_SALES_REPORT_XLSX,
     EP_PORTAL_TABLE_LIST,
     EP_PORTAL_TOKENS_JRPC,
     EP_PORTAL_UPD_LIST,
@@ -28,6 +31,7 @@ from wb.core.constants import (
     PORTAL_AUTH_HEADER,
     SELLER_CONTENT_BASE_URL,
     SELLER_PORTAL_BASE_URL,
+    SELLER_WEEKLY_REPORT_BASE_URL,
     WB_CMP_BASE_URL,
 )
 from wb.core.exceptions import ApiError, AuthenticationError, ValidationError
@@ -298,6 +302,108 @@ class PortalClient:
             include_auth=False,
         )
 
+    def generate_sales_report(
+            self,
+            report_type: str,
+            from_dd_mm_yy: str,
+            to_dd_mm_yy: str,
+    ) -> dict[str, Any]:
+        """Request generation of a sales report on the seller-weekly-report host.
+
+        The POST has no body — the date range is passed as ``dateFrom`` /
+        ``dateTo`` query-string params (DD.MM.YY format per the captured trace).
+
+        Args:
+            report_type: WB report-type slug (e.g. ``'supplier-goods'``).
+            from_dd_mm_yy: Range start formatted as ``DD.MM.YY``.
+            to_dd_mm_yy: Range end formatted as ``DD.MM.YY``.
+
+        Returns:
+            Parsed JSON response — expected shape ``{'data': {...}, 'error': false}``.
+
+        Raises:
+            AuthenticationError: On 401/403 responses.
+            ApiError: On other non-2xx responses or invalid JSON.
+        """
+        path = f'{EP_PORTAL_SALES_REPORT_GENERATE}/{report_type}/order'
+        return self._post(
+            SELLER_WEEKLY_REPORT_BASE_URL,
+            path,
+            payload=None,
+            params={'dateFrom': from_dd_mm_yy, 'dateTo': to_dd_mm_yy},
+        )
+
+    def list_sales_reports(self, report_type: str) -> list[dict[str, Any]]:
+        """List sales reports of ``report_type`` known to WB.
+
+        Args:
+            report_type: WB report-type slug (e.g. ``'supplier-goods'``).
+
+        Returns:
+            List of raw report dicts (may be empty).
+        """
+        path = f'{EP_PORTAL_SALES_REPORT_LIST}/{report_type}/orders'
+        response = self._get(
+            SELLER_WEEKLY_REPORT_BASE_URL,
+            path,
+            params={},
+            origin=SELLER_PORTAL_BASE_URL,
+        )
+        if not isinstance(response, dict):
+            return []
+        data = response.get('data') or []
+        return [d for d in data if isinstance(d, dict)]
+
+    def try_download_sales_report_xlsx(
+            self,
+            report_type: str,
+            report_id: str,
+    ) -> bytes | None:
+        """Attempt to download a sales-report xlsx; return ``None`` if pending.
+
+        The endpoint returns a JSON envelope ``{data, error, errorText}`` rather
+        than raw bytes — the xlsx is base64-encoded inside ``data``. Successful
+        readiness is ``error=false`` AND a non-empty ``data`` string. Anything
+        else (``error=true``, empty ``data``) is treated as "still generating".
+
+        Args:
+            report_type: WB report-type slug (e.g. ``'supplier-goods'``).
+            report_id: The id returned by :meth:`generate_sales_report`.
+
+        Returns:
+            Decoded xlsx bytes on success, ``None`` while pending.
+
+        Raises:
+            AuthenticationError: On 401/403 responses.
+            ApiError: On other non-2xx responses, invalid JSON, or undecodable
+                base64.
+        """
+        import base64
+        import binascii
+
+        path = f'{EP_PORTAL_SALES_REPORT_XLSX}/{report_type}/xlsx/{report_id}'
+        response = self._get(
+            SELLER_WEEKLY_REPORT_BASE_URL,
+            path,
+            params={},
+            origin=SELLER_PORTAL_BASE_URL,
+        )
+        if not isinstance(response, dict):
+            return None
+        if response.get('error'):
+            return None
+        encoded = response.get('data')
+        if not encoded or not isinstance(encoded, str):
+            return None
+        try:
+            return base64.b64decode(encoded, validate=False)
+        except (binascii.Error, ValueError) as exc:
+            raise ApiError(
+                f'Sales-report xlsx base64 decode failed: {exc}',
+                status_code=None,
+                response_body=encoded[:200],
+            ) from exc
+
     def list_campaign_finance(
             self,
             from_dt: str,
@@ -434,14 +540,23 @@ class PortalClient:
             self,
             base_url: str,
             path: str,
-            payload: dict[str, Any],
+            payload: dict[str, Any] | None = None,
+            *,
+            params: dict[str, str] | None = None,
+            origin: str | None = None,
+            referer: str | None = None,
     ) -> dict[str, Any]:
         """Make a POST request to a portal endpoint.
 
         Args:
             base_url: Portal base URL.
             path: Endpoint path.
-            payload: JSON body.
+            payload: JSON body. When ``None``, the request is sent with
+                ``Content-Length: 0`` — used by the sales-report generate
+                endpoint where the date range lives in the query string.
+            params: Optional query-string parameters.
+            origin: Override ``Origin`` header (defaults to seller portal).
+            referer: Override ``Referer`` header.
 
         Returns:
             Parsed JSON response.
@@ -451,12 +566,21 @@ class PortalClient:
             ApiError: On other errors or invalid responses.
         """
         url = f'{base_url}{path}'
-        headers = self._build_headers()
+        headers = self._build_headers(
+            origin=origin or SELLER_PORTAL_BASE_URL,
+            referer=referer,
+        )
 
         try:
-            response = httpx.post(
-                url, json=payload, headers=headers, timeout=self._timeout,
-            )
+            kwargs: dict[str, Any] = {
+                'headers': headers,
+                'timeout': self._timeout,
+            }
+            if payload is not None:
+                kwargs['json'] = payload
+            if params is not None:
+                kwargs['params'] = params
+            response = httpx.post(url, **kwargs)
         except httpx.HTTPError as exc:
             raise ApiError(
                 f'Portal request failed: {exc}',

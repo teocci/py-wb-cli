@@ -61,6 +61,7 @@ __all__ = [
     'create_finance_service',
     'create_portal_jam_service',
     'create_portal_campaign_finance_service',
+    'create_portal_sales_report_service',
 ]
 
 
@@ -423,6 +424,25 @@ def create_portal_campaign_finance_service(profile_name: str | None = None):
 
     client = create_portal_client(profile_name=profile_name)
     return PortalCampaignFinanceService(client)
+
+
+def create_portal_sales_report_service(profile_name: str | None = None):
+    """Create a :class:`PortalSalesReportService` for the seller-goods sales-report.
+
+    Args:
+        profile_name: Profile name, or None for the active profile.
+
+    Returns:
+        Configured :class:`PortalSalesReportService`.
+
+    Raises:
+        ConfigError: If the resolved profile has no portal session
+            (propagated from :func:`create_portal_client`).
+    """
+    from wb.services.portal_sales_report import PortalSalesReportService
+
+    client = create_portal_client(profile_name=profile_name)
+    return PortalSalesReportService(client)
 
 
 def create_audit_logger(profile_name: str | None = None) -> AuditLogger:

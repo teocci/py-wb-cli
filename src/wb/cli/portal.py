@@ -8,7 +8,11 @@ from pathlib import Path
 import typer
 
 from wb.cli._helpers import get_profile, get_renderer
-from wb.core.constants import ExitCode, JAM_REPORT_SEARCH_QUERIES
+from wb.core.constants import (
+    ExitCode,
+    JAM_REPORT_SEARCH_QUERIES,
+    SALES_REPORT_TYPE_SUPPLIER_GOODS,
+)
 from wb.core.exceptions import WbCliError
 from wb.core.output import _stdout_console
 from wb.domain.enums import BidType, PaymentType
@@ -52,6 +56,21 @@ portal_app.add_typer(
     campaign_app,
     name='campaign',
     short_help='cmp.wildberries.ru campaign-side commands (finance, finance-xlsx)',
+)
+
+sales_report_app = typer.Typer(
+    help=(
+        'WB seller-goods sales-report downloads (I-25). Async 3-step workflow '
+        'against seller-weekly-report.wildberries.ru: generate → poll-via-download '
+        '→ save xlsx. Hidden behind a single CLI command — dates in, file out. '
+        'Same portal auth as `wb portal jam`.'
+    ),
+    no_args_is_help=True,
+)
+portal_app.add_typer(
+    sales_report_app,
+    name='sales-report',
+    short_help='WB seller-goods sales-report xlsx downloads (supplier-goods, …)',
 )
 
 # F-21 — map BidType enum value → integer expected by the portal endpoints.
@@ -671,3 +690,123 @@ def campaign_finance_xlsx(
         f'{len(content)} bytes)'
     )
     typer.echo(f'Saved: {target}')
+
+
+# ── `wb portal sales-report` ─────────────────────────────────────────
+
+
+def _get_sales_report_service(profile: str | None):
+    """Build a PortalSalesReportService scoped to the resolved profile."""
+    from wb.services._factory import create_portal_sales_report_service
+    return create_portal_sales_report_service(profile_name=profile)
+
+
+def _render_sales_report_metadata(report, saved_path: Path, renderer) -> None:
+    """Print metadata for a successfully downloaded sales report."""
+    import json
+    from dataclasses import asdict
+
+    payload = {**asdict(report), 'saved_path': str(saved_path)}
+    if renderer.is_json:
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    typer.echo(
+        f'Generated report {report.id} '
+        f'({report.date_from}..{report.date_to})'
+    )
+    typer.echo(f'Saved: {saved_path}')
+
+
+@sales_report_app.command('supplier-goods')
+def sales_report_supplier_goods(
+        ctx: typer.Context,
+        from_str: str = typer.Option(
+            ..., '--from', '-f', help='Report start date YYYY-MM-DD.',
+        ),
+        to_str: str | None = typer.Option(
+            None, '--to', '-t',
+            help='Report end date YYYY-MM-DD. Defaults to --from (single-day report).',
+        ),
+        output: Path | None = typer.Option(
+            None, '--output', '-o',
+            help='Output path. File → save under that name. Directory → save default '
+                 'filename inside. Default: current working directory.',
+        ),
+) -> None:
+    """Generate, poll, and download the supplier-goods xlsx report.
+
+    Runs the full 3-step pipeline (generate → poll-via-download → save) against
+    the undocumented seller-weekly-report endpoint. Daily / weekly / monthly /
+    custom ranges are all just different ``(from, to)`` shapes — no separate
+    flag. ``--json`` emits report metadata as JSON instead of a human-readable
+    line.
+    """
+    from wb.services.portal_sales_report import default_filename
+
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx)
+    from_date = _parse_iso_date(from_str, '--from')
+    to_date = _parse_iso_date(to_str, '--to') if to_str else from_date
+    if to_date < from_date:
+        typer.secho('Error: --to must be on or after --from', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.VALIDATION_ERROR)
+
+    try:
+        service = _get_sales_report_service(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    try:
+        report, content = service.fetch_supplier_goods(from_date, to_date)
+    except WbCliError as exc:
+        typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
+
+    target = _resolve_download_output(output, default_filename(from_date, to_date))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+    _render_sales_report_metadata(report, target, renderer)
+
+
+@sales_report_app.command('list')
+def sales_report_list(ctx: typer.Context) -> None:
+    """List ready/queued supplier-goods sales reports known to WB.
+
+    Calls the seller-weekly-report ``orders`` endpoint. Useful for re-checking
+    a previously requested report — the listing endpoint omits status, so
+    presence in this list means WB has the id on file (ready or pending).
+    """
+    import json
+    from dataclasses import asdict
+    from wb.core.output import render_table
+
+    renderer = get_renderer(ctx)
+    profile = get_profile(ctx)
+
+    try:
+        service = _get_sales_report_service(profile)
+    except WbCliError as exc:
+        typer.secho(f'Error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.CONFIG_ERROR) from exc
+
+    try:
+        reports = service.list_reports(SALES_REPORT_TYPE_SUPPLIER_GOODS)
+    except WbCliError as exc:
+        typer.secho(f'Portal error: {exc}', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=ExitCode.API_ERROR) from exc
+
+    if renderer.is_json:
+        typer.echo(json.dumps([asdict(r) for r in reports], indent=2, ensure_ascii=False))
+        return
+    if not reports:
+        typer.echo('No supplier-goods sales reports found.')
+        return
+    rows = [
+        [r.id[-12:], r.date_from, r.date_to, r.created_at]
+        for r in reports
+    ]
+    render_table(
+        ['ID (tail)', 'From', 'To', 'Created'],
+        rows, title=f'Supplier-Goods Sales Reports ({len(reports)})',
+    )

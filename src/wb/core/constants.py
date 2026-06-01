@@ -123,6 +123,11 @@ __all__ = [
     'EP_PORTAL_UPD_XLSX',
     'MSK_TZ_OFFSET',
     'CAMPAIGN_FINANCE_DEFAULT_PAGE_SIZE',
+    'SELLER_WEEKLY_REPORT_BASE_URL',
+    'EP_PORTAL_SALES_REPORT_GENERATE',
+    'EP_PORTAL_SALES_REPORT_LIST',
+    'EP_PORTAL_SALES_REPORT_XLSX',
+    'SALES_REPORT_TYPE_SUPPLIER_GOODS',
 ]
 
 import re
@@ -145,6 +150,9 @@ WB_CMP_BASE_URL = 'https://cmp.wildberries.ru'
 # WB Джем (Jam) report-download CDN — file payloads land here after WB
 # generates them. Auth is cookie-based; no authorizev3 header.
 DOWNLOADS_CONTENT_ANALYTICS_BASE_URL = 'https://downloads-content-analytics.wildberries.ru'
+# I-25 — WB seller-goods sales-report surface. All three steps (generate /
+# list / xlsx download) live on this host and use regular portal auth.
+SELLER_WEEKLY_REPORT_BASE_URL = 'https://seller-weekly-report.wildberries.ru'
 
 # ── Configuration defaults ─────────────────────────────────────────────
 DEFAULT_PROFILE_NAME = 'default'
@@ -384,6 +392,16 @@ JAM_REPORT_SEARCH_QUERIES = 'SEARCH_QUERIES_REPORT'
 # range in one shot, the JSON variant is paginated.
 EP_PORTAL_UPD_LIST = '/api/v6/upd'
 EP_PORTAL_UPD_XLSX = '/api/v5/updxlsx'
+
+# I-25 — WB seller-goods sales-report endpoints (seller-weekly-report host).
+# Async 3-step: POST order → GET orders → GET xlsx/{id}. Date format in the
+# generate query string is DD.MM.YY (day-first, 2-digit year).
+# /{report_type}/{order,orders,xlsx} is appended at call-site; for the only
+# supported type today, '/supplier-goods' is the path segment.
+EP_PORTAL_SALES_REPORT_GENERATE = '/ns/reportsviewer/analytics-back/api/report'
+EP_PORTAL_SALES_REPORT_LIST = '/ns/reportsviewer/analytics-back/api/report'
+EP_PORTAL_SALES_REPORT_XLSX = '/ns/reportsviewer/analytics-back/api/report'
+SALES_REPORT_TYPE_SUPPLIER_GOODS = 'supplier-goods'
 
 # WB seller portal works in Europe/Moscow (UTC+03:00) year-round; both
 # campaign-finance endpoints expect ISO-8601 datetimes with this offset.

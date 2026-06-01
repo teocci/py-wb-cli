@@ -1348,6 +1348,67 @@ class JamReport:
 
 
 @dataclass(slots=True)
+class SalesReport:
+    """Metadata for a WB seller-goods sales report (I-25).
+
+    Returned by both the generate (POST) and list (GET) endpoints on
+    ``seller-weekly-report.wildberries.ru``. The list endpoint returns a
+    narrower projection — only ``id, createdAt, dateFrom, dateTo`` — so the
+    other fields are tolerated as defaults.
+
+    Readiness is **not** signalled by any field here: the list endpoint
+    omits status; ``total_count == 0`` is ambiguous (pending vs. legitimately
+    empty day); ``file_url`` is empty on the immediate POST response.
+    The orchestrator decides readiness by attempting the xlsx download and
+    treating a non-empty ``data`` envelope as success.
+
+    Attributes:
+        id: Server-assigned id of the shape
+            ``supplier-goods-{supplierID}-{from}-{to}-{nonce}``.
+        supplier_id: Seller ID; 0 when the producing endpoint omits it.
+        locale: WB locale string (e.g. ``'ru'``); empty when omitted.
+        report_name: Report-type slug (``'supplier-goods'``).
+        date_from: Reporting period start (``YYYY-MM-DD``).
+        date_to: Reporting period end (``YYYY-MM-DD``).
+        created_at: When WB queued the report (ISO-8601).
+        expired_at: When WB will purge the report (ISO-8601; ``''`` from list).
+        file_url: Populated once WB exposes the file; not used as a readiness
+            check (backfilled by the service after a successful download).
+        total_count: Row count of the xlsx; do **not** use as readiness signal.
+        is_deleted: WB-side soft-delete flag.
+    """
+
+    id: str
+    supplier_id: int
+    locale: str
+    report_name: str
+    date_from: str
+    date_to: str
+    created_at: str
+    expired_at: str
+    file_url: str
+    total_count: int
+    is_deleted: bool
+
+    @classmethod
+    def from_api(cls, data: dict) -> SalesReport:
+        """Build from a raw ``data`` entry; tolerant of missing keys."""
+        return cls(
+            id=str(data.get('id', '')),
+            supplier_id=int(data.get('supplierID') or 0),
+            locale=str(data.get('locale', '')),
+            report_name=str(data.get('reportName', '')),
+            date_from=str(data.get('dateFrom', '')),
+            date_to=str(data.get('dateTo', '')),
+            created_at=str(data.get('createdAt', '')),
+            expired_at=str(data.get('expiredAt', '')),
+            file_url=str(data.get('fileUrl', '')),
+            total_count=int(data.get('totalCount') or 0),
+            is_deleted=bool(data.get('isDeleted') or False),
+        )
+
+
+@dataclass(slots=True)
 class CampaignFinanceEntry:
     """One deduction row from the cmp.wildberries.ru expense ledger.
 
