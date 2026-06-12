@@ -62,6 +62,7 @@ __all__ = [
     'create_portal_jam_service',
     'create_portal_campaign_finance_service',
     'create_portal_sales_report_service',
+    'create_economics_service',
 ]
 
 
@@ -944,6 +945,26 @@ def create_finance_service(profile_name: str | None = None):
     """
     from wb.services.finance import FinanceService
     return FinanceService(create_finance_client(profile_name))
+
+
+def create_economics_service(profile_name: str | None = None):
+    """Create an :class:`EconomicsService` from profile credentials.
+
+    Composes the warehouse-remains reports service (analytics token) with the
+    finance settlement service (finance token). Both tokens must be present on
+    the profile — the stock side needs analytics, the cost side needs finance.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured :class:`EconomicsService` instance.
+    """
+    from wb.services.economics import EconomicsService
+    return EconomicsService(
+        create_reports_service(profile_name),
+        create_finance_service(profile_name),
+    )
 
 
 def create_product_service(profile_name: str | None = None):

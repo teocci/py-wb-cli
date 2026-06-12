@@ -128,6 +128,9 @@ __all__ = [
     'EP_PORTAL_SALES_REPORT_LIST',
     'EP_PORTAL_SALES_REPORT_XLSX',
     'SALES_REPORT_TYPE_SUPPLIER_GOODS',
+    'ECONOMICS_STOCK_LIMIT',
+    'ECONOMICS_DEFAULT_MIN_STOCK',
+    'ECONOMICS_SALE_OPER',
 ]
 
 import re
@@ -367,6 +370,17 @@ EXCLUDED_WAREHOUSE_PREFIXES = ('В пути', 'Всего')
 # ── Report cache settings ─────────────────────────────────────────────
 REPORT_CACHE_TTL_HOURS = 6
 REPORTS_DIR_NAME = 'reports'
+
+# ── Unit economics (I-26) ────────────────────────────────────────────
+# Upper bound on products pulled from the warehouse-remains report when
+# building the stock side of the economics join. Large enough to cover a
+# whole catalogue in one pass.
+ECONOMICS_STOCK_LIMIT = 100_000
+# Minimum total stock for a product to appear under the default in-stock scope.
+ECONOMICS_DEFAULT_MIN_STOCK = 1
+# Russian classifier value (docTypeName/sellerOperName) marking a sale row in
+# the finance detailed report; everything else (returns, fees) is non-sale.
+ECONOMICS_SALE_OPER = 'Продажа'
 
 # ── Prices & Discounts API endpoint paths ───────────────────────────
 # Source: discounts-prices-api.wildberries.ru (verified live 2026-04-05)
