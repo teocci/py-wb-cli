@@ -399,6 +399,25 @@ class ReportsService:
 # ── Aggregation helpers ──────────────────────────────────────────────
 
 
+def _physical_warehouses(item: WarehouseRemainItem) -> list[WarehouseStock]:
+    """Return real warehouse entries, dropping WB's synthetic rows.
+
+    Excludes the duplicate ``Всего находится на складах`` aggregate (never a
+    real warehouse) and ``В пути`` in-transit rows, so quantities are not
+    double-counted.
+
+    Args:
+        item: A parsed warehouse-remains item.
+
+    Returns:
+        Warehouse entries that represent physical, on-shelf stock.
+    """
+    return [
+        wh for wh in item.warehouses
+        if not wh.warehouse_name.startswith(EXCLUDED_WAREHOUSE_PREFIXES)
+    ]
+
+
 def _aggregate_top(
         items: list[WarehouseRemainItem],
         limit: int,
@@ -424,7 +443,7 @@ def _aggregate_top(
                 warehouses=[],
             )
         summary = by_nm[item.nm_id]
-        for wh in item.warehouses:
+        for wh in _physical_warehouses(item):
             summary.total_quantity += wh.quantity
             summary.warehouses.append(
                 WarehouseStock(
@@ -586,10 +605,7 @@ def _compute_runway_item(
     sale_days = sale_days_map.get(item.nm_id, 0)
     confidence = _runway_confidence(sale_days)
 
-    physical_wh = [
-        wh for wh in item.warehouses
-        if not wh.warehouse_name.startswith(EXCLUDED_WAREHOUSE_PREFIXES)
-    ]
+    physical_wh = _physical_warehouses(item)
 
     wh_runways = []
     for wh in physical_wh:

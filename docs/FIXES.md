@@ -27,6 +27,7 @@ Tracks planned and in-progress bug fixes. Completed fixes: [docs/phases/](phases
 | F-19 | `bid recommend / minimum / get-items` always HTTP 400 — wrong request shape, never implemented | ✅ DONE | services/bids.py, client/promotion.py, domain/models.py, cli/bid.py | 0.37.0 | [detail](phases/F-19-bid-endpoints-real-implementation.md) |
 | F-20 | `wb auth login` / `login-portal` help and docs don't explain official-API vs portal-scraping distinction | ✅ DONE | cli/auth.py, cli/portal.py, cli/app.py, CLAUDE.md, AGENT.md | 0.37.1 | [detail](phases/F-20-auth-help-official-vs-portal.md) |
 | F-22 | `wb auth login-portal` clobbers JWT-derived `seller_id` with portal `user_id` (+ add `wb auth refresh`) | ✅ DONE | auth/profiles.py, cli/auth.py | 0.40.1 | [detail](phases/F-22-portal-clobbers-seller-id.md) |
+| F-23 | `economics product` / `report warehouse top` double-count stock — synthetic `Всего`/`В пути` rows summed | ✅ DONE | services/reports.py | 0.47.1 | [detail](phases/F-23-warehouse-stock-double-count.md) |
 
 ### In Progress
 

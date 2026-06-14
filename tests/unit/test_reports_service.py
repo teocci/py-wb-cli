@@ -231,3 +231,23 @@ class TestAggregateTop:
     def test_empty_input(self):
         result = _aggregate_top([], limit=5)
         assert result == []
+
+    def test_excludes_synthetic_and_transit_rows(self):
+        # F-23: WB injects a duplicate 'Всего находится на складах' total and
+        # 'В пути' in-transit rows alongside the real per-warehouse entries.
+        # Only the physical warehouses must be summed (40 + 25 = 65).
+        items = [
+            WarehouseRemainItem(
+                brand='B', subject_name='S', vendor_code='V',
+                nm_id=189923770, barcode='BC', tech_size='', volume=0.0,
+                warehouses=[
+                    WarehouseStock('Коледино', 40),
+                    WarehouseStock('Казань', 25),
+                    WarehouseStock('В пути до получателей', 12),
+                    WarehouseStock('Всего находится на складах', 65),
+                ],
+            ),
+        ]
+        result = _aggregate_top(items, limit=10)
+        assert result[0].total_quantity == 65
+        assert len(result[0].warehouses) == 2

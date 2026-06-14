@@ -6,8 +6,8 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.47.0 |
-| **Tests Passing** | 1659/1660 (31 new in I-26; 1 pre-existing env-leak in `test_auth_list_empty`) |
+| **Current Version** | 0.47.1 |
+| **Tests Passing** | 1660/1661 (1 new in F-23; 1 pre-existing env-leak in `test_auth_list_empty`) |
 | **Phases Complete** | 63 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
@@ -83,6 +83,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | I-24 | `wb portal campaign finance{,-xlsx}` — cmp.wildberries.ru expense ledger (JSON + xlsx) | ✅ DONE | 0.45.0 |
 | I-25 | `wb portal sales-report supplier-goods` — seller-weekly-report.wildberries.ru xlsx (async generate→poll→download) | ✅ DONE | 0.46.0 |
 | I-26 | `wb economics product` — per-product unit economics (stock × settlement costs → margin) | ✅ DONE | 0.47.0 |
+| F-23 | `economics product` / `report warehouse top` double-count stock — synthetic `Всего`/`В пути` rows excluded | ✅ DONE | 0.47.1 |
 
 Phase detail files: [docs/phases/](phases/)
 
