@@ -114,6 +114,13 @@ __all__ = [
     'REPORTS_DIR_NAME',
     'PRICES_BASE_URL',
     'EP_PRICES_GOODS_FILTER',
+    'CONTENT_BASE_URL',
+    'EP_CONTENT_CARDS_LIST',
+    'EP_CONTENT_CARDS_UPDATE',
+    'EP_CONTENT_CARDS_ERROR_LIST',
+    'CONTENT_CARDS_PAGE_LIMIT',
+    'CONTENT_UPDATE_BATCH_LIMIT',
+    'CONTENT_DESCRIPTION_MAX_LENGTH',
     'DOWNLOADS_CONTENT_ANALYTICS_BASE_URL',
     'EP_PORTAL_JAM_GENERATE',
     'EP_PORTAL_JAM_DOWNLOADS',
@@ -142,6 +149,7 @@ ANALYTICS_BASE_URL = 'https://seller-analytics-api.wildberries.ru'
 STATISTICS_BASE_URL = 'https://statistics-api.wildberries.ru'
 FINANCE_BASE_URL = 'https://finance-api.wildberries.ru'
 PRICES_BASE_URL = 'https://discounts-prices-api.wildberries.ru'
+CONTENT_BASE_URL = 'https://content-api.wildberries.ru'
 COMMON_API_BASE_URL = 'https://common-api.wildberries.ru'
 
 # ── Seller portal base URLs ──────────────────────────────────────────
@@ -385,6 +393,23 @@ ECONOMICS_SALE_OPER = 'Продажа'
 # ── Prices & Discounts API endpoint paths ───────────────────────────
 # Source: discounts-prices-api.wildberries.ru (verified live 2026-04-05)
 EP_PRICES_GOODS_FILTER = '/api/v2/list/goods/filter'
+
+# ── Content API endpoint paths (I-27) ────────────────────────────────
+# Source: docs/swagger/02-products.yaml. Host: content-api.wildberries.ru.
+# `cards/update` is a destructive full-overwrite — always round-trip via
+# `get/cards/list` first so unedited fields are resent unchanged. A 200 on
+# update is not proof of success; `cards/error/list` carries the failures.
+EP_CONTENT_CARDS_LIST = '/content/v2/get/cards/list'
+EP_CONTENT_CARDS_UPDATE = '/content/v2/cards/update'
+EP_CONTENT_CARDS_ERROR_LIST = '/content/v2/cards/error/list'
+# Cards per `get/cards/list` page — WB hard ceiling is 100 (cursor pagination).
+CONTENT_CARDS_PAGE_LIMIT = 100
+# Cards per `cards/update` request — WB hard ceiling is 3000.
+CONTENT_UPDATE_BATCH_LIMIT = 3000
+# Absolute description length ceiling across all categories (standard 2000,
+# minimum 1000, maximum 5000). Per-category limits are stricter and enforced
+# by WB itself — surfaced back to us via `cards/error/list`.
+CONTENT_DESCRIPTION_MAX_LENGTH = 5000
 
 # ── Seller portal endpoint paths ─────────────────────────────────────
 EP_PORTAL_AUTH_TOKEN = '/ns/suppliers-auth/suppliers-portal-core/auth/token'

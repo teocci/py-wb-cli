@@ -19,6 +19,7 @@ from wb.cli.bid import bid_app
 from wb.cli.budget import budget_app
 from wb.cli.campaign import campaign_app
 from wb.cli.cluster import cluster_app
+from wb.cli.content import content_app
 from wb.cli.economics import economics_app
 from wb.cli.finance import finance_app
 from wb.cli.portal import portal_app
@@ -69,6 +70,10 @@ app.add_typer(
 )
 app.add_typer(snapshot_app, name='snapshot', help='Local domain snapshots')
 app.add_typer(product_app, name='product', help='Product summary and analysis')
+app.add_typer(
+    content_app, name='content',
+    short_help='Read & edit product card descriptions — content-api',
+)
 app.add_typer(rate_app, name='rate', help='Rate-limit diagnostic (read-only)')
 app.add_typer(cache_app, name='cache', help='HTTP response cache')
 app.command('assess', help='Morning account snapshot: balance, campaigns, 7-day spend')(

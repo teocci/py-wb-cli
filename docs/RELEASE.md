@@ -30,6 +30,7 @@
 
 | Tag | Version | Date | Notes |
 |-----|---------|------|-------|
+| v0.48.0 | 0.48.0 | 2026-06-22 | I-27: wb content — product card description read/edit |
 | v0.23.0 | 0.23.0 | 2026-04-21 | sales-funnel --min-orders + --all |
 | v0.22.0 | 0.22.0 | 2026-04-21 | stats daily-report + wb-daily-report skill |
 | v0.21.0 | 0.21.0 | 2026-04-21 | stats campaigns --status filter |

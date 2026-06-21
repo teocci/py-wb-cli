@@ -12,6 +12,7 @@ from wb.core.config import Settings
 from wb.core.constants import (
     ANALYTICS_BASE_URL,
     CACHE_DB_FILE,
+    CONTENT_BASE_URL,
     DEFAULT_TOKEN_TYPE,
     FINANCE_BASE_URL,
     PRICES_BASE_URL,
@@ -945,6 +946,75 @@ def create_finance_service(profile_name: str | None = None):
     """
     from wb.services.finance import FinanceService
     return FinanceService(create_finance_client(profile_name))
+
+
+def _get_content_token(
+        profile_name: str | None = None,
+        cli_token: str | None = None,
+) -> str:
+    """Retrieve the content token from a CLI flag or the active profile.
+
+    Priority chain (post A-2): ``CLI flag → profile → ConfigError``.
+    Mirrors :func:`_get_finance_token` but reads the ``content`` token
+    category used by the Content API (product cards).
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+        cli_token: Token passed via CLI flag (highest priority).
+
+    Returns:
+        Content API JWT.
+
+    Raises:
+        ConfigError: When neither a CLI flag nor a registered profile
+            provides a content token.
+    """
+    if cli_token:
+        return cli_token
+    settings = _Container.settings()
+    try:
+        store = ProfileStore(settings.config_dir)
+        profile = store.get_profile(profile_name)
+    except ConfigError as exc:
+        raise _bootstrap_required_error(
+            'no active profile and no --token flag',
+        ) from exc
+    return profile.get_token('content')
+
+
+def create_content_client(profile_name: str | None = None):
+    """Create a :class:`ContentClient` from profile credentials.
+
+    Wires the shared :class:`EndpointBudget` so the Content API per-minute
+    limits (100/min reads, 10/min writes) are enforced preemptively.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured :class:`ContentClient` instance.
+    """
+    from wb.client.content import ContentClient
+    token = _get_content_token(profile_name)
+    token_type = _get_token_type(profile_name)
+    http = _Container.http_client(
+        CONTENT_BASE_URL, token,
+        with_rate_limits=True, token_type=token_type,
+    )
+    return ContentClient(http)
+
+
+def create_content_service(profile_name: str | None = None):
+    """Create a :class:`ContentService` from profile credentials.
+
+    Args:
+        profile_name: Profile name, or None for active profile.
+
+    Returns:
+        Configured :class:`ContentService` instance.
+    """
+    from wb.services.content import ContentService
+    return ContentService(create_content_client(profile_name))
 
 
 def create_economics_service(profile_name: str | None = None):

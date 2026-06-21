@@ -6,9 +6,9 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 
 | Metric | Value |
 |--------|-------|
-| **Current Version** | 0.47.1 |
-| **Tests Passing** | 1660/1661 (1 new in F-23; 1 pre-existing env-leak in `test_auth_list_empty`) |
-| **Phases Complete** | 63 |
+| **Current Version** | 0.48.0 |
+| **Tests Passing** | 1691/1693 (32 new in I-27; 2 pre-existing failures unrelated to I-27 — `test_auth_list_empty` env-leak + flaky `test_acquire_after_window_clears_no_sleep`) |
+| **Phases Complete** | 64 |
 | **Agent-Ready** | YES — JSON mode, `--compact`, `--sort-by`/`--top N`, composite reads, idempotent mutations, `--fields`, preemptive rate limiting |
 
 ## Phase Index
@@ -84,6 +84,7 @@ Coding instructions: [CLAUDE.md](../CLAUDE.md) · Command reference: [AGENT.md](
 | I-25 | `wb portal sales-report supplier-goods` — seller-weekly-report.wildberries.ru xlsx (async generate→poll→download) | ✅ DONE | 0.46.0 |
 | I-26 | `wb economics product` — per-product unit economics (stock × settlement costs → margin) | ✅ DONE | 0.47.0 |
 | F-23 | `economics product` / `report warehouse top` double-count stock — synthetic `Всего`/`В пути` rows excluded | ✅ DONE | 0.47.1 |
+| I-27 | `wb content` — read & edit product card descriptions (Content API round-trip) | ✅ DONE | 0.48.0 |
 
 Phase detail files: [docs/phases/](phases/)
 

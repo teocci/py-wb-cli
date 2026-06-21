@@ -55,6 +55,9 @@ from wb.core.constants import (
     EP_CAMPAIGN_RENAME,
     EP_CAMPAIGN_START,
     EP_CAMPAIGN_STOP,
+    EP_CONTENT_CARDS_ERROR_LIST,
+    EP_CONTENT_CARDS_LIST,
+    EP_CONTENT_CARDS_UPDATE,
     EP_CSV_CREATE,
     EP_CSV_LIST,
     EP_CSV_RETRY,
@@ -168,6 +171,14 @@ NEVER_CACHE: frozenset[str] = frozenset({
     EP_STOCKS_WB_WAREHOUSES,
     EP_WAREHOUSE_REMAINS_CREATE,
     EP_WAREHOUSE_REMAINS_STATUS,
+    # ── Content API ─────────────────────────────────────────
+    # Descriptions are live and mutable; the round-trip re-reads a card
+    # immediately before overwriting it, so a stale cached read could
+    # resurrect old characteristics/sizes. The update is a mutation and
+    # the error-list is an async report. None may be cached.
+    EP_CONTENT_CARDS_LIST,
+    EP_CONTENT_CARDS_UPDATE,
+    EP_CONTENT_CARDS_ERROR_LIST,
 })
 
 

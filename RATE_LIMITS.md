@@ -79,6 +79,9 @@ Base costs a 30-minute lockout). Override with `wb auth login --token-type
 | `wb finance acquiring detailed` | `EP_FINANCE_ACQUIRING_DETAILED` | `/api/finance/v1/acquiring/detailed` (finance-api) | **1/min** (burst 1) | **1/h** (assumed) | swagger 13 |
 | `wb finance acquiring get` | `/api/finance/v1/acquiring/detailed/{reportId}` | template — no prior, EndpointBudget learns from response headers | — | — | swagger 13 |
 | `wb prices list` | `EP_PRICES_GOODS_FILTER` | `/api/v2/list/goods/filter` | undocumented | undocumented | not in swagger |
+| `wb content list` / `get` / `export` | `EP_CONTENT_CARDS_LIST` | `/content/v2/get/cards/list` (content-api) | **100/min** (burst 5) | *uniform* | swagger 02 |
+| `wb content apply` / `set-description` | `EP_CONTENT_CARDS_UPDATE` | `/content/v2/cards/update` (content-api) | **10/min** (6 s, burst 5) | *uniform* | swagger 02 |
+| `wb content apply` / `set-description` (confirm) | `EP_CONTENT_CARDS_ERROR_LIST` | `/content/v2/cards/error/list` (content-api) | **10/min** (burst 5) | *uniform* | swagger 02 |
 
 > *uniform* in the Base column means swagger documents a single rate that applies
 > to every token type — no penalty for Base on that endpoint.
@@ -194,6 +197,7 @@ Some endpoints share a swagger description but track separate buckets:
 
 | File | API | Base URL |
 |---|---|---|
+| `docs/swagger/02-products.yaml` | Content | `content-api.wildberries.ru` |
 | `docs/swagger/08-promotion.yaml` | Promotion | `advert-api.wildberries.ru` |
 | `docs/swagger/11-analytics.yaml` | Analytics | `seller-analytics-api.wildberries.ru` |
 | `docs/swagger/12-reports.yaml` | Reports | `seller-analytics-api.wildberries.ru` |

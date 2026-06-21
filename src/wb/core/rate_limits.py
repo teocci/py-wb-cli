@@ -40,6 +40,9 @@ from wb.core.constants import (
     EP_CAMPAIGN_RENAME,
     EP_CAMPAIGN_START,
     EP_CAMPAIGN_STOP,
+    EP_CONTENT_CARDS_ERROR_LIST,
+    EP_CONTENT_CARDS_LIST,
+    EP_CONTENT_CARDS_UPDATE,
     EP_CSV_CREATE,
     EP_CSV_LIST,
     EP_CSV_RETRY,
@@ -164,6 +167,12 @@ ENDPOINT_LIMITS: dict[str, tuple[int, float]] = {
     EP_FINANCE_SALES_REPORT_DETAILED: (1, 60.0),   # swagger 13: 1/min, burst 1
     EP_FINANCE_ACQUIRING_LIST:        (1, 60.0),   # swagger 13: 1/min, burst 1
     EP_FINANCE_ACQUIRING_DETAILED:    (1, 60.0),   # swagger 13: 1/min, burst 1
+
+    # ── Content API — product cards (I-27) ───────────────────────────────
+    #   reads are generous; writes and the error-list share a 10/min bucket.
+    EP_CONTENT_CARDS_LIST:       (100, 60.0),  # swagger 02: 100/min, burst 5
+    EP_CONTENT_CARDS_UPDATE:     (10, 60.0),   # swagger 02: 10/min, 6 s, burst 5
+    EP_CONTENT_CARDS_ERROR_LIST: (10, 60.0),   # swagger 02: 10/min, burst 5
 }
 
 # ── Base-token overrides (R-5) ─────────────────────────────────────────
